@@ -32,12 +32,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  build-currency-rates-api:
-    name: Carrency Rates Api Quality Gate
+  build-currency-accounting-api:
+    name: Carrency accounting Api Quality Gate
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./Api/HomeBudget-Rates-Api
+        working-directory: .
 
     steps:
       - name: Set up JDK 17
