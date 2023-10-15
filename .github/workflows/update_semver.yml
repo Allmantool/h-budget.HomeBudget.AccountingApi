@@ -1,0 +1,48 @@
+name: Update Semver
+
+on:
+  push:
+    branches:
+      - master
+      - developed
+      - feature/*
+      - test/*
+      - hotfix/*
+      - fix/*
+      - tech/*
+    tags:
+      - "v*"
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  update-semver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Git Semantic Version
+        id: tag_version
+        uses: PaulHatch/semantic-version@v5.3.0
+        with:
+          tag_prefix: "v"
+          version_format: "${major}.${minor}.${patch}-build${increment}"
+          bump_each_commit: true
+          version_from_branch: true
+          debug: true
+
+      - name: Tag Release (vX.Y.Z)
+        run: |
+          git tag ${{ steps.tag_version.outputs.version_tag }}
+          git push origin ${{ steps.tag_version.outputs.version_tag }}
+
+      - name: Show generated tag
+        run: |
+          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
+          tag=$(echo $tag_v | sed 's/v//')
+
+          echo ${tag}
