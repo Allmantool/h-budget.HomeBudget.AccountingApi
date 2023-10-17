@@ -62,7 +62,6 @@ RUN echo '--->GITHUB_RUN_ID:' ${GITHUB_RUN_ID}
 RUN echo '--->PULL_REQUEST_SOURCE_BRANCH:' ${PULL_REQUEST_SOURCE_BRANCH}
 RUN echo '--->PULL_REQUEST_TARGET_BRANCH:' ${PULL_REQUEST_TARGET_BRANCH}
 
-COPY ["HomeBudget.Accounting/*.csproj", "HomeBudget.Accounting/"]
 COPY ["HomeBudget.Domain/*.csproj", "HomeBudget.Domain/"]
 COPY ["HomeBudget.Accounting.Api/*.csproj", "HomeBudget.Accounting.Api/"]
 
