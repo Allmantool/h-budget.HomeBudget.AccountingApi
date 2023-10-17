@@ -1,4 +1,4 @@
-﻿namespace HomeBudget_Accounting_Api
+﻿namespace HomeBudget.Accounting.Domain.Models
 {
     public enum AccountType
     {

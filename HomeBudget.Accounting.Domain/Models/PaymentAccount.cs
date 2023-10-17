@@ -1,4 +1,6 @@
-namespace HomeBudget_Accounting_Api
+﻿using System;
+
+namespace HomeBudget.Accounting.Domain.Models
 {
     public class PaymentAccount
     {
