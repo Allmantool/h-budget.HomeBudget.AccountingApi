@@ -91,7 +91,8 @@ RUN dotnet dev-certs https --trust
 RUN /tools/reportgenerator \
     -reports:'/app/testresults/coverage/**/coverage.cobertura.xml' \
     -targetdir:'/app/testresults/coverage/reports' \
-    -reporttypes:'SonarQube;Cobertura'
+    -reporttypes:'SonarQube;Cobertura'; \
+    exit 0;
 
 RUN /tools/dotnet-sonarscanner end /d:sonar.login="${SONAR_TOKEN}"; exit 0;
 
