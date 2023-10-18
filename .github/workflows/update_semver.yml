@@ -14,10 +14,11 @@ on:
       - "v*"
 
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [closed]
 
 jobs:
-  update-semver:
+  update-semver_if_merged:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out code

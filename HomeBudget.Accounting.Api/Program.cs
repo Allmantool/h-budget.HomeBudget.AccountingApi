@@ -2,20 +2,25 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-var builder = WebApplication.CreateBuilder(args);
+using HomeBudget_Accounting_Api.Extensions;
 
-builder.Services.AddControllers();
+var webAppBuilder = WebApplication.CreateBuilder(args);
+var services = webAppBuilder.Services;
+var environment = webAppBuilder.Environment;
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+webAppBuilder.Services.AddControllers();
 
-var app = builder.Build();
+webAppBuilder.Services.AddEndpointsApiExplorer();
+webAppBuilder.Services.AddSwaggerGen();
+
+services.SetupSwaggerGen();
+
+var app = webAppBuilder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.SetUpSwaggerUi();
 }
 
 app.UseAuthorization();
