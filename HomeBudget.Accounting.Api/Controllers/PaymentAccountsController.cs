@@ -22,15 +22,19 @@ namespace HomeBudget_Accounting_Api.Controllers
         }
 
         [HttpGet("GetPaymentAccounts")]
-        public Result<IEnumerable<PaymentAccount>> Get()
+        public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
-            return new Result<IEnumerable<PaymentAccount>>(MockStore.PaymentAccounts);
+            return new Result<IReadOnlyCollection<PaymentAccount>>(MockStore.PaymentAccounts);
         }
 
-        [HttpGet("GetPaymentAccount")]
+        [HttpGet("GetPaymentAccountById/{paymentAccountId}")]
         public Result<PaymentAccount> GetById(string paymentAccountId)
         {
-            var targetGuid = Guid.Parse(paymentAccountId);
+            if (!Guid.TryParse(paymentAccountId, out var targetGuid))
+            {
+                return new Result<PaymentAccount>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+            }
+
             var payload = MockStore.PaymentAccounts.SingleOrDefault(p => p.Id == targetGuid);
 
             return payload == null
@@ -39,38 +43,41 @@ namespace HomeBudget_Accounting_Api.Controllers
         }
 
         [HttpPost("MakePaymentAccount")]
-        public Result<Guid> CreateNew(CreatePaymentAccountRequest request)
+        public Result<string> CreateNew([FromBody] CreatePaymentAccountRequest request)
         {
             var newPaymentAccount = new PaymentAccount
             {
                 Id = Guid.NewGuid(),
                 Agent = request.Agent,
                 Balance = request.Balance,
-                Currency = request.Currency,
+                Currency = request.CurrencyAbbreviation,
                 Description = request.Description,
                 Type = request.AccountType
             };
 
             MockStore.PaymentAccounts.Add(newPaymentAccount);
 
-            return new Result<Guid>(newPaymentAccount.Id);
+            return new Result<string>(newPaymentAccount.Id.ToString());
         }
 
-        [HttpDelete("RemovePaymentAccount")]
+        [HttpDelete("RemovePaymentAccount/{paymentAccountId}")]
         public Result<bool> DeleteById(string paymentAccountId)
         {
-            var targetGuid = Guid.Parse(paymentAccountId);
+            if (!Guid.TryParse(paymentAccountId, out var targetGuid))
+            {
+                return new Result<bool>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+            }
+
             var paymentAccountForDelete = MockStore.PaymentAccounts.FirstOrDefault(p => p.Id == targetGuid);
+            var isRemoveSuccessful = MockStore.PaymentAccounts.Remove(paymentAccountForDelete);
 
-            MockStore.PaymentAccounts.Remove(paymentAccountForDelete);
-
-            return new Result<bool>(isSucceeded: MockStore.PaymentAccounts.Remove(paymentAccountForDelete));
+            return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
         }
 
-        [HttpPatch("UpdatePaymentAccount")]
-        public Result<bool> Update(UpdatePaymentAccountRequest request)
+        [HttpPatch("UpdatePaymentAccount/{paymentAccountId}")]
+        public Result<bool> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
         {
-            if (!Guid.TryParse(request.Id, out var requestPaymentAccountGuid))
+            if (!Guid.TryParse(paymentAccountId, out var requestPaymentAccountGuid))
             {
                 return new Result<bool>();
             }

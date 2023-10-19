@@ -28,3 +28,12 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// To add visibility for integration tests
+namespace HomeBudget.Accounting.Api
+{
+    public partial class Program
+    {
+        protected Program() { }
+    }
+}

@@ -1,6 +1,6 @@
 ﻿namespace HomeBudget.Accounting.Domain.Models
 {
-    public enum AccountType
+    public enum AccountTypes
     {
         Cash = 0,
         Bank = 1,
