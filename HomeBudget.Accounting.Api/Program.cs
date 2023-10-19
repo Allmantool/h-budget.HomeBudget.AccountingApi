@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 
 using HomeBudget_Accounting_Api.Extensions;
+using HomeBudget_Accounting_Api.Extensions.Logs;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var services = webAppBuilder.Services;
@@ -19,6 +20,8 @@ webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();
 
 services.SetupSwaggerGen();
+configuration.InitializeLogger(environment, webAppBuilder.Host);
+
 var webApp = webAppBuilder.Build();
 
 webApp.SetUpBaseApplication(services, environment, configuration);
