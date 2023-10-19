@@ -1,12 +1,17 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 
 using HomeBudget_Accounting_Api.Extensions;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var services = webAppBuilder.Services;
 var environment = webAppBuilder.Environment;
+var configuration = webAppBuilder.Configuration
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
+    .Build();
 
 webAppBuilder.Services.AddControllers();
 
@@ -14,20 +19,20 @@ webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();
 
 services.SetupSwaggerGen();
+var webApp = webAppBuilder.Build();
 
-var app = webAppBuilder.Build();
+webApp.SetUpBaseApplication(services, environment, configuration);
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (webApp.Environment.IsDevelopment())
 {
-    app.SetUpSwaggerUi();
 }
 
-app.UseAuthorization();
+webApp.UseAuthorization();
 
-app.MapControllers();
+webApp.MapControllers();
 
-app.Run();
+webApp.Run();
 
 // To add visibility for integration tests
 namespace HomeBudget.Accounting.Api
