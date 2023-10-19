@@ -29,7 +29,7 @@ if [ ${PULL_REQUEST_ID} ];
         /o:"allmantool" \
         /n:"h-budget-accounting" \
         /v:"${GITHUB_RUN_ID}" \
-        /d:sonar.branch.name="branch-.${PULL_REQUEST_SOURCE_BRANCH:11}" \
+        /d:sonar.branch.name="master" \
         /d:sonar.login="${SONAR_TOKEN}" \
         /d:sonar.host.url="https://sonarcloud.io" \
         /d:sonar.coverageReportPaths="/app/testresults/coverage/reports/SonarQube.xml" \
