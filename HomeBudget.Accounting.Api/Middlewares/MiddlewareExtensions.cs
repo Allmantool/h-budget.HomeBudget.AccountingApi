@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
 
-namespace HomeBudget_Accounting_Api.Middlewares
+namespace HomeBudget.Accounting.Api.Middlewares
 {
     internal static class MiddlewareExtensions
     {

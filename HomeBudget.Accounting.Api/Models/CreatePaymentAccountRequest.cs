@@ -1,6 +1,6 @@
 ﻿using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget_Accounting_Api.Models
+namespace HomeBudget.Accounting.Api.Models
 {
     public class CreatePaymentAccountRequest
     {

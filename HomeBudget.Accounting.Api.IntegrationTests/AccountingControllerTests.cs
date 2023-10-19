@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 
 using FluentAssertions;
+
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.Models;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget_Accounting_Api.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {

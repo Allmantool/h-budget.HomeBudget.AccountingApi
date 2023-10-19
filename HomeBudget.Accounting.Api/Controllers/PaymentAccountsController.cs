@@ -5,10 +5,10 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Api.Models;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget_Accounting_Api.Models;
 
-namespace HomeBudget_Accounting_Api.Controllers
+namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route("paymentAccounts")]

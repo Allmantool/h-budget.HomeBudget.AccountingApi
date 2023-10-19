@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 
-using HomeBudget_Accounting_Api.Extensions;
-using HomeBudget_Accounting_Api.Extensions.Logs;
+using HomeBudget.Accounting.Api.Extensions;
+using HomeBudget.Accounting.Api.Extensions.Logs;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var services = webAppBuilder.Services;
