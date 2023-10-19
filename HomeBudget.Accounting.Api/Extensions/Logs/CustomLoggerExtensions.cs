@@ -26,7 +26,7 @@ namespace HomeBudget_Accounting_Api.Extensions.Logs
                 .Enrich.WithSpan()
                 .WriteTo.Debug()
                 .WriteTo.Console()
-                .WriteTo.Elasticsearch(ConfigureElasticSink(configuration, environment))
+                .AddElasticSearchSupport(configuration, environment)
                 .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
@@ -35,13 +35,24 @@ namespace HomeBudget_Accounting_Api.Extensions.Logs
             return Log.Logger;
         }
 
-        private static ElasticsearchSinkOptions ConfigureElasticSink(IConfiguration configuration, IHostEnvironment environment)
+        private static LoggerConfiguration AddElasticSearchSupport(
+            this LoggerConfiguration loggerConfiguration,
+            IConfiguration configuration,
+            IHostEnvironment environment)
+        {
+            var elasticNodeUrl = (configuration["ElasticConfiguration:Uri"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS")) ?? string.Empty;
+
+            return string.IsNullOrWhiteSpace(elasticNodeUrl)
+                ? loggerConfiguration
+                : loggerConfiguration.WriteTo.Elasticsearch(ConfigureElasticSink(environment, elasticNodeUrl));
+        }
+
+        private static ElasticsearchSinkOptions ConfigureElasticSink(IHostEnvironment environment, string elasticNodeUrl)
         {
             var formattedExecuteAssemblyName = typeof(Program).Assembly.GetName().Name;
             var dateIndexPostfix = DateTime.UtcNow.ToString("MM-yyyy-dd");
-            var nodeUri = new Uri((configuration["ElasticConfiguration:Uri"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS")) ?? string.Empty);
 
-            return new ElasticsearchSinkOptions(nodeUri)
+            return new ElasticsearchSinkOptions(new Uri(elasticNodeUrl))
             {
                 AutoRegisterTemplate = true,
                 TypeName = null,
