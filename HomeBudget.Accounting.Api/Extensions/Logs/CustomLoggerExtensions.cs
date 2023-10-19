@@ -9,9 +9,9 @@ using Serilog.Enrichers.Span;
 using Serilog.Exceptions;
 using Serilog.Sinks.Elasticsearch;
 
-namespace HomeBudget_Accounting_Api.Extensions.Logs
+namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
-    public static class CustomLoggerExtensions
+    internal static class CustomLoggerExtensions
     {
         public static ILogger InitializeLogger(
             this IConfiguration configuration,

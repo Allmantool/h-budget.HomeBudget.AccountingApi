@@ -1,11 +1,11 @@
-﻿using System.Threading.Tasks;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 
 using HomeBudget.Accounting.Domain.Constants;
 
-namespace HomeBudget_Accounting_Api.Middlewares
+namespace HomeBudget.Accounting.Api.Middlewares
 {
     internal class CorrelationIdMiddleware
     {

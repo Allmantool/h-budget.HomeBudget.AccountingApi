@@ -2,7 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
 
-namespace HomeBudget_Accounting_Api.Extensions
+namespace HomeBudget.Accounting.Api.Extensions
 {
     internal static class SwaggerExtensions
     {

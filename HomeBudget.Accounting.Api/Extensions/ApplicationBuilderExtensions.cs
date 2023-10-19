@@ -8,10 +8,10 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
 
+using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget_Accounting_Api.Middlewares;
 
-namespace HomeBudget_Accounting_Api.Extensions
+namespace HomeBudget.Accounting.Api.Extensions
 {
     internal static class ApplicationBuilderExtensions
     {

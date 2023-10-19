@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-
 using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget_Accounting_Api
+namespace HomeBudget.Accounting.Api
 {
     internal static class MockStore
     {
