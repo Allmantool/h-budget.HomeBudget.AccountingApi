@@ -21,13 +21,13 @@ namespace HomeBudget.Accounting.Api.Controllers
             _logger = logger;
         }
 
-        [HttpGet("GetPaymentAccounts")]
+        [HttpGet("getPaymentAccounts")]
         public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
             return new Result<IReadOnlyCollection<PaymentAccount>>(MockStore.PaymentAccounts);
         }
 
-        [HttpGet("GetPaymentAccountById/{paymentAccountId}")]
+        [HttpGet("getPaymentAccountById/{paymentAccountId}")]
         public Result<PaymentAccount> GetById(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetGuid))
@@ -42,7 +42,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 : new Result<PaymentAccount>(payload);
         }
 
-        [HttpPost("MakePaymentAccount")]
+        [HttpPost("makePaymentAccount")]
         public Result<string> CreateNew([FromBody] CreatePaymentAccountRequest request)
         {
             var newPaymentAccount = new PaymentAccount
@@ -60,7 +60,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             return new Result<string>(newPaymentAccount.Id.ToString());
         }
 
-        [HttpDelete("RemovePaymentAccount/{paymentAccountId}")]
+        [HttpDelete("removePaymentAccount/{paymentAccountId}")]
         public Result<bool> DeleteById(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetGuid))
@@ -74,7 +74,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
         }
 
-        [HttpPatch("UpdatePaymentAccount/{paymentAccountId}")]
+        [HttpPatch("updatePaymentAccount/{paymentAccountId}")]
         public Result<bool> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
         {
             if (!Guid.TryParse(paymentAccountId, out var requestPaymentAccountGuid))
