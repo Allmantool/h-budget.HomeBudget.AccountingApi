@@ -2,7 +2,7 @@
 {
     public class Result<T>
     {
-        public Result(T payload = default, string message = default, bool isSucceeded = default)
+        public Result(T payload = default, string message = default, bool isSucceeded = true)
         {
             Payload = payload;
             IsSucceeded = isSucceeded;
