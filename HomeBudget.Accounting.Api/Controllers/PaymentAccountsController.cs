@@ -13,11 +13,6 @@ namespace HomeBudget.Accounting.Api.Controllers
     [Route("paymentAccounts")]
     public class PaymentAccountsController : ControllerBase
     {
-
-        public PaymentAccountsController()
-        {
-        }
-
         [HttpGet("getPaymentAccounts")]
         public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
