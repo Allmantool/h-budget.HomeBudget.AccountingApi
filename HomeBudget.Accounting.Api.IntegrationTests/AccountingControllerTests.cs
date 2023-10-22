@@ -133,12 +133,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/UpdatePaymentAccount/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<bool>>(patchUpdatePaymentAccount);
+            var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
-            var payload = result.Payload;
 
-            payload.Should().BeFalse();
+            result.IsSucceeded.Should().BeFalse();
         }
 
         [Test]
@@ -158,12 +157,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/UpdatePaymentAccount/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<bool>>(patchUpdatePaymentAccount);
+            var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
-            var payload = result.Payload;
 
-            payload.Should().BeTrue();
+            result.IsSucceeded.Should().BeTrue();
         }
     }
 }
