@@ -6,10 +6,10 @@ using FluentAssertions;
 using NUnit.Framework;
 using RestSharp;
 
-using HomeBudget.Accounting.Api.Models;
+using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests
+namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     // [Ignore("Intend to be used only for local testing. Not appropriate infrastructure has been setup")]
     [TestFixture]
@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         [Test]
         public void GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
         {
-            var getPaymentAccountsRequest = new RestRequest("/paymentAccounts/GetPaymentAccounts");
+            var getPaymentAccountsRequest = new RestRequest("/paymentAccounts");
 
             var response = RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
 
@@ -40,7 +40,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
-            var getPaymentAccountByIdRequest = new RestRequest($"/paymentAccounts/GetPaymentAccountById/{paymentAccountId}");
+            var getPaymentAccountByIdRequest = new RestRequest($"/paymentAccounts/byId/{paymentAccountId}");
 
             var response = RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
@@ -55,7 +55,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             const string paymentAccountId = "invalidRef";
 
-            var getPaymentAccountByIdRequest = new RestRequest($"/paymentAccounts/GetPaymentAccountById/{paymentAccountId}");
+            var getPaymentAccountByIdRequest = new RestRequest($"/paymentAccounts/byId/{paymentAccountId}");
 
             var response = RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
@@ -76,7 +76,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 Description = "Some description"
             };
 
-            var postMakePaymentAccountRequest = new RestRequest("/paymentAccounts/MakePaymentAccount", Method.Post).AddJsonBody(requestBody);
+            var postMakePaymentAccountRequest = new RestRequest("/paymentAccounts", Method.Post).AddJsonBody(requestBody);
 
             var response = RestHttpClient.Execute<Result<string>>(postMakePaymentAccountRequest);
 
@@ -91,7 +91,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"/paymentAccounts/RemovePaymentAccount/{paymentAccountId}", Method.Delete);
+            var deleteMakePaymentAccountRequest = new RestRequest($"/paymentAccounts/{paymentAccountId}", Method.Delete);
 
             var response = RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
 
@@ -106,7 +106,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             const string paymentAccountId = "Invalid";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"/paymentAccounts/RemovePaymentAccount/{paymentAccountId}", Method.Delete);
+            var deleteMakePaymentAccountRequest = new RestRequest($"/paymentAccounts/{paymentAccountId}", Method.Delete);
 
             var response = RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
 
@@ -130,7 +130,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 Description = "Some description"
             };
 
-            var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/UpdatePaymentAccount/{paymentAccountId}", Method.Patch)
+            var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
@@ -154,7 +154,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 Description = "Updated description"
             };
 
-            var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/UpdatePaymentAccount/{paymentAccountId}", Method.Patch)
+            var patchUpdatePaymentAccount = new RestRequest($"/paymentAccounts/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);

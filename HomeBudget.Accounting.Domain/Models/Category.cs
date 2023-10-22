@@ -1,6 +1,6 @@
 ﻿namespace HomeBudget.Accounting.Domain.Models
 {
-    public class DepositOperation : BaseDomainEntity
+    public class Category : BaseDomainEntity
     {
     }
 }

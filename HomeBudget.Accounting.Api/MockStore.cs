@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api
@@ -53,6 +54,26 @@ namespace HomeBudget.Accounting.Api
                 Currency = CurrencyTypes.BYN.ToString(),
                 Description = "Tech description"
             }
+        };
+
+        public static readonly Dictionary<int, Contractor> Contractors = new()
+        {
+            {
+               new Contractor(new[] { "Work", "GodelTech" }).GetHashCode(),
+               new Contractor(new[] { "Work", "GodelTech" })
+            },
+            {
+                new Contractor(new[] { "Mobile Operators", "A1", "+375 29 687 42 43" }).GetHashCode(),
+                new Contractor(new[] { "Mobile Operators", "A1", "+375 29 687 42 43" })
+            },
+            {
+                new Contractor(new[] { "Transport", "Taxi" }).GetHashCode(),
+                new Contractor(new[] { "Transport", "Taxi" })
+            },
+            {
+                new Contractor(new[] { "Glossary", "Dionis" }).GetHashCode(),
+                new Contractor(new[] { "Glossary", "Dionis" })
+            },
         };
     }
 }
