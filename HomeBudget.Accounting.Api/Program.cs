@@ -1,8 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 
@@ -25,11 +23,6 @@ configuration.InitializeLogger(environment, webAppBuilder.Host);
 var webApp = webAppBuilder.Build();
 
 webApp.SetUpBaseApplication(services, environment, configuration);
-
-// Configure the HTTP request pipeline.
-if (webApp.Environment.IsDevelopment())
-{
-}
 
 webApp.UseAuthorization();
 

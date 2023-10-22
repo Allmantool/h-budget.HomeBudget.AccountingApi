@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.Models;
 using HomeBudget.Accounting.Domain.Models;
@@ -14,11 +13,9 @@ namespace HomeBudget.Accounting.Api.Controllers
     [Route("paymentAccounts")]
     public class PaymentAccountsController : ControllerBase
     {
-        private readonly ILogger<PaymentAccountsController> _logger;
 
-        public PaymentAccountsController(ILogger<PaymentAccountsController> logger)
+        public PaymentAccountsController()
         {
-            _logger = logger;
         }
 
         [HttpGet("getPaymentAccounts")]
