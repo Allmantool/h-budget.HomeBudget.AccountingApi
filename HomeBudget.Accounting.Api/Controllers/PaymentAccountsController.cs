@@ -4,8 +4,8 @@ using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
 
-using HomeBudget.Accounting.Api.Models;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Api.Models.PaymentAccount;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -13,13 +13,13 @@ namespace HomeBudget.Accounting.Api.Controllers
     [Route("paymentAccounts")]
     public class PaymentAccountsController : ControllerBase
     {
-        [HttpGet("getPaymentAccounts")]
+        [HttpGet]
         public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
             return new Result<IReadOnlyCollection<PaymentAccount>>(MockStore.PaymentAccounts);
         }
 
-        [HttpGet("getPaymentAccountById/{paymentAccountId}")]
+        [HttpGet("byId/{paymentAccountId}")]
         public Result<PaymentAccount> GetById(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetGuid))
@@ -34,7 +34,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 : new Result<PaymentAccount>(payload);
         }
 
-        [HttpPost("makePaymentAccount")]
+        [HttpPost]
         public Result<string> CreateNew([FromBody] CreatePaymentAccountRequest request)
         {
             var newPaymentAccount = new PaymentAccount
@@ -52,7 +52,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             return new Result<string>(newPaymentAccount.Id.ToString());
         }
 
-        [HttpDelete("removePaymentAccount/{paymentAccountId}")]
+        [HttpDelete("{paymentAccountId}")]
         public Result<bool> DeleteById(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetGuid))
@@ -66,7 +66,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
         }
 
-        [HttpPatch("updatePaymentAccount/{paymentAccountId}")]
+        [HttpPatch("{paymentAccountId}")]
         public Result<string> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
         {
             if (!Guid.TryParse(paymentAccountId, out var requestPaymentAccountGuid))

@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
+using HomeBudget.Accounting.Api.Configuration;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var services = webAppBuilder.Services;
@@ -13,6 +15,8 @@ var configuration = webAppBuilder.Configuration
     .Build();
 
 webAppBuilder.Services.AddControllers();
+
+services.SetUpDi(configuration);
 
 webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();

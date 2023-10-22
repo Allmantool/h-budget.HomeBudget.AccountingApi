@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
+    <ProjectReference Include="..\HomeBudget.Components.Contractors\HomeBudget.Components.Contractors.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,10 +1,7 @@
-﻿using System;
-
-namespace HomeBudget.Accounting.Domain.Models
+﻿namespace HomeBudget.Accounting.Domain.Models
 {
-    public class PaymentAccount
+    public class PaymentAccount : BaseDomainEntity
     {
-        public Guid Id { get; set; }
         public AccountTypes Type { get; set; }
         public string Currency { get; set; }
         public decimal Balance { get; set; }
