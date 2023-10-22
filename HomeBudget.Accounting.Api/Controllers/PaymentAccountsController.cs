@@ -50,7 +50,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Id = Guid.NewGuid(),
                 Agent = request.Agent,
                 Balance = request.Balance,
-                Currency = request.CurrencyAbbreviation,
+                Currency = request.Currency,
                 Description = request.Description,
                 Type = request.AccountType
             };

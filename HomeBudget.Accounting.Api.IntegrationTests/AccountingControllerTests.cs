@@ -72,7 +72,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 Balance = 100,
                 AccountType = AccountTypes.Cash,
                 Agent = "Vtb",
-                CurrencyAbbreviation = "",
+                Currency = "",
                 Description = "Some description"
             };
 
