@@ -75,11 +75,11 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPatch("updatePaymentAccount/{paymentAccountId}")]
-        public Result<bool> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
+        public Result<string> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
         {
             if (!Guid.TryParse(paymentAccountId, out var requestPaymentAccountGuid))
             {
-                return new Result<bool>();
+                return new Result<string>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
             var updatedPaymentAccount = new PaymentAccount
@@ -96,12 +96,12 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (elementForReplaceIndex == -1)
             {
-                return new Result<bool>();
+                return new Result<string>(isSucceeded: false, message: $"A payment account with guid: '{nameof(paymentAccountId)}' hasn't been found");
             }
 
             MockStore.PaymentAccounts[elementForReplaceIndex] = updatedPaymentAccount;
 
-            return new Result<bool>(true);
+            return new Result<string>(paymentAccountId);
         }
     }
 }
