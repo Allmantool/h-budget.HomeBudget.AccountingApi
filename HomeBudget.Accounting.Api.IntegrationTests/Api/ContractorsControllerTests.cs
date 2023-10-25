@@ -37,6 +37,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task GetContractorById_WhenTryToGetById_ThenIsSuccessStatusCode()
+        {
+            var getContractorsRequest = new RestRequest("/contractors/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
+
+            var response = await RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
+
+            var result = response.Data;
+
+            Assert.IsTrue(response.IsSuccessful);
+        }
+
+        [Test]
         public void CreateNewContractor_WhenCreateANewOneContractor_ReturnsNewGeneratedGuid()
         {
             var requestBody = new CreateContractorRequest

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,6 +24,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         public Result<IReadOnlyCollection<Contractor>> GetContractors()
         {
             return new Result<IReadOnlyCollection<Contractor>>(MockStore.Contractors.Values);
+        }
+
+        [HttpGet("byId/{contractorId}")]
+        public Result<Contractor> GetContractors(string contractorId)
+        {
+            return new Result<Contractor>(MockStore.Contractors.Values.SingleOrDefault(c => c.Id.ToString() == contractorId));
         }
 
         [HttpPost]
