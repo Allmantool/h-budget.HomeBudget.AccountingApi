@@ -22,7 +22,9 @@ ENV GITHUB_RUN_ID=${GITHUB_RUN_ID}
 
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb 
 RUN dpkg -i packages-microsoft-prod.deb 
-RUN rm packages-microsoft-prod.deb 
+RUN rm packages-microsoft-prod.deb
+
+RUN apt show default-jdk
 
 RUN --mount=type=cache,target=/var/cache/apt \ 
     apt-get update && \
