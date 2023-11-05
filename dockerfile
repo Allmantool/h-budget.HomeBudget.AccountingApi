@@ -24,10 +24,10 @@ RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod
 RUN dpkg -i packages-microsoft-prod.deb 
 RUN rm packages-microsoft-prod.deb
 
+RUN apt-get update
 RUN apt show default-jdk
 
 RUN --mount=type=cache,target=/var/cache/apt \ 
-    apt-get update && \
     apt-get install -y --quiet --no-install-recommends \
     apt-transport-https && \
     apt-get -y autoremove && \
@@ -35,7 +35,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get clean autoclean
 
 RUN --mount=type=cache,target=/var/cache/apt \      
-    apt-get update && \
     apt-get install -y --quiet --no-install-recommends \
     openjdk-21-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
