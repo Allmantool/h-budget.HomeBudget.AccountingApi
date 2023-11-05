@@ -16,6 +16,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category("Integration")]
     public class ContractorsControllerTests : BaseWebApplicationFactory<HomeBudgetAccountingApiApplicationFactory<Program>, Program>
     {
+        private const string ApiHost = "/contractors";
+
         [SetUp]
         public override void SetUp()
         {
@@ -27,25 +29,35 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
         {
-            var getContractorsRequest = new RestRequest("/contractors");
+            var getContractorsRequest = new RestRequest(ApiHost);
 
             var response = await RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Contractor>>>(getContractorsRequest);
-
-            var result = response.Data;
 
             Assert.IsTrue(response.IsSuccessful);
         }
 
         [Test]
-        public async Task GetContractorById_WhenTryToGetById_ThenIsSuccessStatusCode()
+        public async Task GetContractorById_WhenTryToGetExistedById_ThenIsSuccessStatusCode()
         {
-            var getContractorsRequest = new RestRequest("/contractors/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
+            var getContractorsRequest = new RestRequest($"{ApiHost}/byId/66e81106-9214-41a4-8297-82d6761f1d40");
 
             var response = await RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
 
-            var result = response.Data;
+            var payload = response.Data;
 
-            Assert.IsTrue(response.IsSuccessful);
+            Assert.IsTrue(payload.IsSucceeded);
+        }
+
+        [Test]
+        public async Task GetContractorById_WhenTryToGetNotExistedById_ThenIsFailStatusCode()
+        {
+            var getContractorsRequest = new RestRequest($"{ApiHost}/byId/b4a1bc33-a50f-4c9d-aac4-761dfec063dc");
+
+            var response = await RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
+
+            var payload = response.Data;
+
+            Assert.IsFalse(payload.IsSucceeded);
         }
 
         [Test]
@@ -56,7 +68,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 NameNodes = new[] { "Node1", "Node2" }
             };
 
-            var postCreateContractorRequest = new RestRequest("/contractors", Method.Post).AddJsonBody(requestBody);
+            var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
             var response = RestHttpClient.Execute<Result<string>>(postCreateContractorRequest);
 

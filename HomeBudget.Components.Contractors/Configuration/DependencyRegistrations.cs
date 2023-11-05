@@ -11,7 +11,8 @@ namespace HomeBudget.Components.Contractors.Configuration
             this IServiceCollection services)
         {
             return services
-                .AddScoped<IContractorFactory, ContractorFactory>();
+                .AddScoped<IContractorFactory, ContractorFactory>()
+                .AddScoped<ICategoryFactory, CategoryFactory>();
         }
     }
 }
