@@ -16,7 +16,7 @@ namespace HomeBudget.Accounting.Domain.Models
 
         public override int GetHashCode()
         {
-            return string.Join(',', NameNodes).GetHashCode();
+            return string.Join(',', NameNodes).GetHashCode() + (int)CategoryType;
         }
     }
 }

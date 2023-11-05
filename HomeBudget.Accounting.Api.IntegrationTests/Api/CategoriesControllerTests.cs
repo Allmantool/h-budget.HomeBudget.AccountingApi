@@ -62,7 +62,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void CreateNewCategory_WhenCreateANewOneCategory_ReturnsNewGeneratedGuid()
         {
-            var requestBody = new CreateCategoryRequest()
+            var requestBody = new CreateCategoryRequest
             {
                 CategoryType = (int)CategoryTypes.Expense,
                 NameNodes = new[] { "Node1", "Node2" }
@@ -76,6 +76,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var payload = result.Payload;
 
             Guid.TryParse(payload, out _).Should().BeTrue();
+        }
+
+        [TestCase(1, CategoryTypes.Expense)]
+        [TestCase(0, CategoryTypes.Income)]
+        public async Task CreateNewCategory_WhenCreateExpenseCategory_ReturnsExpectedOutcome(int requestOperationType, CategoryTypes outcomeOperationType)
+        {
+            var requestBody = new CreateCategoryRequest
+            {
+                CategoryType = requestOperationType,
+                NameNodes = new[] { "Node1", "Node2" }
+            };
+
+            var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
+
+            var saveResponse = await RestHttpClient.ExecuteAsync<Result<string>>(postCreateCategoryRequest);
+
+            var result = saveResponse.Data;
+            var createdCategoryId = result.Payload;
+
+            var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{createdCategoryId}");
+
+            var getByIdResponse = await RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
+
+            var getByIdPayload = getByIdResponse.Data;
+
+            getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType);
         }
     }
 }

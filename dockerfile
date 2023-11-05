@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 RUN --mount=type=cache,target=/var/cache/apt \      
     apt-get update && \
     apt-get install -y --quiet --no-install-recommends \
-    openjdk-11-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
+    openjdk-21-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
     apt-get clean autoclean && \
     apt-get clean autoclean
@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Fix certificate issues
 RUN update-ca-certificates -f
 
-ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
+ENV JAVA_HOME /usr/lib/jvm/java-21-openjdk-amd64/
 RUN export JAVA_HOME
 RUN export PATH=$PATH:$JAVA_HOME/bin
 
