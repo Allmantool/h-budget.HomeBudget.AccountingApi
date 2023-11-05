@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
@@ -27,9 +28,13 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpGet("byId/{contractorId}")]
-        public Result<Contractor> GetContractors(string contractorId)
+        public Result<Contractor> GetContractorById(string contractorId)
         {
-            return new Result<Contractor>(MockStore.Contractors.Values.SingleOrDefault(c => c.Id.ToString() == contractorId));
+            var contractorById = MockStore.Contractors.Values.SingleOrDefault(c => string.Equals(c.Id.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
+
+            return contractorById == null
+                ? new Result<Contractor>(isSucceeded: false, message: $"The contractor with {contractorId} hasn't been found")
+                : new Result<Contractor>(payload: contractorById);
         }
 
         [HttpPost]
