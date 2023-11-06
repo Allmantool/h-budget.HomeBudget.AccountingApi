@@ -1,11 +1,9 @@
-FROM ubuntu:22.04 AS ubuntu-src
-
 FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0-jammy AS build-7.0
+FROM mcr.microsoft.com/dotnet/sdk:7.0-jammy AS build
 WORKDIR /scr
 
 COPY --from=mcr.microsoft.com/dotnet/sdk:6.0 /usr/share/dotnet/shared /usr/share/dotnet/shared
