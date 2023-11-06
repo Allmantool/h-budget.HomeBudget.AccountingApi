@@ -24,7 +24,7 @@ RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod
 RUN wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.deb
 
 RUN dpkg -i packages-microsoft-prod.deb
-RUN dpkg -i jdk-21_linux-x64_bin.debs
+RUN dpkg -i jdk-21_linux-x64_bin.deb
 
 RUN apt-get updates
 RUN apt show default-jdk
