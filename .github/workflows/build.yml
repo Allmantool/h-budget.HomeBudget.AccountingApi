@@ -105,15 +105,21 @@ jobs:
           .
 
       - name: Test report generation
-        run: dotnet test --no-build --verbosity normal --collect:"XPlat Code Coverage" --logger trx --results-directory coverage
+        run: |
+          dotnet test 
+          --no-build 
+          --verbosity normal 
+          --collect:"XPlat Code Coverage" 
+          --logger trx 
+          --results-directory coverage
 
       - name: Code Coverage Summary Report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          filename: 'coverage/*/coverage.cobertura.xml'
+          filename: "coverage/*/coverage.cobertura.xml"
           badge: true
-          format: 'markdown'
-          output: 'both
+          format: "markdown"
+          output: "both"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
