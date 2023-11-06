@@ -37,7 +37,7 @@ RUN mkdir jdk-21 && \
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \   
     apt-get install -f -y --quiet --no-install-recommends \
-    ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
+    ant dos2unix ca-certificates-java dotnet-sdk-6.0 dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
     apt-get clean autoclean && \
     apt-get clean autoclean
