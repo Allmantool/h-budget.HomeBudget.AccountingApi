@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Fix certificate issues
 RUN update-ca-certificates -f
 
-ENV JAVA_HOME /usr/lib/jvm/java-21-openjdk-amd64/
+ENV JAVA_HOME /usr/local/jdk-21
 RUN export JAVA_HOME=/usr/local/jdk-21
 RUN export PATH=$JAVA_HOME/bin:$PATH
 
