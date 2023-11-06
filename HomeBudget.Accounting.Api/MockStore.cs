@@ -56,74 +56,47 @@ namespace HomeBudget.Accounting.Api
             }
         };
 
-        public static readonly Dictionary<int, Contractor> Contractors = new()
+        public static readonly List<Contractor> Contractors = new()
         {
+            new Contractor(new[] { "Work", "GodelTech" })
             {
-               new Contractor(new[] { "Work", "GodelTech" }).GetHashCode(),
-               new Contractor(new[] { "Work", "GodelTech" })
-               {
-                   Id = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78")
-               }
+                Id = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78")
             },
+            new Contractor(new[] { "Mobile Operators", "A1", "+375 29 687 42 43" })
             {
-                new Contractor(new[] { "Mobile Operators", "A1", "+375 29 687 42 43" }).GetHashCode(),
-                new Contractor(new[] { "Mobile Operators", "A1", "+375 29 687 42 43" })
-                {
-                    Id = Guid.Parse("1c0112d1-3310-46d7-b8c3-b248002b9a8c")
-                }
+                Id = Guid.Parse("1c0112d1-3310-46d7-b8c3-b248002b9a8c")
             },
+            new Contractor(new[] { "Transport", "Taxi" })
             {
-                new Contractor(new[] { "Transport", "Taxi" }).GetHashCode(),
-                new Contractor(new[] { "Transport", "Taxi" })
-                {
-                    Id = Guid.Parse("66e81106-9214-41a4-8297-82d6761f1d40")
-                }
+                Id = Guid.Parse("66e81106-9214-41a4-8297-82d6761f1d40")
             },
+            new Contractor(new[] { "Glossary", "Dionis" })
             {
-                new Contractor(new[] { "Glossary", "Dionis" }).GetHashCode(),
-                new Contractor(new[] { "Glossary", "Dionis" })
-                {
-                    Id = Guid.Parse("20275637-3f7b-444e-b08b-0ca612afcd61")
-                }
+                Id = Guid.Parse("20275637-3f7b-444e-b08b-0ca612afcd61")
             },
         };
 
-        public static readonly Dictionary<int, Category> Categories = new()
+        public static readonly List<Category> Categories = new()
         {
+            new Category(CategoryTypes.Income, new[] { "Income", "Salary" })
             {
-                new Category(CategoryTypes.Income, new[] { "Income", "Salary" }).GetHashCode(),
-                new Category(CategoryTypes.Income, new[] { "Income", "Salary" })
-                {
-                    Id = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742")
-                }
+                Id = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742")
             },
+            new Category(CategoryTypes.Income, new[] { "Transport", "Public" })
             {
-                new Category(CategoryTypes.Income, new[] { "Transport", "Public" }).GetHashCode(),
-                new Category(CategoryTypes.Income, new[] { "Transport", "Public" })
-                {
-                    Id = Guid.Parse("d5a7f8c7-8b5b-422b-92fa-49a81563f60a")
-                }
+                Id = Guid.Parse("d5a7f8c7-8b5b-422b-92fa-49a81563f60a")
             },
+            new Category(CategoryTypes.Expense, new[] { "Public services", "Web" })
             {
-                new Category(CategoryTypes.Expense, new[] { "Public services", "Web" }).GetHashCode(),
-                new Category(CategoryTypes.Expense, new[] { "Public services", "Web" })
-                {
-                    Id = Guid.Parse("66ce6a56-f61e-4530-8098-b8c58b61a381")
-                }
+                Id = Guid.Parse("66ce6a56-f61e-4530-8098-b8c58b61a381")
             },
+            new Category(CategoryTypes.Income, new[] { "Transport", "Taxi" })
             {
-                new Category(CategoryTypes.Income, new[] { "Transport", "Taxi" }).GetHashCode(),
-                new Category(CategoryTypes.Income, new[] { "Transport", "Taxi" })
-                {
-                    Id = Guid.Parse("e9b040ef-6450-46ab-8416-2b146d4da0f0")
-                }
+                Id = Guid.Parse("e9b040ef-6450-46ab-8416-2b146d4da0f0")
             },
+            new Category(CategoryTypes.Income, new[] { "Food" })
             {
-                new Category(CategoryTypes.Income, new[] { "Food" }).GetHashCode(),
-                new Category(CategoryTypes.Income, new[] { "Food" })
-                {
-                    Id = Guid.Parse("b4a1bc33-a50f-4c9d-aac4-761dfec063dc")
-                }
+                Id = Guid.Parse("b4a1bc33-a50f-4c9d-aac4-761dfec063dc")
             },
         };
     }

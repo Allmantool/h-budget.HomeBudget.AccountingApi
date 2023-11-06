@@ -65,7 +65,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new CreateCategoryRequest
             {
                 CategoryType = (int)CategoryTypes.Expense,
-                NameNodes = new[] { "Node1", "Node2" }
+                NameNodes = new[] { "Node1", "Node2", "Node3" }
             };
 
             var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
@@ -80,7 +80,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         [TestCase(1, CategoryTypes.Expense)]
         [TestCase(0, CategoryTypes.Income)]
-        public async Task CreateNewCategory_WhenCreateExpenseCategory_ReturnsExpectedOutcome(int requestOperationType, CategoryTypes outcomeOperationType)
+        public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(int requestOperationType, CategoryTypes outcomeOperationType)
         {
             var requestBody = new CreateCategoryRequest
             {

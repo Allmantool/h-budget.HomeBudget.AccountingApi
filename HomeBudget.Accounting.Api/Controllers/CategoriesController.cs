@@ -24,16 +24,16 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<Category>> GetCategories()
         {
-            return new Result<IReadOnlyCollection<Category>>(MockStore.Categories.Values);
+            return new Result<IReadOnlyCollection<Category>>(MockStore.Categories);
         }
 
         [HttpGet("byId/{categoryId}")]
         public Result<Category> GetCategoryById(string categoryId)
         {
-            var categoryById = MockStore.Categories.Values.SingleOrDefault(c => string.Equals(c.Id.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
+            var categoryById = MockStore.Categories.SingleOrDefault(c => string.Equals(c.Id.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
 
             return categoryById == null
-                ? new Result<Category>(isSucceeded: false, message: $"The category with {categoryId} hasn't been found")
+                ? new Result<Category>(isSucceeded: false, message: $"The category with '{categoryId}' hasn't been found")
                 : new Result<Category>(payload: categoryById);
         }
 
@@ -42,7 +42,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var newCategory = _categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
 
-            MockStore.Categories.Add(newCategory.GetHashCode(), newCategory);
+            if (MockStore.Categories.Select(c => c.CategoryKey).Contains(newCategory.CategoryKey))
+            {
+                return new Result<string>(isSucceeded: false, message: $"The category with '{newCategory.CategoryKey}' key already exists");
+            }
+
+            MockStore.Categories.Add(newCategory);
 
             return new Result<string>(newCategory.Id.ToString());
         }
