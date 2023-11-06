@@ -31,9 +31,8 @@ RUN wget https://download.oracle.com/java/21/archive/jdk-21_linux-x64_bin.deb -O
 
 RUN dpkg -i jdk-21_linux-x64_bin.deb
 
-RUN apt-get update
-
-RUN --mount=type=cache,target=/var/cache/apt \      
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \   
     apt-get install -f -y --quiet --no-install-recommends \
     openjdk-21-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
