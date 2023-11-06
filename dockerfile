@@ -20,13 +20,13 @@ ENV PULL_REQUEST_SOURCE_BRANCH=${PULL_REQUEST_SOURCE_BRANCH}
 ENV PULL_REQUEST_TARGET_BRANCH=${PULL_REQUEST_TARGET_BRANCH}
 ENV GITHUB_RUN_ID=${GITHUB_RUN_ID}
 
-RUN apt install -f
-
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
 RUN wget https://download.oracle.com/java/21/archive/jdk-21_linux-x64_bin.deb -O jdk-21_linux-x64_bin.deb
 
 RUN dpkg -i packages-microsoft-prod.deb
 RUN dpkg -i jdk-21_linux-x64_bin.deb
+
+RUN apt install -f
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get install -y --quiet --no-install-recommends \
