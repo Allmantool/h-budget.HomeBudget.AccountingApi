@@ -24,16 +24,16 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<Contractor>> GetContractors()
         {
-            return new Result<IReadOnlyCollection<Contractor>>(MockStore.Contractors.Values);
+            return new Result<IReadOnlyCollection<Contractor>>(MockStore.Contractors);
         }
 
         [HttpGet("byId/{contractorId}")]
         public Result<Contractor> GetContractorById(string contractorId)
         {
-            var contractorById = MockStore.Contractors.Values.SingleOrDefault(c => string.Equals(c.Id.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
+            var contractorById = MockStore.Contractors.SingleOrDefault(c => string.Equals(c.Id.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
 
             return contractorById == null
-                ? new Result<Contractor>(isSucceeded: false, message: $"The contractor with {contractorId} hasn't been found")
+                ? new Result<Contractor>(isSucceeded: false, message: $"The contractor with '{contractorId}' hasn't been found")
                 : new Result<Contractor>(payload: contractorById);
         }
 
@@ -42,7 +42,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var newContractor = _contractorFactory.Create(request.NameNodes);
 
-            MockStore.Contractors.Add(newContractor.GetHashCode(), newContractor);
+            if (MockStore.Contractors.Select(c => c.ContractorKey).Contains(newContractor.ContractorKey))
+            {
+                return new Result<string>(isSucceeded: false, message: $"The contractor with '{newContractor.ContractorKey}' key already exists");
+            }
+
+            MockStore.Contractors.Add(newContractor);
 
             return new Result<string>(newContractor.Id.ToString());
         }

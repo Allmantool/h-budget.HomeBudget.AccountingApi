@@ -3,7 +3,7 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:7.0-jammy AS build
 WORKDIR /scr
 
 COPY --from=mcr.microsoft.com/dotnet/sdk:6.0 /usr/share/dotnet/shared /usr/share/dotnet/shared
@@ -20,22 +20,24 @@ ENV PULL_REQUEST_SOURCE_BRANCH=${PULL_REQUEST_SOURCE_BRANCH}
 ENV PULL_REQUEST_TARGET_BRANCH=${PULL_REQUEST_TARGET_BRANCH}
 ENV GITHUB_RUN_ID=${GITHUB_RUN_ID}
 
-RUN wget https://packages.microsoft.com/config/debian/11/packages-microsoft-prod.deb -O packages-microsoft-prod.deb 
-RUN dpkg -i packages-microsoft-prod.deb 
-RUN rm packages-microsoft-prod.deb 
-
-RUN --mount=type=cache,target=/var/cache/apt \ 
+RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get install -y --quiet --no-install-recommends \
     apt-transport-https && \
     apt-get -y autoremove && \
-    apt-get clean autoclean && \
     apt-get clean autoclean
 
-RUN --mount=type=cache,target=/var/cache/apt \      
-    apt-get update && \
-    apt-get install -y --quiet --no-install-recommends \
-    openjdk-11-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
+RUN wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz -O jdk-21_linux-x64_bin.tar.gz
+RUN mkdir jdk-21 && \
+    tar -xvf jdk-21_linux-x64_bin.tar.gz -C jdk-21 && \
+    cd jdk-21  && \
+    mkdir -p /usr/local/jdk-21  && \
+    mv * /usr/local/jdk-21
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \   
+    apt-get install -f -y --quiet --no-install-recommends \
+    ant dos2unix ca-certificates-java dotnet-sdk-6.0 dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
     apt-get clean autoclean && \
     apt-get clean autoclean
@@ -43,9 +45,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Fix certificate issues
 RUN update-ca-certificates -f
 
-ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64/
-RUN export JAVA_HOME
-RUN export PATH=$PATH:$JAVA_HOME/bin
+ENV JAVA_HOME /usr/lib/jvm/java-21-openjdk-amd64/
+RUN export JAVA_HOME=/usr/local/jdk-21
+RUN export PATH=$JAVA_HOME/bin:$PATH
 
 RUN dotnet new tool-manifest
 RUN dotnet tool install dotnet-sonarscanner --tool-path /tools --version 5.13.1

@@ -4,19 +4,18 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class Category : BaseDomainEntity
     {
-        public Category(CategoryTypes categoryType, IEnumerable<string> nameNodes)
-        {
-            NameNodes = nameNodes;
-            CategoryType = categoryType;
-        }
-
         public CategoryTypes CategoryType { get; }
 
         public IEnumerable<string> NameNodes { get; }
 
-        public override int GetHashCode()
+        public string CategoryKey { get; }
+
+        public Category(CategoryTypes categoryType, IEnumerable<string> nameNodes)
         {
-            return string.Join(',', NameNodes).GetHashCode();
+            NameNodes = nameNodes;
+            CategoryType = categoryType;
+
+            CategoryKey = $"{(int)CategoryType}-{string.Join(',', NameNodes)}";
         }
     }
 }
