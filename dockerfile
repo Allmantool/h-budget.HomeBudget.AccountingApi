@@ -21,10 +21,10 @@ ENV PULL_REQUEST_TARGET_BRANCH=${PULL_REQUEST_TARGET_BRANCH}
 ENV GITHUB_RUN_ID=${GITHUB_RUN_ID}
 
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-RUN wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.deb -O jdk-17_linux-x64_bin.deb
+RUN wget https://download.oracle.com/java/19/archive/jdk-19.0.2_linux-x64_bin.deb -O jdk-19_linux-x64_bin.deb
 
 RUN dpkg -i packages-microsoft-prod.deb
-RUN dpkg -i jdk-17_linux-x64_bin.deb
+RUN dpkg -i jdk-19_linux-x64_bin.deb
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get install -y --quiet --no-install-recommends \
@@ -39,18 +39,18 @@ RUN apt show default-jdk
 
 RUN --mount=type=cache,target=/var/cache/apt \      
     apt-get install -y --quiet --no-install-recommends \
-    openjdk-17-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
+    openjdk-19-jdk ant dos2unix ca-certificates-java dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
     apt-get clean autoclean && \
     apt-get clean autoclean
 
 RUN rm packages-microsoft-prod.deb
-RUN rm jdk-17_linux-x64_bin.deb
+RUN rm jdk-19_linux-x64_bin.deb
 
 # Fix certificate issues
 RUN update-ca-certificates -f
 
-ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
+ENV JAVA_HOME /usr/lib/jvm/java-19-openjdk-amd64/
 RUN export JAVA_HOME
 RUN export PATH=$PATH:$JAVA_HOME/bin
 
