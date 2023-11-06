@@ -21,11 +21,10 @@ ENV PULL_REQUEST_TARGET_BRANCH=${PULL_REQUEST_TARGET_BRANCH}
 ENV GITHUB_RUN_ID=${GITHUB_RUN_ID}
 
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-RUN wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.deb -O packages-microsoft-prod.deb
+RUN wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.deb
 
 RUN dpkg -i packages-microsoft-prod.deb
- 
-RUN rm packages-microsoft-prod.deb
+RUN dpkg -i jdk-21_linux-x64_bin.debs
 
 RUN apt-get updates
 RUN apt show default-jdk
@@ -43,6 +42,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y autoremove && \
     apt-get clean autoclean && \
     apt-get clean autoclean
+
+RUN rm packages-microsoft-prod.deb
+RUN rm jdk-21_linux-x64_bin.deb
 
 # Fix certificate issues
 RUN update-ca-certificates -f
