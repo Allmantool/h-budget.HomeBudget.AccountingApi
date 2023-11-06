@@ -28,25 +28,21 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get clean autoclean
 
 RUN wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz -O jdk-21_linux-x64_bin.tar.gz
-RUN mkdir jdk-21 && \
-    tar -xvf jdk-21_linux-x64_bin.tar.gz -C jdk-21 && \
-    cd jdk-21  && \
-    mkdir -p /usr/local/jdk-21  && \
-    mv * /usr/local/jdk-21
+RUN mkdir /usr/lib/jvm && \
+    tar -xvf jdk-21_linux-x64_bin.tar.gz -C /usr/lib/jvm
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \   
     apt-get install -f -y --quiet --no-install-recommends \
     ant dos2unix ca-certificates-java dotnet-sdk-6.0 dotnet-sdk-7.0 && \
     apt-get -y autoremove && \
-    apt-get clean autoclean && \
     apt-get clean autoclean
 
 # Fix certificate issues
 RUN update-ca-certificates -f
 
-ENV JAVA_HOME /usr/local/jdk-21
-RUN export JAVA_HOME=/usr/local/jdk-21
+ENV JAVA_HOME /usr/lib/jvm/jdk-21.0.1
+RUN export JAVA_HOME=/usr/lib/jvm/jdk-21.0.1
 RUN export PATH=$JAVA_HOME/bin:$PATH
 
 RUN dotnet new tool-manifest
