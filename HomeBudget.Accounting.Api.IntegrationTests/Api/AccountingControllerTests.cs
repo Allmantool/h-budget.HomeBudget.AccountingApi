@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using FluentAssertions;
-using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -33,7 +34,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetPaymentAccount_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
+        public void GetPaymentAccountById_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
@@ -48,7 +49,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetPaymentAccount_WhenInValidFilterById_ReturnsFalseResult()
+        public void GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
         {
             const string paymentAccountId = "invalidRef";
 
@@ -88,9 +89,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
+            var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -103,9 +104,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const string paymentAccountId = "Invalid";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
+            var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;

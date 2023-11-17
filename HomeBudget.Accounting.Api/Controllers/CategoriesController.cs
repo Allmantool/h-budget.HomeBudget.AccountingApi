@@ -12,15 +12,8 @@ namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route("categories")]
-    public class CategoriesController : ControllerBase
+    public class CategoriesController(ICategoryFactory categoryFactory) : ControllerBase
     {
-        private readonly ICategoryFactory _categoryFactory;
-
-        public CategoriesController(ICategoryFactory categoryFactory)
-        {
-            _categoryFactory = categoryFactory;
-        }
-
         [HttpGet]
         public Result<IReadOnlyCollection<Category>> GetCategories()
         {
@@ -40,7 +33,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpPost]
         public Result<string> CreateNewContractor([FromBody] CreateCategoryRequest request)
         {
-            var newCategory = _categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
+            var newCategory = categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
 
             if (MockStore.Categories.Select(c => c.CategoryKey).Contains(newCategory.CategoryKey))
             {

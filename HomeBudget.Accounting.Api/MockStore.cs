@@ -104,7 +104,7 @@ namespace HomeBudget.Accounting.Api
         {
             new DepositOperation
             {
-                Key = Guid.Parse("3b57a8ab-ee4d-4a17-a75a-481b0d86e3ac"),
+                Key = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c"),
                 Amount = 35.64m,
                 CategoryId = Guid.Parse("e9b040ef-6450-46ab-8416-2b146d4da0f0"),
                 ContractorId = Guid.Parse("66e81106-9214-41a4-8297-82d6761f1d40"),
@@ -113,7 +113,7 @@ namespace HomeBudget.Accounting.Api
             },
             new DepositOperation
             {
-                Key = Guid.Parse("3b57a8ab-ee4d-4a17-a75a-481b0d86e3ac"),
+                Key = Guid.Parse("20a8ca8e-0127-462c-b854-b2868490f3ec"),
                 Amount = 35.64m,
                 CategoryId = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742"),
                 ContractorId = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78"),

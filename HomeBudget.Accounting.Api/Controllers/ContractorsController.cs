@@ -12,15 +12,8 @@ namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route("contractors")]
-    public class ContractorsController : ControllerBase
+    public class ContractorsController(IContractorFactory contractorFactory) : ControllerBase
     {
-        private readonly IContractorFactory _contractorFactory;
-
-        public ContractorsController(IContractorFactory contractorFactory)
-        {
-            _contractorFactory = contractorFactory;
-        }
-
         [HttpGet]
         public Result<IReadOnlyCollection<Contractor>> GetContractors()
         {
@@ -40,7 +33,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpPost]
         public Result<string> CreateNewContractor([FromBody] CreateContractorRequest request)
         {
-            var newContractor = _contractorFactory.Create(request.NameNodes);
+            var newContractor = contractorFactory.Create(request.NameNodes);
 
             if (MockStore.Contractors.Select(c => c.ContractorKey).Contains(newContractor.ContractorKey))
             {

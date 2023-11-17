@@ -4,8 +4,8 @@ using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
 
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
