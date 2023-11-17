@@ -12,15 +12,8 @@ namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route("categories")]
-    public class CategoriesController : ControllerBase
+    public class CategoriesController(ICategoryFactory categoryFactory) : ControllerBase
     {
-        private readonly ICategoryFactory _categoryFactory;
-
-        public CategoriesController(ICategoryFactory categoryFactory)
-        {
-            _categoryFactory = categoryFactory;
-        }
-
         [HttpGet]
         public Result<IReadOnlyCollection<Category>> GetCategories()
         {
@@ -30,7 +23,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("byId/{categoryId}")]
         public Result<Category> GetCategoryById(string categoryId)
         {
-            var categoryById = MockStore.Categories.SingleOrDefault(c => string.Equals(c.Id.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
+            var categoryById = MockStore.Categories.SingleOrDefault(c => string.Equals(c.Key.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
 
             return categoryById == null
                 ? new Result<Category>(isSucceeded: false, message: $"The category with '{categoryId}' hasn't been found")
@@ -40,7 +33,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpPost]
         public Result<string> CreateNewContractor([FromBody] CreateCategoryRequest request)
         {
-            var newCategory = _categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
+            var newCategory = categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
 
             if (MockStore.Categories.Select(c => c.CategoryKey).Contains(newCategory.CategoryKey))
             {
@@ -49,7 +42,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             MockStore.Categories.Add(newCategory);
 
-            return new Result<string>(newCategory.Id.ToString());
+            return new Result<string>(newCategory.Key.ToString());
         }
     }
 }

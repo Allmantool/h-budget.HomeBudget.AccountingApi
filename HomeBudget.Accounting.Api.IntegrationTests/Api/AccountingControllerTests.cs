@@ -1,50 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using FluentAssertions;
 
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     // [Ignore("Intend to be used only for local testing. Not appropriate infrastructure has been setup")]
+    [Category(TestTypes.Integration)]
     [TestFixture]
-    [Category("Integration")]
-    public class AccountingControllerTests
-        : BaseWebApplicationFactory<HomeBudgetAccountingApiApplicationFactory<Program>, Program>
+    public class AccountingControllerTests : IAsyncDisposable
     {
         private const string ApiHost = "/paymentAccounts";
 
-        [SetUp]
-        public override void SetUp()
-        {
-            SetUpHttpClient();
-
-            base.SetUp();
-        }
+        private readonly AccountingTestWebApp _sut = new();
 
         [Test]
         public void GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
         {
             var getPaymentAccountsRequest = new RestRequest(ApiHost);
 
-            var response = RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
+            var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
 
             Assert.IsTrue(response.IsSuccessful);
         }
 
         [Test]
-        public void GetPaymentAccount_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
+        public void GetPaymentAccountById_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = _sut.RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -53,13 +49,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetPaymentAccount_WhenInValidFilterById_ReturnsFalseResult()
+        public void GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
         {
             const string paymentAccountId = "invalidRef";
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = _sut.RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
 
@@ -80,7 +76,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<string>>(postMakePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<string>>(postMakePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -93,9 +89,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
+            var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -108,9 +104,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const string paymentAccountId = "Invalid";
 
-            var deleteMakePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
+            var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = RestHttpClient.Execute<Result<bool>>(deleteMakePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -135,7 +131,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
+            var response = _sut.RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
 
@@ -159,11 +155,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
+            var response = _sut.RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
 
             result.IsSucceeded.Should().BeTrue();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_sut != null)
+            {
+                await _sut.DisposeAsync();
+            }
         }
     }
 }

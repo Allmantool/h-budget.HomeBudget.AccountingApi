@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 
-namespace HomeBudget.Components.Contractors.Factories
+namespace HomeBudget.Components.Categories.Factories
 {
     internal class CategoryFactory : ICategoryFactory
     {
@@ -12,7 +12,7 @@ namespace HomeBudget.Components.Contractors.Factories
         {
             return new Category(categoryType, nameNodes)
             {
-                Id = Guid.NewGuid()
+                Key = Guid.NewGuid()
             };
         }
     }

@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Domain.Models
 {
-    public class Category : BaseDomainEntity
+    public class Category : DomainEntity
     {
         public CategoryTypes CategoryType { get; }
 

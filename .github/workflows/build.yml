@@ -41,6 +41,11 @@ jobs:
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "8.0.x"
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v3
         with:
@@ -78,7 +83,17 @@ jobs:
 
           echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
 
-      - name: Build docker image
+      - name: Install external tools for quality gate verification
+        shell: bash
+        run: |
+          dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+          dotnet tool install --global dotnet-sonarscanner --version 5.14.0
+
+      - name: Make the scanner script file executable
+        run: |
+          chmod +x ./startsonar.sh
+
+      - name: Start sonnar scanning
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
@@ -91,24 +106,37 @@ jobs:
           ACTION: ${{ github.action }}
           EVENT_NAME: ${{ github.event_name }}
         shell: bash
+        run: sh ./startsonar.sh
+
+      - name: Build the solution to quality metrics gathering
+        shell: bash
         run: |
+          dotnet build HomeBudgetAccountingApi.sln \
+            --no-incremental
 
-          echo "latest tag is ${{ steps.last_tag.outputs.TARGET_TAG }}"
+      - name: Run test for coverage collecting
+        shell: bash
+        run: |
+          dotnet-dotcover test HomeBudgetAccountingApi.sln \
+            --dcReportType=HTML \
+            --dcOutput="test-results/accounting-coverage.html" \
+            --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests"
 
+      - name: End sonnar scanning
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+        shell: bash
+        run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+
+      - name: Build docker image
+        env:
+          BUILD_VERSION: ${{ steps.last_tag.outputs.TARGET_TAG }}
+        shell: bash
+        run: |
           docker build \
-          --target 'publish' -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}" \
-          --build-arg PULL_REQUEST_ID='${{ steps.findPr.outputs.pr }}' \
-          --build-arg PULL_REQUEST_SOURCE_BRANCH='${{ github.ref }}' \
-          --build-arg PULL_REQUEST_TARGET_BRANCH=refs/heads/master \
-          --build-arg GITHUB_RUN_ID='${{ github.run_id }}' \
-          --build-arg SONAR_TOKEN='${{ env.SONAR_TOKEN }}' \
-          .
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+            --target 'final' \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}" \
+            .
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -116,8 +144,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push docker image with Buildx
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}"
+      - name: Push docker image
+        shell: bash
+        run: |
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}"

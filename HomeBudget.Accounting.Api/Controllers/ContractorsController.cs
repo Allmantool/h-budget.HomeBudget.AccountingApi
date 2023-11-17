@@ -12,15 +12,8 @@ namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route("contractors")]
-    public class ContractorsController : ControllerBase
+    public class ContractorsController(IContractorFactory contractorFactory) : ControllerBase
     {
-        private readonly IContractorFactory _contractorFactory;
-
-        public ContractorsController(IContractorFactory contractorFactory)
-        {
-            _contractorFactory = contractorFactory;
-        }
-
         [HttpGet]
         public Result<IReadOnlyCollection<Contractor>> GetContractors()
         {
@@ -30,7 +23,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("byId/{contractorId}")]
         public Result<Contractor> GetContractorById(string contractorId)
         {
-            var contractorById = MockStore.Contractors.SingleOrDefault(c => string.Equals(c.Id.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
+            var contractorById = MockStore.Contractors.SingleOrDefault(c => string.Equals(c.Key.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
 
             return contractorById == null
                 ? new Result<Contractor>(isSucceeded: false, message: $"The contractor with '{contractorId}' hasn't been found")
@@ -40,7 +33,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpPost]
         public Result<string> CreateNewContractor([FromBody] CreateContractorRequest request)
         {
-            var newContractor = _contractorFactory.Create(request.NameNodes);
+            var newContractor = contractorFactory.Create(request.NameNodes);
 
             if (MockStore.Contractors.Select(c => c.ContractorKey).Contains(newContractor.ContractorKey))
             {
@@ -49,7 +42,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             MockStore.Contractors.Add(newContractor);
 
-            return new Result<string>(newContractor.Id.ToString());
+            return new Result<string>(newContractor.Key.ToString());
         }
     }
 }

@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Domain.Models
 {
-    public class Contractor : BaseDomainEntity
+    public class Contractor : DomainEntity
     {
         public IEnumerable<string> NameNodes { get; }
 

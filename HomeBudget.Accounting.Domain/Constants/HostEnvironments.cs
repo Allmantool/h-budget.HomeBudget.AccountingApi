@@ -4,5 +4,6 @@
     {
         public static readonly string Docker = "Docker";
         public static readonly string Development = "Development";
+        public static readonly string Integration = "Integration";
     }
 }

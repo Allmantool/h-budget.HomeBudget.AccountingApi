@@ -1,17 +1,17 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Domain.Services;
-using HomeBudget.Components.Contractors.Factories;
+using HomeBudget.Components.Operations.Factories;
 
-namespace HomeBudget.Components.Contractors.Configuration
+namespace HomeBudget.Components.Operations.Configuration
 {
     public static class DependencyRegistrations
     {
-        public static IServiceCollection RegisterContractorsIoCDependency(
+        public static IServiceCollection RegisterOperationsIoCDependency(
             this IServiceCollection services)
         {
             return services
-                .AddScoped<IContractorFactory, ContractorFactory>();
+                .AddScoped<IOperationFactory, OperationFactory>();
         }
     }
 }

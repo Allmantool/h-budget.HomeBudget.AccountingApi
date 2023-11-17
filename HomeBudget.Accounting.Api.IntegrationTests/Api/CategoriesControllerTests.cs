@@ -8,29 +8,24 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class CategoriesControllerTests : BaseWebApplicationFactory<HomeBudgetAccountingApiApplicationFactory<Program>, Program>
+    public class CategoriesControllerTests : IAsyncDisposable
     {
         private const string ApiHost = "/categories";
 
-        [SetUp]
-        public override void SetUp()
-        {
-            SetUpHttpClient();
-
-            base.SetUp();
-        }
+        private readonly CategoriesTestWebApp _sut = new();
 
         [Test]
         public async Task GetCategories_WhenTryToGetAllCategories_ThenIsSuccessStatusCode()
         {
             var getCategoriesRequest = new RestRequest(ApiHost);
 
-            var response = await RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Category>>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Category>>>(getCategoriesRequest);
 
             Assert.IsTrue(response.IsSuccessful);
         }
@@ -40,7 +35,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/d5a7f8c7-8b5b-422b-92fa-49a81563f60a");
 
-            var response = await RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -52,7 +47,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
 
-            var response = await RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -70,7 +65,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = RestHttpClient.Execute<Result<string>>(postCreateCategoryRequest);
+            var response = _sut.RestHttpClient.Execute<Result<string>>(postCreateCategoryRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -90,18 +85,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var saveResponse = await RestHttpClient.ExecuteAsync<Result<string>>(postCreateCategoryRequest);
+            var saveResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateCategoryRequest);
 
             var result = saveResponse.Data;
             var createdCategoryId = result.Payload;
 
             var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{createdCategoryId}");
 
-            var getByIdResponse = await RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
+            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
 
             var getByIdPayload = getByIdResponse.Data;
 
             getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_sut != null)
+            {
+                await _sut.DisposeAsync();
+            }
         }
     }
 }
