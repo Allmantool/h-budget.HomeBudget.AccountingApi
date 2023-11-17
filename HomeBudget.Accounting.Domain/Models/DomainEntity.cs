@@ -2,9 +2,9 @@
 
 namespace HomeBudget.Accounting.Domain.Models
 {
-    public abstract class BaseDomainEntity
+    public abstract class DomainEntity
     {
-        public Guid Id { get; set; }
+        public Guid Key { get; set; }
 
         public long OperationUnixTime { get; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }

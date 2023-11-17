@@ -12,7 +12,7 @@ namespace HomeBudget.Components.Contractors.Factories
         {
             return new Contractor(nameNodes)
             {
-                Id = Guid.NewGuid()
+                Key = Guid.NewGuid()
             };
         }
     }

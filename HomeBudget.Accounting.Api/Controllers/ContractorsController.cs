@@ -30,7 +30,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("byId/{contractorId}")]
         public Result<Contractor> GetContractorById(string contractorId)
         {
-            var contractorById = MockStore.Contractors.SingleOrDefault(c => string.Equals(c.Id.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
+            var contractorById = MockStore.Contractors.SingleOrDefault(c => string.Equals(c.Key.ToString(), contractorId, StringComparison.OrdinalIgnoreCase));
 
             return contractorById == null
                 ? new Result<Contractor>(isSucceeded: false, message: $"The contractor with '{contractorId}' hasn't been found")
@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             MockStore.Contractors.Add(newContractor);
 
-            return new Result<string>(newContractor.Id.ToString());
+            return new Result<string>(newContractor.Key.ToString());
         }
     }
 }

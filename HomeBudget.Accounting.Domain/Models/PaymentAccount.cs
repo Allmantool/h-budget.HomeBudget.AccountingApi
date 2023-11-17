@@ -1,6 +1,6 @@
 ﻿namespace HomeBudget.Accounting.Domain.Models
 {
-    public class PaymentAccount : BaseDomainEntity
+    public class PaymentAccount : DomainEntity
     {
         public AccountTypes Type { get; set; }
         public string Currency { get; set; }

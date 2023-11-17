@@ -30,7 +30,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("byId/{categoryId}")]
         public Result<Category> GetCategoryById(string categoryId)
         {
-            var categoryById = MockStore.Categories.SingleOrDefault(c => string.Equals(c.Id.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
+            var categoryById = MockStore.Categories.SingleOrDefault(c => string.Equals(c.Key.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
 
             return categoryById == null
                 ? new Result<Category>(isSucceeded: false, message: $"The category with '{categoryId}' hasn't been found")
@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             MockStore.Categories.Add(newCategory);
 
-            return new Result<string>(newCategory.Id.ToString());
+            return new Result<string>(newCategory.Key.ToString());
         }
     }
 }

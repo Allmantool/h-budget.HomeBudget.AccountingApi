@@ -2,6 +2,8 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Components.Contractors.Configuration;
+using HomeBudget.Components.Operations.Configuration;
+using HomeBudget.Components.Categories.Configuration;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -11,7 +13,10 @@ namespace HomeBudget.Accounting.Api.Configuration
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            return services.RegisterContractorsIoCDependency();
+            return services
+                .RegisterContractorsIoCDependency()
+                .RegisterOperationsIoCDependency()
+                .RegisterCategoriesIoCDependency();
         }
     }
 }

@@ -27,7 +27,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<PaymentAccount>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var payload = MockStore.PaymentAccounts.SingleOrDefault(p => p.Id == targetGuid);
+            var payload = MockStore.PaymentAccounts.SingleOrDefault(p => p.Key == targetGuid);
 
             return payload == null
                 ? new Result<PaymentAccount>(isSucceeded: false, message: "Payment account with provided guid is not exist")
@@ -39,7 +39,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var newPaymentAccount = new PaymentAccount
             {
-                Id = Guid.NewGuid(),
+                Key = Guid.NewGuid(),
                 Agent = request.Agent,
                 Balance = request.Balance,
                 Currency = request.Currency,
@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             MockStore.PaymentAccounts.Add(newPaymentAccount);
 
-            return new Result<string>(newPaymentAccount.Id.ToString());
+            return new Result<string>(newPaymentAccount.Key.ToString());
         }
 
         [HttpDelete("{paymentAccountId}")]
@@ -60,7 +60,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<bool>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var paymentAccountForDelete = MockStore.PaymentAccounts.FirstOrDefault(p => p.Id == targetGuid);
+            var paymentAccountForDelete = MockStore.PaymentAccounts.FirstOrDefault(p => p.Key == targetGuid);
             var isRemoveSuccessful = MockStore.PaymentAccounts.Remove(paymentAccountForDelete);
 
             return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
@@ -76,7 +76,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var updatedPaymentAccount = new PaymentAccount
             {
-                Id = requestPaymentAccountGuid,
+                Key = requestPaymentAccountGuid,
                 Agent = request.Agent,
                 Balance = request.Balance,
                 Currency = request.Currency,
@@ -84,7 +84,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Type = request.AccountType
             };
 
-            var elementForReplaceIndex = MockStore.PaymentAccounts.FindIndex(p => p.Id == requestPaymentAccountGuid);
+            var elementForReplaceIndex = MockStore.PaymentAccounts.FindIndex(p => p.Key == requestPaymentAccountGuid);
 
             if (elementForReplaceIndex == -1)
             {
