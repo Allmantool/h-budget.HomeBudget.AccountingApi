@@ -100,9 +100,9 @@ namespace HomeBudget.Accounting.Api
             },
         };
 
-        public static readonly List<DepositOperation> DepositOperations = new()
+        public static readonly List<PaymentOperation> PaymentOperations = new()
         {
-            new DepositOperation
+            new PaymentOperation
             {
                 Key = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c"),
                 Amount = 35.64m,
@@ -112,7 +112,7 @@ namespace HomeBudget.Accounting.Api
                 Comment = "Comment Expense",
                 OperationDate = new DateOnly(2023, 01, 15)
             },
-            new DepositOperation
+            new PaymentOperation
             {
                 Key = Guid.Parse("20a8ca8e-0127-462c-b854-b2868490f3ec"),
                 Amount = 35.64m,

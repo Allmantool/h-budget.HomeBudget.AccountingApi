@@ -4,7 +4,7 @@ namespace HomeBudget.Accounting.Domain.Services
 {
     public interface IOperationFactory
     {
-        DepositOperation Create(
+        PaymentOperation Create(
             decimal amount,
             string comment,
             string categoryId,
