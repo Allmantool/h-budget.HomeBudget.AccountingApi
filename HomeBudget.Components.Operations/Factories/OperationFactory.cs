@@ -7,7 +7,7 @@ namespace HomeBudget.Components.Operations.Factories
 {
     internal class OperationFactory : IOperationFactory
     {
-        public DepositOperation Create(
+        public PaymentOperation Create(
             decimal amount,
             string comment,
             string categoryId,
@@ -19,7 +19,7 @@ namespace HomeBudget.Components.Operations.Factories
                 return default;
             }
 
-            return new DepositOperation
+            return new PaymentOperation
             {
                 Key = Guid.NewGuid(),
                 OperationDate = DateOnly.FromDateTime(DateTime.UtcNow),

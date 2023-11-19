@@ -60,7 +60,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<bool>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var paymentAccountForDelete = MockStore.PaymentAccounts.FirstOrDefault(p => p.Key == targetGuid);
+            var paymentAccountForDelete = MockStore.PaymentAccounts.Find(p => p.Key == targetGuid);
             var isRemoveSuccessful = MockStore.PaymentAccounts.Remove(paymentAccountForDelete);
 
             return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);

@@ -15,19 +15,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class DepositOperationsControllerTests : IAsyncDisposable
+    public class PaymentOperationsControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "account-operations";
+        private const string ApiHost = "payment-operations";
 
         private readonly OperationsTestWebApp _sut = new();
 
         [Test]
-        public void GetDepositOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
+        public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
             var getOperationsRequest = new RestRequest($"{ApiHost}/{accountId}");
 
-            var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<DepositOperation>>>(getOperationsRequest);
+            var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperation>>>(getOperationsRequest);
 
             Assert.IsTrue(response.IsSuccessful);
         }
@@ -40,7 +40,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
 
-            var response = _sut.RestHttpClient.Execute<Result<DepositOperation>>(getOperationByIdRequest);
+            var response = _sut.RestHttpClient.Execute<Result<PaymentOperation>>(getOperationByIdRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -56,7 +56,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
 
-            var response = _sut.RestHttpClient.Execute<Result<DepositOperation>>(getOperationByIdRequest);
+            var response = _sut.RestHttpClient.Execute<Result<PaymentOperation>>(getOperationByIdRequest);
 
             var result = response.Data;
 
@@ -66,7 +66,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void CreateNewOperation_WhenCreateAnOperation_ReturnsNewGeneratedGuid()
         {
-            var operationAmountBefore = MockStore.DepositOperations.Count;
+            var operationAmountBefore = MockStore.PaymentOperations.Count;
 
             var requestBody = new CreateOperationRequest
             {
@@ -86,7 +86,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
             var payload = result.Payload;
 
-            var operationAmountAfter = MockStore.DepositOperations.Count;
+            var operationAmountAfter = MockStore.PaymentOperations.Count;
 
             Assert.Multiple(() =>
             {
@@ -98,7 +98,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void DeleteById_WithValidOperationRef_ThenSuccessful()
         {
-            var operationAmountBefore = MockStore.DepositOperations.Count;
+            var operationAmountBefore = MockStore.PaymentOperations.Count;
 
             const string operationId = "20a8ca8e-0127-462c-b854-b2868490f3ec";
             const string accountId = "852530a6-70b0-4040-8912-8558d59d977a";
@@ -110,7 +110,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
             var payload = result.Payload;
 
-            var operationAmountAfter = MockStore.DepositOperations.Count;
+            var operationAmountAfter = MockStore.PaymentOperations.Count;
 
             Assert.Multiple(() =>
             {
