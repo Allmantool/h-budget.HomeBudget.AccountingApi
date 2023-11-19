@@ -8,6 +8,7 @@ namespace HomeBudget.Accounting.Domain.Services
             decimal amount,
             string comment,
             string categoryId,
-            string contractorId);
+            string contractorId,
+            string paymentAccountId);
     }
 }
