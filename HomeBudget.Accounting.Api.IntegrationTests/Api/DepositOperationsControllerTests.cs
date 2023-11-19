@@ -17,14 +17,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category("Integration")]
     public class DepositOperationsControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "/operations";
+        private const string ApiHost = "account-operations";
 
         private readonly OperationsTestWebApp _sut = new();
 
         [Test]
         public void GetDepositOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {
-            var getOperationsRequest = new RestRequest(ApiHost);
+            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+            var getOperationsRequest = new RestRequest($"{ApiHost}/{accountId}");
 
             var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<DepositOperation>>>(getOperationsRequest);
 
@@ -34,9 +35,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
-            var operationId = MockStore.DepositOperations.First().Key.ToString();
+            const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
+            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/byId/{operationId}");
+            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
 
             var response = _sut.RestHttpClient.Execute<Result<DepositOperation>>(getOperationByIdRequest);
 
@@ -49,9 +51,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void GetOperationById_WhenInValidFilterById_ReturnsFalseResult()
         {
-            const string operationId = "invalidRef";
+            const string operationId = "invalid-operation-ref";
+            const string accountId = "invalid-acc-ref";
 
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/byId/{operationId}");
+            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
 
             var response = _sut.RestHttpClient.Execute<Result<DepositOperation>>(getOperationByIdRequest);
 
@@ -73,7 +76,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockStore.Contractors.First().Key.ToString(),
             };
 
-            var postCreateRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
+            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+
+            var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                .AddJsonBody(requestBody);
 
             var response = _sut.RestHttpClient.Execute<Result<string>>(postCreateRequest);
 
@@ -94,9 +100,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var operationAmountBefore = MockStore.DepositOperations.Count;
 
-            var operationId = MockStore.DepositOperations.Last().Key.ToString();
+            const string operationId = "20a8ca8e-0127-462c-b854-b2868490f3ec";
+            const string accountId = "852530a6-70b0-4040-8912-8558d59d977a";
 
-            var deleteOperationRequest = new RestRequest($"{ApiHost}/{operationId}", Method.Delete);
+            var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
             var response = _sut.RestHttpClient.Execute<Result<bool>>(deleteOperationRequest);
 
@@ -115,9 +122,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void DeleteById_WithInValidOperationRef_ThenFail()
         {
-            const string operationId = "Invalid";
+            const string operationId = "invalid-operation-ref";
+            const string accountId = "invalid-acc-ref";
 
-            var deleteOperationRequest = new RestRequest($"{ApiHost}/{operationId}", Method.Delete);
+            var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
             var response = _sut.RestHttpClient.Execute<Result<bool>>(deleteOperationRequest);
 
@@ -130,7 +138,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void Update_WithInvalid_ThenFail()
         {
-            const string operationId = "Invalid";
+            const string operationId = "invalid-operation-ref";
+            const string accountId = "invalid-acc-ref";
 
             var requestBody = new UpdateOperationRequest
             {
@@ -140,7 +149,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockStore.Contractors.First().ContractorKey
             };
 
-            var patchUpdateOperation = new RestRequest($"{ApiHost}/{operationId}", Method.Patch)
+            var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             var response = _sut.RestHttpClient.Execute<Result<string>>(patchUpdateOperation);
@@ -153,7 +162,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void Update_WithValid_ThenSuccessful()
         {
-            var operationId = MockStore.DepositOperations.First().Key.ToString();
+            const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
+            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
             var requestBody = new UpdateOperationRequest
             {
@@ -163,7 +173,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockStore.Contractors.First().Key.ToString()
             };
 
-            var patchUpdateOperation = new RestRequest($"{ApiHost}/{operationId}", Method.Patch)
+            var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             var response = _sut.RestHttpClient.Execute<Result<string>>(patchUpdateOperation);
