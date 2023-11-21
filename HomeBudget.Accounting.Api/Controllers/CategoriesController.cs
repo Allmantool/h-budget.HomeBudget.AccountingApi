@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.ComponentModel;
 
 using Microsoft.AspNetCore.Mvc;
 
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
@@ -12,8 +12,7 @@ using HomeBudget.Accounting.Domain.Services;
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
-    [DisplayName("categories")]
-    [Route("categories")]
+    [Route(Endpoints.Categories, Name = Endpoints.Categories)]
     public class CategoriesController(ICategoryFactory categoryFactory) : ControllerBase
     {
         [HttpGet]

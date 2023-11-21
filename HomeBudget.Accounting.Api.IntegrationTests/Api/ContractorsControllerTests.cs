@@ -6,6 +6,7 @@ using FluentAssertions;
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Contractor;
 using HomeBudget.Accounting.Domain.Models;
@@ -17,7 +18,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category("Integration")]
     public class ContractorsControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "/contractors";
+        private const string ApiHost = $"/{Endpoints.Contractors}";
 
         private readonly ContractorsTestWebApp _sut = new();
 

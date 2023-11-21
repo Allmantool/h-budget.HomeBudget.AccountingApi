@@ -6,9 +6,10 @@ using FluentAssertions;
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -16,7 +17,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category("Integration")]
     public class CategoriesControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "/categories";
+        private const string ApiHost = $"/{Endpoints.Categories}";
 
         private readonly CategoriesTestWebApp _sut = new();
 

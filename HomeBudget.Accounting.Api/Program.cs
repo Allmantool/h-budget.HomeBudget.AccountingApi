@@ -14,7 +14,10 @@ var configuration = webAppBuilder.Configuration
     .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
     .Build();
 
-webAppBuilder.Services.AddControllers();
+webAppBuilder.Services.AddControllers(o =>
+{
+    o.Conventions.Add(new SwaggerControllerDocConvention());
+});
 
 services.SetUpDi(configuration);
 

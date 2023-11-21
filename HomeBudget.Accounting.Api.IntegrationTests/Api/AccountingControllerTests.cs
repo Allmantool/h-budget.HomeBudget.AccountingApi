@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using FluentAssertions;
-
 using NUnit.Framework;
 using RestSharp;
 
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
@@ -18,7 +18,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [TestFixture]
     public class AccountingControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "/payment-accounts";
+        private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
         private readonly AccountingTestWebApp _sut = new();
 
