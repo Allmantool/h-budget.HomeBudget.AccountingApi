@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ComponentModel;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,7 @@ using HomeBudget.Accounting.Domain.Services;
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [Route("payment-operations/{paymentAccountId}")]
+    [DisplayName("payment-operations")]
     [ApiController]
     public class PaymentOperationsController(IOperationFactory operationFactory) : ControllerBase
     {

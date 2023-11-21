@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ComponentModel;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,7 @@ using HomeBudget.Accounting.Api.Models.Contractor;
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
+    [DisplayName("contractors")]
     [Route("contractors")]
     public class ContractorsController(IContractorFactory contractorFactory) : ControllerBase
     {

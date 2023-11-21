@@ -14,12 +14,11 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
-    // [Ignore("Intend to be used only for local testing. Not appropriate infrastructure has been setup")]
     [Category(TestTypes.Integration)]
     [TestFixture]
     public class AccountingControllerTests : IAsyncDisposable
     {
-        private const string ApiHost = "/paymentAccounts";
+        private const string ApiHost = "/payment-accounts";
 
         private readonly AccountingTestWebApp _sut = new();
 
