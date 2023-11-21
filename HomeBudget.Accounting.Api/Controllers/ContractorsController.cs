@@ -1,19 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.ComponentModel;
 
 using Microsoft.AspNetCore.Mvc;
 
-using HomeBudget.Accounting.Domain.Services;
-using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Contractor;
+using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Domain.Services;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
-    [DisplayName("contractors")]
-    [Route("contractors")]
+    [Route(Endpoints.Contractors, Name = Endpoints.Contractors)]
     public class ContractorsController(IContractorFactory contractorFactory) : ControllerBase
     {
         [HttpGet]

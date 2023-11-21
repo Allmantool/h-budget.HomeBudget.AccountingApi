@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.ComponentModel;
 
 using Microsoft.AspNetCore.Mvc;
 
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operation;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
-    [Route("payment-operations/{paymentAccountId}")]
-    [DisplayName("payment-operations")]
+    [Route(Endpoints.PaymentOperationsWithPaymentAccountId, Name = Endpoints.PaymentOperations)]
     [ApiController]
     public class PaymentOperationsController(IOperationFactory operationFactory) : ControllerBase
     {
