@@ -1,4 +1,7 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using System;
+using System.Collections.Generic;
+
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Accounts
 {
