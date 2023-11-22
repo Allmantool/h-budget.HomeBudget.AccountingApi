@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Accounts;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -17,7 +18,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
-            return new Result<IReadOnlyCollection<PaymentAccount>>(MockStore.PaymentAccounts);
+            return new Result<IReadOnlyCollection<PaymentAccount>>(MockAccountsStore.PaymentAccounts);
         }
 
         [HttpGet("byId/{paymentAccountId}")]
@@ -28,7 +29,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<PaymentAccount>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var payload = MockStore.PaymentAccounts.SingleOrDefault(p => p.Key == targetGuid);
+            var payload = MockAccountsStore.PaymentAccounts.SingleOrDefault(p => p.Key == targetGuid);
 
             return payload == null
                 ? new Result<PaymentAccount>(isSucceeded: false, message: "Payment account with provided guid is not exist")
@@ -48,7 +49,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Type = request.AccountType
             };
 
-            MockStore.PaymentAccounts.Add(newPaymentAccount);
+            MockAccountsStore.PaymentAccounts.Add(newPaymentAccount);
 
             return new Result<string>(newPaymentAccount.Key.ToString());
         }
@@ -61,8 +62,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<bool>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var paymentAccountForDelete = MockStore.PaymentAccounts.Find(p => p.Key == targetGuid);
-            var isRemoveSuccessful = MockStore.PaymentAccounts.Remove(paymentAccountForDelete);
+            var paymentAccountForDelete = MockAccountsStore.PaymentAccounts.Find(p => p.Key == targetGuid);
+            var isRemoveSuccessful = MockAccountsStore.PaymentAccounts.Remove(paymentAccountForDelete);
 
             return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
         }
@@ -85,14 +86,14 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Type = request.AccountType
             };
 
-            var elementForReplaceIndex = MockStore.PaymentAccounts.FindIndex(p => p.Key == requestPaymentAccountGuid);
+            var elementForReplaceIndex = MockAccountsStore.PaymentAccounts.FindIndex(p => p.Key == requestPaymentAccountGuid);
 
             if (elementForReplaceIndex == -1)
             {
                 return new Result<string>(isSucceeded: false, message: $"A payment account with guid: '{nameof(paymentAccountId)}' hasn't been found");
             }
 
-            MockStore.PaymentAccounts[elementForReplaceIndex] = updatedPaymentAccount;
+            MockAccountsStore.PaymentAccounts[elementForReplaceIndex] = updatedPaymentAccount;
 
             return new Result<string>(paymentAccountId);
         }
