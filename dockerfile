@@ -49,6 +49,7 @@ COPY ["HomeBudget.Accounting.Api/*.csproj", "HomeBudget.Accounting.Api/"]
 COPY ["HomeBudget.Components.Categories/*.csproj", "HomeBudget.Components.Categories/"]
 COPY ["HomeBudget.Components.Contractors/*.csproj", "HomeBudget.Components.Contractors/"]
 COPY ["HomeBudget.Components.Operations/*.csproj", "HomeBudget.Components.Operations/"]
+COPY ["HomeBudget.Components.Accounts/*.csproj", "HomeBudget.Components.Accounts/"]
 COPY ["HomeBudget.Accounting.Api.IntegrationTests/*.csproj", "HomeBudget.Accounting.Api.IntegrationTests/"]
 
 COPY . .
