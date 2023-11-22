@@ -1,4 +1,4 @@
-﻿namespace HomeBudget.Accounting.Api.Models.Operation
+﻿namespace HomeBudget.Accounting.Api.Models.Operations.Requests
 {
     public class UpdateOperationRequest
     {

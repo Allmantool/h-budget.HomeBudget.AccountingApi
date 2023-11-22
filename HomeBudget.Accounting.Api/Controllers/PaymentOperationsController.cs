@@ -5,9 +5,13 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
-using HomeBudget.Accounting.Api.Models.Operation;
+using HomeBudget.Accounting.Api.Models.Operations.Requests;
+using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
+using HomeBudget.Components.Accounts;
+using HomeBudget.Components.Accounts.Extensions;
+using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -18,7 +22,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<PaymentOperation>> GetPaymentOperations(string paymentAccountId)
         {
-            var paymentAccountOperations = MockStore.PaymentOperations
+            var paymentAccountOperations = MockOperationsStore.PaymentOperations
                 .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
@@ -28,7 +32,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("byId/{operationId}")]
         public Result<PaymentOperation> GetOperationById(string paymentAccountId, string operationId)
         {
-            var operationById = MockStore.PaymentOperations
+            var operationById = MockOperationsStore.PaymentOperations
                 .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
                 .SingleOrDefault(c => string.Equals(c.Key.ToString(), operationId, StringComparison.OrdinalIgnoreCase));
 
@@ -38,10 +42,14 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public Result<string> CreateNewOperation(string paymentAccountId, [FromBody] CreateOperationRequest request)
+        public Result<CreateOperationResponse> CreateNewOperation(string paymentAccountId, [FromBody] CreateOperationRequest request)
         {
-            var isPaymentAccountExists = MockStore.PaymentOperations
-                .Exists(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase));
+            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+
+            if (paymentAccount == null)
+            {
+                return new Result<CreateOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
+            }
 
             var newOperation = operationFactory.Create(
                 request.Amount,
@@ -50,39 +58,59 @@ namespace HomeBudget.Accounting.Api.Controllers
                 request.ContractorId,
                 paymentAccountId);
 
-            if (!isPaymentAccountExists)
+            MockOperationsStore.PaymentOperations.Add(newOperation);
+
+            paymentAccount.SyncBalanceOnCreate(newOperation);
+
+            var response = new CreateOperationResponse
             {
-                return new Result<string>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
-            }
+                PaymentAccountBalance = paymentAccount.Balance,
+                PaymentAccountId = paymentAccountId,
+                PaymentOperationId = newOperation.Key.ToString()
+            };
 
-            MockStore.PaymentOperations.Add(newOperation);
-
-            return new Result<string>(newOperation.Key.ToString());
+            return new Result<CreateOperationResponse>(response, isSucceeded: true);
         }
 
         [HttpDelete("{operationId}")]
-        public Result<bool> DeleteById(string paymentAccountId, string operationId)
+        public Result<RemoveOperationResponse> DeleteById(string paymentAccountId, string operationId)
         {
             if (!Guid.TryParse(operationId, out var targetGuid))
             {
-                return new Result<bool>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
             }
 
-            var operationForDelete = MockStore.PaymentOperations
+            var operationForDelete = MockOperationsStore.PaymentOperations
                 .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
                 .FirstOrDefault(p => p.Key == targetGuid);
 
-            var isRemoveSuccessful = MockStore.PaymentOperations.Remove(operationForDelete);
+            var isRemoveSuccessful = MockOperationsStore.PaymentOperations.Remove(operationForDelete);
 
-            return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
+            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+
+            if (paymentAccount == null)
+            {
+                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
+            }
+
+            paymentAccount.SyncBalanceOnDelete(operationForDelete);
+
+            var response = new RemoveOperationResponse
+            {
+                PaymentAccountBalance = paymentAccount.Balance,
+                PaymentAccountId = paymentAccountId,
+                PaymentOperationId = operationForDelete.Key.ToString()
+            };
+
+            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: isRemoveSuccessful);
         }
 
         [HttpPatch("{operationId}")]
-        public Result<string> Update(string paymentAccountId, string operationId, [FromBody] UpdateOperationRequest request)
+        public Result<UpdateOperationResponse> Update(string paymentAccountId, string operationId, [FromBody] UpdateOperationRequest request)
         {
             if (!Guid.TryParse(operationId, out var requestOperationGuid))
             {
-                return new Result<string>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
             }
 
             var updatedOperation = new PaymentOperation
@@ -95,17 +123,30 @@ namespace HomeBudget.Accounting.Api.Controllers
                 ContractorId = Guid.Parse(request.ContractorId)
             };
 
-            var elementForReplaceIndex = MockStore.PaymentOperations
+            var elementForReplaceIndex = MockOperationsStore.PaymentOperations
                 .FindIndex(p => p.Key.CompareTo(requestOperationGuid) == 0);
 
             if (elementForReplaceIndex == -1)
             {
-                return new Result<string>(isSucceeded: false, message: $"A operation with guid: '{nameof(operationId)}' hasn't been found");
+                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"A operation with guid: '{nameof(operationId)}' hasn't been found");
             }
 
-            MockStore.PaymentOperations[elementForReplaceIndex] = updatedOperation;
+            var originOperation = MockOperationsStore.PaymentOperations[elementForReplaceIndex];
 
-            return new Result<string>(operationId);
+            MockOperationsStore.PaymentOperations[elementForReplaceIndex] = updatedOperation;
+
+            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+
+            paymentAccount.SyncBalanceOnUpdate(originOperation, updatedOperation);
+
+            var response = new UpdateOperationResponse
+            {
+                PaymentAccountBalance = paymentAccount.Balance,
+                PaymentAccountId = paymentAccountId,
+                PaymentOperationId = updatedOperation.Key.ToString()
+            };
+
+            return new Result<UpdateOperationResponse>(response, isSucceeded: true);
         }
     }
 }
