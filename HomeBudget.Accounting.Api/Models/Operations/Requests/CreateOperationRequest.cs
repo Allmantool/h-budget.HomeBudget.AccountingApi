@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Accounting.Api.Models.Operations.Requests
+﻿using System;
+
+namespace HomeBudget.Accounting.Api.Models.Operations.Requests
 {
     public class CreateOperationRequest
     {
@@ -6,5 +8,6 @@
         public string Comment { get; set; }
         public string ContractorId { get; set; }
         public string CategoryId { get; set; }
+        public DateOnly OperationDate { get; set; }
     }
 }

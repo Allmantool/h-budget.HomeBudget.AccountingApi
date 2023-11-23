@@ -4,7 +4,7 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class PaymentOperation : DomainEntity
     {
-        public DateOnly OperationDate { get; set; }
+        public DateOnly OperationDay { get; set; }
         public string Comment { get; set; }
         public Guid ContractorId { get; set; }
         public Guid CategoryId { get; set; }

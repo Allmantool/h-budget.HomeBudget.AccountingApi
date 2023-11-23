@@ -1,4 +1,6 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Domain.Services
 {
@@ -9,6 +11,7 @@ namespace HomeBudget.Accounting.Domain.Services
             string comment,
             string categoryId,
             string contractorId,
-            string paymentAccountId);
+            string paymentAccountId,
+            DateOnly operationDay);
     }
 }

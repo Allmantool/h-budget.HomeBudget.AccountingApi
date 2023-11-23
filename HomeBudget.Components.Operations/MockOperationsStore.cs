@@ -17,7 +17,7 @@ namespace HomeBudget.Components.Operations
                 CategoryId = Guid.Parse("e9b040ef-6450-46ab-8416-2b146d4da0f0"),
                 ContractorId = Guid.Parse("66e81106-9214-41a4-8297-82d6761f1d40"),
                 Comment = "Comment Expense",
-                OperationDate = new DateOnly(2023, 01, 15)
+                OperationDay = new DateOnly(2023, 01, 15)
             },
             new PaymentOperation
             {
@@ -27,7 +27,7 @@ namespace HomeBudget.Components.Operations
                 CategoryId = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742"),
                 ContractorId = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78"),
                 Comment = "Comment Income",
-                OperationDate = new DateOnly(2023, 01, 16)
+                OperationDay = new DateOnly(2023, 01, 16)
             },
             new PaymentOperation
             {
@@ -37,7 +37,7 @@ namespace HomeBudget.Components.Operations
                 CategoryId = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742"),
                 ContractorId = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78"),
                 Comment = "Comment Income",
-                OperationDate = new DateOnly(2023, 01, 16)
+                OperationDay = new DateOnly(2023, 01, 16)
             }
         };
     }
