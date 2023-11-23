@@ -56,7 +56,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 request.Comment,
                 request.CategoryId,
                 request.ContractorId,
-                paymentAccountId);
+                paymentAccountId,
+                request.OperationDate);
 
             MockOperationsStore.PaymentOperations.Add(newOperation);
 

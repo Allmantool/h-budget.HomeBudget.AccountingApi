@@ -12,7 +12,8 @@ namespace HomeBudget.Components.Operations.Factories
             string comment,
             string categoryId,
             string contractorId,
-            string paymentAccountId)
+            string paymentAccountId,
+            DateOnly operationDay)
         {
             if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
             {
@@ -22,7 +23,7 @@ namespace HomeBudget.Components.Operations.Factories
             return new PaymentOperation
             {
                 Key = Guid.NewGuid(),
-                OperationDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                OperationDay = operationDay,
                 Amount = amount,
                 Comment = comment,
                 PaymentAccountId = Guid.Parse(paymentAccountId),
