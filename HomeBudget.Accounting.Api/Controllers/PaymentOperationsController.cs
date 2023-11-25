@@ -121,7 +121,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Comment = request.Comment,
                 PaymentAccountId = Guid.Parse(paymentAccountId),
                 CategoryId = Guid.Parse(request.CategoryId),
-                ContractorId = Guid.Parse(request.ContractorId)
+                ContractorId = Guid.Parse(request.ContractorId),
+                OperationDay = request.OperationDate
             };
 
             var elementForReplaceIndex = MockOperationsStore.PaymentOperations
