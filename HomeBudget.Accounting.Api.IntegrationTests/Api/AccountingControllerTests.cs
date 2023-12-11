@@ -29,7 +29,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
 
-            Assert.IsTrue(response.IsSuccessful);
+            response.IsSuccessful.Should().BeTrue();
         }
 
         [Test]

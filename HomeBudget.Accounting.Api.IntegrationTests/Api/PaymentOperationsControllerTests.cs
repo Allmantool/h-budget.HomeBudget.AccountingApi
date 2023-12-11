@@ -35,7 +35,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperation>>>(getOperationsRequest);
 
-            Assert.IsTrue(response.IsSuccessful);
+            response.IsSuccessful.Should().BeTrue();
         }
 
         [Test]
