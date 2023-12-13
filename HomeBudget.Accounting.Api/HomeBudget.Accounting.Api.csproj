@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="12.0.1" />
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
     <PackageReference Include="Serilog.Enrichers.Environment" Version="2.3.0" />
@@ -30,5 +31,6 @@
       <_Parameter1>HomeBudget.Accounting.Api.IntegrationTests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
+
 
 </Project>

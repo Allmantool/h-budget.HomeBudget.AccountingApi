@@ -7,14 +7,14 @@ namespace HomeBudget.Components.Accounts
 {
     public static class MockAccountsStore
     {
-        public static readonly List<PaymentAccount> PaymentAccounts = new()
+        public static readonly List<PaymentAccount> Records = new()
         {
             new()
             {
                 Key = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84"),
                 Agent = "Priorbank",
                 Type = AccountTypes.Bank,
-                Balance = 320.24m,
+                Balance = 0m,
                 Currency = CurrencyTypes.BYN.ToString(),
                 Description = "Prior description"
             },

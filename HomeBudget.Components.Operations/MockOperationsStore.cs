@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 using HomeBudget.Accounting.Domain.Models;
 
@@ -7,8 +7,8 @@ namespace HomeBudget.Components.Operations
 {
     public static class MockOperationsStore
     {
-        public static readonly List<PaymentOperation> PaymentOperations = new()
-        {
+        public static readonly List<PaymentOperation> Records =
+        [
             new PaymentOperation
             {
                 Key = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c"),
@@ -38,7 +38,7 @@ namespace HomeBudget.Components.Operations
                 ContractorId = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78"),
                 Comment = "Comment Income",
                 OperationDay = new DateOnly(2023, 01, 16)
-            }
-        };
+            },
+        ];
     }
 }

@@ -28,17 +28,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private readonly OperationsTestWebApp _sut = new();
 
         [Test]
-        public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
-        {
-            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
-            var getOperationsRequest = new RestRequest($"{ApiHost}/{accountId}");
-
-            var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperation>>>(getOperationsRequest);
-
-            response.IsSuccessful.Should().BeTrue();
-        }
-
-        [Test]
         public void GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
             const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
@@ -70,9 +59,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperation()
+        public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
         {
-            var operationAmountBefore = MockOperationsStore.PaymentOperations.Count;
+            var operationAmountBefore = MockOperationEventsStore.Events.Count;
 
             var requestBody = new CreateOperationRequest
             {
@@ -82,9 +71,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
             };
 
-            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+            const string paymentAccountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
-            var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+            var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
             var response = _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
@@ -92,13 +81,51 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
             var payload = result.Payload;
 
-            var operationAmountAfter = MockOperationsStore.PaymentOperations.Count;
+            var operationAmountAfter = MockOperationEventsStore.Events.Count;
 
             Assert.Multiple(() =>
             {
                 Guid.TryParse(payload.PaymentOperationId, out _).Should().BeTrue();
                 Guid.TryParse(payload.PaymentAccountId, out _).Should().BeTrue();
                 operationAmountBefore.Should().BeLessThan(operationAmountAfter);
+            });
+        }
+
+        [Test]
+        public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationHistoryRecord()
+        {
+            const string paymentAccountId = "c9b33506-9a98-4f76-ad8e-17c96858305b";
+
+            var operationsAmountBefore = MockOperationHistoryWithBalanceStore.Records
+                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0);
+
+            foreach (var i in Enumerable.Range(1, 7))
+            {
+                var requestBody = new CreateOperationRequest
+                {
+                    Amount = 10 + i,
+                    Comment = $"New operation - {i}",
+                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    OperationDate = new DateOnly(2023, 12, 15)
+                };
+
+                var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
+                    .AddJsonBody(requestBody);
+
+                _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+            }
+
+            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+
+            var paymentsHistoryResponse = _sut.RestHttpClient
+                .Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            var operationAmountAfter = paymentsHistoryResponse.Data.Payload.Count;
+
+            Assert.Multiple(() =>
+            {
+                operationsAmountBefore.Should().BeLessThan(operationAmountAfter);
             });
         }
 
@@ -115,14 +142,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
-            var balanceBefore = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
             _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var operationAmountAfter = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var operationAmountAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             Assert.Multiple(() =>
             {
@@ -136,13 +163,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const string operationId = "5a53e3d3-0596-4ade-8aff-f3b3b956d0bd";
             const string accountId = "c9b33506-9a98-4f76-ad8e-17c96858305b";
 
-            var balanceBefore = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
             _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
-            var balanceAfter = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             Assert.Multiple(() =>
             {
@@ -153,7 +180,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void DeleteById_WithValidOperationRef_BalanceShouldBeDescriesed()
         {
-            var operationAmountBefore = MockOperationsStore.PaymentOperations.Count;
+            var operationAmountBefore = MockOperationsStore.Records.Count;
 
             const string operationId = "20a8ca8e-0127-462c-b854-b2868490f3ec";
             const string accountId = "852530a6-70b0-4040-8912-8558d59d977a";
@@ -164,7 +191,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var result = response.Data;
 
-            var operationAmountAfter = MockOperationsStore.PaymentOperations.Count;
+            var operationAmountAfter = MockOperationsStore.Records.Count;
 
             Assert.Multiple(() =>
             {
@@ -253,14 +280,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockContractorsStore.Contractors.First().Key.ToString()
             };
 
-            var balanceBefore = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
-            var balanceAfter = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             Assert.Multiple(() =>
             {

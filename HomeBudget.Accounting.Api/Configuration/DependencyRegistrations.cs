@@ -1,9 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using HomeBudget.Components.Accounts.Configuration;
+using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
-using HomeBudget.Components.Categories.Configuration;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -14,6 +15,7 @@ namespace HomeBudget.Accounting.Api.Configuration
             IConfiguration configuration)
         {
             return services
+                .RegisterPaymentAccountsIoCDependency()
                 .RegisterContractorsIoCDependency()
                 .RegisterOperationsIoCDependency()
                 .RegisterCategoriesIoCDependency();

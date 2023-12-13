@@ -1,38 +1,34 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Accounts.Extensions;
 using HomeBudget.Components.Operations;
+using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
-    [Route(Endpoints.PaymentOperationsWithPaymentAccountId, Name = Endpoints.PaymentOperations)]
+    [Route(Endpoints.PaymentOperationsByPaymentAccountId, Name = Endpoints.PaymentOperations)]
     [ApiController]
-    public class PaymentOperationsController(IOperationFactory operationFactory) : ControllerBase
+    public class PaymentOperationsController(
+        IMapper mapper,
+        IPaymentOperationsService paymentOperationsService
+        ) : ControllerBase
     {
-        [HttpGet]
-        public Result<IReadOnlyCollection<PaymentOperation>> GetPaymentOperations(string paymentAccountId)
-        {
-            var paymentAccountOperations = MockOperationsStore.PaymentOperations
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return new Result<IReadOnlyCollection<PaymentOperation>>(paymentAccountOperations);
-        }
-
         [HttpGet("byId/{operationId}")]
         public Result<PaymentOperation> GetOperationById(string paymentAccountId, string operationId)
         {
-            var operationById = MockOperationsStore.PaymentOperations
+            var operationById = MockOperationsStore.Records
                 .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
                 .SingleOrDefault(c => string.Equals(c.Key.ToString(), operationId, StringComparison.OrdinalIgnoreCase));
 
@@ -42,35 +38,31 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public Result<CreateOperationResponse> CreateNewOperation(string paymentAccountId, [FromBody] CreateOperationRequest request)
+        public async Task<Result<CreateOperationResponse>> CreateNewOperationAsync(
+            string paymentAccountId,
+            [FromBody] CreateOperationRequest request,
+            CancellationToken token = default)
         {
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(Guid.Parse(paymentAccountId)) == 0);
 
             if (paymentAccount == null)
             {
-                return new Result<CreateOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
+                return new Result<CreateOperationResponse>(
+                    isSucceeded: false,
+                    message: $"The payment account '{paymentAccountId}' doesn't exist");
             }
 
-            var newOperation = operationFactory.Create(
-                request.Amount,
-                request.Comment,
-                request.CategoryId,
-                request.ContractorId,
-                paymentAccountId,
-                request.OperationDate);
+            var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            MockOperationsStore.PaymentOperations.Add(newOperation);
-
-            paymentAccount.SyncBalanceOnCreate(newOperation);
+            var responseResult = await paymentOperationsService.CreateAsync(paymentAccountId, operationPayload, token);
 
             var response = new CreateOperationResponse
             {
-                PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = newOperation.Key.ToString()
+                PaymentOperationId = responseResult.Payload.ToString()
             };
 
-            return new Result<CreateOperationResponse>(response, isSucceeded: true);
+            return new Result<CreateOperationResponse>(response, isSucceeded: responseResult.IsSucceeded);
         }
 
         [HttpDelete("{operationId}")]
@@ -81,13 +73,13 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
             }
 
-            var operationForDelete = MockOperationsStore.PaymentOperations
+            var operationForDelete = MockOperationsStore.Records
                 .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
                 .FirstOrDefault(p => p.Key == targetGuid);
 
-            var isRemoveSuccessful = MockOperationsStore.PaymentOperations.Remove(operationForDelete);
+            var isRemoveSuccessful = MockOperationsStore.Records.Remove(operationForDelete);
 
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
 
             if (paymentAccount == null)
             {
@@ -125,7 +117,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 OperationDay = request.OperationDate
             };
 
-            var elementForReplaceIndex = MockOperationsStore.PaymentOperations
+            var elementForReplaceIndex = MockOperationsStore.Records.ToList()
                 .FindIndex(p => p.Key.CompareTo(requestOperationGuid) == 0);
 
             if (elementForReplaceIndex == -1)
@@ -133,11 +125,11 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"A operation with guid: '{nameof(operationId)}' hasn't been found");
             }
 
-            var originOperation = MockOperationsStore.PaymentOperations[elementForReplaceIndex];
+            var originOperation = MockOperationsStore.Records[elementForReplaceIndex];
 
-            MockOperationsStore.PaymentOperations[elementForReplaceIndex] = updatedOperation;
+            MockOperationsStore.Records[elementForReplaceIndex] = updatedOperation;
 
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
+            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
 
             paymentAccount.SyncBalanceOnUpdate(originOperation, updatedOperation);
 

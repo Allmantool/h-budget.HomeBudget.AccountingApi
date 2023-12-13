@@ -24,4 +24,5 @@
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
   </ItemGroup>
 
+
 </Project>
