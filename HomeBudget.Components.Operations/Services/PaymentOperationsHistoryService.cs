@@ -49,18 +49,18 @@ namespace HomeBudget.Components.Operations.Services
 
             var operationsHistory = new SortedList<long, PaymentOperationHistoryRecord>();
 
-            foreach (var operationEvent in mostUpToDateHistoryRecords)
-            {
-                var previousRecordBalance = operationsHistory.Any()
-                    ? operationsHistory.Last().Value.Balance
-                    : 0;
+            var previousRecordBalance = operationsHistory.Any()
+                ? operationsHistory.Last().Value.Balance
+                : 0;
 
+            foreach (var operationEvent in mostUpToDateHistoryRecords.Select(r => r.Payload))
+            {
                 operationsHistory.Add(
-                    operationEvent.Payload.OperationUnixTime,
+                    operationEvent.OperationUnixTime,
                     new PaymentOperationHistoryRecord
                     {
-                        Record = operationEvent.Payload,
-                        Balance = previousRecordBalance + operationEvent.Payload.Amount
+                        Record = operationEvent,
+                        Balance = previousRecordBalance + operationEvent.Amount
                     });
             }
 

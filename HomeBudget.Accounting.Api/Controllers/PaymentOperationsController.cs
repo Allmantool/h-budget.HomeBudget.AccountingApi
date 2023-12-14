@@ -62,7 +62,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
 
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
+            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new RemoveOperationResponse
             {
@@ -92,7 +92,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, Guid.Parse(operationId), operationPayload, token);
 
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
+            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new UpdateOperationResponse
             {

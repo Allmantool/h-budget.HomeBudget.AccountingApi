@@ -112,14 +112,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
-            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
             _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var operationAmountAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var operationAmountAfter = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
             Assert.Multiple(() =>
             {
@@ -148,7 +148,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             });
 
             var balanceBefore = MockAccountsStore.Records
-                .Find(pa => pa.Key.CompareTo(accountId) == 0)
+                .Single(pa => pa.Key.CompareTo(accountId) == 0)
                 .Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
@@ -156,7 +156,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
             var balanceAfter = MockAccountsStore.Records
-                .Find(pa => pa.Key.CompareTo(accountId) == 0)
+                .Single(pa => pa.Key.CompareTo(accountId) == 0)
                 .Balance;
 
             balanceBefore.Should().BeGreaterThan(balanceAfter);
@@ -286,14 +286,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = MockContractorsStore.Contractors.First().Key.ToString()
             };
 
-            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(accountId) == 0).Balance;
+            var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
-            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(accountId) == 0).Balance;
+            var balanceAfter = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
         }

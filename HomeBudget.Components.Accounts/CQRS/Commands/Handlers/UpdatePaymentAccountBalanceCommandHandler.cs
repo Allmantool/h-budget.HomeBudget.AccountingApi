@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace HomeBudget.Components.Accounts.CQRS.Commands.Handlers
             UpdatePaymentAccountBalanceCommand request,
             CancellationToken cancellationToken)
         {
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(request.PaymentAccountId) == 0);
+            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(request.PaymentAccountId) == 0);
 
             paymentAccount.Balance = request.Balance;
 

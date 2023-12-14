@@ -18,7 +18,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<PaymentAccount>> Get()
         {
-            return new Result<IReadOnlyCollection<PaymentAccount>>(MockAccountsStore.Records);
+            return new Result<IReadOnlyCollection<PaymentAccount>>(MockAccountsStore.Records.ToList());
         }
 
         [HttpGet("byId/{paymentAccountId}")]
@@ -55,17 +55,17 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpDelete("{paymentAccountId}")]
-        public Result<bool> DeleteById(string paymentAccountId)
+        public Result<Guid> DeleteById(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetGuid))
             {
-                return new Result<bool>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+                return new Result<Guid>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var paymentAccountForDelete = MockAccountsStore.Records.Find(p => p.Key == targetGuid);
-            var isRemoveSuccessful = MockAccountsStore.Records.Remove(paymentAccountForDelete);
+            var paymentAccountForDelete = MockAccountsStore.Records.FirstOrDefault(p => p.Key.CompareTo(targetGuid) == 0);
+            MockAccountsStore.Records.Remove(paymentAccountForDelete);
 
-            return new Result<bool>(payload: isRemoveSuccessful, isSucceeded: isRemoveSuccessful);
+            return new Result<Guid>(payload: paymentAccountForDelete.Key);
         }
 
         [HttpPatch("{paymentAccountId}")]
@@ -86,14 +86,15 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Type = request.AccountType
             };
 
-            var elementForReplaceIndex = MockAccountsStore.Records.FindIndex(p => p.Key == requestPaymentAccountGuid);
+            var itemForDelete = MockAccountsStore.Records.FirstOrDefault(p => p.Key.CompareTo(requestPaymentAccountGuid) == 0);
 
-            if (elementForReplaceIndex == -1)
+            if (itemForDelete == null)
             {
                 return new Result<string>(isSucceeded: false, message: $"A payment account with guid: '{nameof(paymentAccountId)}' hasn't been found");
             }
 
-            MockAccountsStore.Records[elementForReplaceIndex] = updatedPaymentAccount;
+            MockAccountsStore.Records.Remove(itemForDelete);
+            MockAccountsStore.Records.Add(updatedPaymentAccount);
 
             return new Result<string>(paymentAccountId);
         }
