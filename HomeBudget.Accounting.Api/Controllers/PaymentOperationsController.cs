@@ -11,7 +11,6 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Operations;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -24,18 +23,6 @@ namespace HomeBudget.Accounting.Api.Controllers
         IPaymentOperationsService paymentOperationsService
         ) : ControllerBase
     {
-        [HttpGet("byId/{operationId}")]
-        public Result<PaymentOperation> GetOperationById(string paymentAccountId, string operationId)
-        {
-            var operationById = MockOperationsStore.Records
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .SingleOrDefault(c => string.Equals(c.Key.ToString(), operationId, StringComparison.OrdinalIgnoreCase));
-
-            return operationById == null
-                ? new Result<PaymentOperation>(isSucceeded: false, message: $"The operation with '{operationId}' hasn't been found")
-                : new Result<PaymentOperation>(payload: operationById);
-        }
-
         [HttpPost]
         public async Task<Result<CreateOperationResponse>> CreateNewOperationAsync(
             string paymentAccountId,

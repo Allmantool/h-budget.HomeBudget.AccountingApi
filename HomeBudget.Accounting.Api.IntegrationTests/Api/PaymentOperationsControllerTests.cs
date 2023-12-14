@@ -16,6 +16,7 @@ using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Contractors;
 using HomeBudget.Components.Operations;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -26,37 +27,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
         private readonly OperationsTestWebApp _sut = new();
-
-        [Test]
-        public void GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
-        {
-            const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
-            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
-
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
-
-            var response = _sut.RestHttpClient.Execute<Result<PaymentOperation>>(getOperationByIdRequest);
-
-            var result = response.Data;
-            var payload = result.Payload;
-
-            payload.Amount.Should().Be(35.64m);
-        }
-
-        [Test]
-        public void GetOperationById_WhenInValidFilterById_ReturnsFalseResult()
-        {
-            const string operationId = "invalid-operation-ref";
-            const string accountId = "invalid-acc-ref";
-
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
-
-            var response = _sut.RestHttpClient.Execute<Result<PaymentOperation>>(getOperationByIdRequest);
-
-            var result = response.Data;
-
-            result.IsSucceeded.Should().BeFalse();
-        }
 
         [Test]
         public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
@@ -294,38 +264,43 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void Update_WithValid_BalanceShouldBeExpectedlyUpdated()
         {
-            const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
-            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+            var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
+            var accountId = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f");
+
+            MockOperationEventsStore.Events.Add(new PaymentOperationEvent
+            {
+                EventType = EventTypes.Add,
+                Payload = new PaymentOperation
+                {
+                    PaymentAccountId = accountId,
+                    Key = operationId,
+                    Amount = 12.0m
+                }
+            });
 
             var requestBody = new UpdateOperationRequest
             {
-                Amount = 170,
+                Amount = 17.22m,
                 Comment = "Some update description",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
                 ContractorId = MockContractorsStore.Contractors.First().Key.ToString()
             };
 
-            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
             _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
-            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
-            Assert.Multiple(() =>
-            {
-                balanceBefore.Should().BeLessThan(balanceAfter);
-            });
+            balanceBefore.Should().BeLessThan(balanceAfter);
         }
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
-            if (_sut != null)
-            {
-                await _sut.DisposeAsync();
-            }
+            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
     }
 }

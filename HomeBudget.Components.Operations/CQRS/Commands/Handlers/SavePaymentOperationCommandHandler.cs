@@ -35,7 +35,7 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
                     upToDateBalanceResult.Payload),
                 cancellationToken);
 
-            return Task.FromResult(new Result<Guid>(paymentOperationEvent.PaymentOperationId));
+            return Task.FromResult(new Result<Guid>(paymentOperationEvent.Payload.Key));
         }
     }
 }

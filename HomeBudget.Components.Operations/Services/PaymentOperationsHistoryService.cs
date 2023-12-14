@@ -23,8 +23,13 @@ namespace HomeBudget.Components.Operations.Services
             }
 
             var mostUpToDateHistoryRecords = historyEventsForAccount
-                .GroupBy(ev => ev.PaymentOperationId).Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
-                .Select(gr => gr.OrderBy(ev => ev.OperationUnixTime).Last());
+                .GroupBy(ev => ev.Payload.Key)
+                .Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
+                .Where(gr => gr.Any(ev => ev.EventType == EventTypes.Add))
+                .Select(gr => gr
+                    .OrderBy(ev => ev.Payload.OperationDay)
+                    .ThenBy(ev => ev.Payload.OperationUnixTime)
+                    .Last());
 
             if (mostUpToDateHistoryRecords.Count() == 1)
             {

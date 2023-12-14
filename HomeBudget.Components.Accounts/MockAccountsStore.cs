@@ -20,6 +20,15 @@ namespace HomeBudget.Components.Accounts
             },
             new()
             {
+                Key = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f"),
+                Agent = "Priorbank - update test",
+                Type = AccountTypes.Bank,
+                Balance = 12.0m,
+                Currency = CurrencyTypes.BYN.ToString(),
+                Description = "Prior description - test update"
+            },
+            new()
+            {
                 Key = Guid.Parse("47d84ccf-7f79-4b6b-a691-3c2b313b0905"),
                 Agent = "Priorbank",
                 Type = AccountTypes.Bank,
