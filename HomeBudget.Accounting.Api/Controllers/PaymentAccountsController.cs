@@ -65,7 +65,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             var paymentAccountForDelete = MockAccountsStore.Records.FirstOrDefault(p => p.Key.CompareTo(targetGuid) == 0);
             MockAccountsStore.Records.Remove(paymentAccountForDelete);
 
-            return new Result<Guid>(payload: paymentAccountForDelete.Key);
+            return new Result<Guid>(payload: targetGuid);
         }
 
         [HttpPatch("{paymentAccountId}")]
