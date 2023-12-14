@@ -13,15 +13,15 @@ using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 {
-    internal class SavePaymentOperationCommandHandler(
+    internal class UpdatePaymentOperationCommandHandler(
         IMapper mapper,
         ISender sender,
         IPaymentOperationsHistoryService paymentOperationsHistoryService)
-        : IRequestHandler<SavePaymentOperationCommand, Result<Guid>>
+        : IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {
-        public Task<Result<Guid>> Handle(SavePaymentOperationCommand request, CancellationToken cancellationToken)
+        public Task<Result<Guid>> Handle(UpdatePaymentOperationCommand request, CancellationToken cancellationToken)
         {
-            var paymentAccountId = request.OperationForAdd.PaymentAccountId;
+            var paymentAccountId = request.OperationForUpdate.PaymentAccountId;
 
             var paymentOperationEvent = mapper.Map<PaymentOperationEvent>(request);
 

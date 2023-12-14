@@ -21,15 +21,17 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
     {
         public Task<Result<Guid>> Handle(RemovePaymentOperationCommand request, CancellationToken cancellationToken)
         {
+            var paymentAccountId = request.OperationForDelete.PaymentAccountId;
+
             var paymentOperationEvent = mapper.Map<PaymentOperationEvent>(request);
 
             MockOperationEventsStore.Events.Add(paymentOperationEvent);
 
-            var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(request.OperationForDelete.PaymentAccountId);
+            var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(paymentAccountId);
 
             sender.Send(
                 new UpdatePaymentAccountBalanceCommand(
-                    request.OperationForDelete.PaymentAccountId,
+                    paymentAccountId,
                     upToDateBalanceResult.Payload),
                 cancellationToken);
 

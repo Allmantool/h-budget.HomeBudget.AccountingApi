@@ -11,7 +11,6 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Accounts.Extensions;
 using HomeBudget.Components.Operations;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -66,6 +65,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpDelete("{operationId}")]
         public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(string paymentAccountId, string operationId, CancellationToken token = default)
         {
+            // TODO: Fluent validation
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
                 return new Result<RemoveOperationResponse>(
@@ -88,45 +88,30 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPatch("{operationId}")]
-        public Result<UpdateOperationResponse> Update(string paymentAccountId, string operationId, [FromBody] UpdateOperationRequest request)
+        public async Task<Result<UpdateOperationResponse>> UpdateAsync(
+            string paymentAccountId,
+            string operationId,
+            [FromBody] UpdateOperationRequest request,
+            CancellationToken token = default)
         {
-            if (!Guid.TryParse(operationId, out var requestOperationGuid))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
-                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<UpdateOperationResponse>(
+                    isSucceeded: false,
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
-            var updatedOperation = new PaymentOperation
-            {
-                Key = requestOperationGuid,
-                Amount = request.Amount,
-                Comment = request.Comment,
-                PaymentAccountId = Guid.Parse(paymentAccountId),
-                CategoryId = Guid.Parse(request.CategoryId),
-                ContractorId = Guid.Parse(request.ContractorId),
-                OperationDay = request.OperationDate
-            };
+            var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            var elementForReplaceIndex = MockOperationsStore.Records.ToList()
-                .FindIndex(p => p.Key.CompareTo(requestOperationGuid) == 0);
+            var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, Guid.Parse(operationId), operationPayload, token);
 
-            if (elementForReplaceIndex == -1)
-            {
-                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"A operation with guid: '{nameof(operationId)}' hasn't been found");
-            }
-
-            var originOperation = MockOperationsStore.Records[elementForReplaceIndex];
-
-            MockOperationsStore.Records[elementForReplaceIndex] = updatedOperation;
-
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
-
-            paymentAccount.SyncBalanceOnUpdate(originOperation, updatedOperation);
+            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new UpdateOperationResponse
             {
                 PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = updatedOperation.Key.ToString()
+                PaymentOperationId = updateResponseResult.Payload.ToString()
             };
 
             return new Result<UpdateOperationResponse>(response, isSucceeded: true);

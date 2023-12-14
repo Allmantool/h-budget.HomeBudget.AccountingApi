@@ -4,6 +4,6 @@
     {
         Add = 0,
         Remove = 1,
-        Upgrade = 2
+        Update = 2
     }
 }

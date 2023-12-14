@@ -18,7 +18,7 @@ namespace HomeBudget.Components.Operations.Services
     {
         public Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
         {
-            var newOperation = operationFactory.Create(
+            var operationForAdd = operationFactory.Create(
                 paymentAccountId,
                 payload.Amount,
                 payload.Comment,
@@ -26,7 +26,7 @@ namespace HomeBudget.Components.Operations.Services
                 payload.ContractorId,
                 payload.OperationDate);
 
-            return mediator.Send(new SavePaymentOperationCommand(newOperation), token);
+            return mediator.Send(new SavePaymentOperationCommand(operationForAdd), token);
         }
 
         public Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
@@ -38,6 +38,22 @@ namespace HomeBudget.Components.Operations.Services
             return operationForDelete == null
                 ? Task.FromResult(new Result<Guid>(isSucceeded: false, message: $"The operation '{operationId}' doesn't exist"))
                 : mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Record), token);
+        }
+
+        public Task<Result<Guid>> UpdateAsync(Guid paymentAccountId, Guid operationId, PaymentOperationPayload payload, CancellationToken token)
+        {
+            var operationForUpdate = new PaymentOperation
+            {
+                PaymentAccountId = paymentAccountId,
+                Key = operationId,
+                Amount = payload.Amount,
+                Comment = payload.Comment,
+                CategoryId = Guid.Parse(payload.CategoryId),
+                ContractorId = Guid.Parse(payload.ContractorId),
+                OperationDay = payload.OperationDate
+            };
+
+            return mediator.Send(new UpdatePaymentOperationCommand(operationForUpdate), token);
         }
     }
 }
