@@ -6,9 +6,9 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.CQRS.Commands.Models
 {
-    public class SavePaymentOperationCommand(PaymentOperation operationForAdd)
+    internal class RemovePaymentOperationCommand(PaymentOperation operationForDelete)
         : IRequest<Result<Guid>>
     {
-        public PaymentOperation OperationForAdd { get; } = operationForAdd;
+        public PaymentOperation OperationForDelete { get; } = operationForDelete;
     }
 }

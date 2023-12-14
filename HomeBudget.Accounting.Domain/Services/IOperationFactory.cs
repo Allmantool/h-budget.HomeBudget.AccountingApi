@@ -7,7 +7,7 @@ namespace HomeBudget.Accounting.Domain.Services
     public interface IOperationFactory
     {
         PaymentOperation Create(
-            string paymentAccountId,
+            Guid paymentAccountId,
             decimal amount,
             string comment,
             string categoryId,

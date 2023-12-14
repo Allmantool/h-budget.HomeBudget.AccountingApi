@@ -43,59 +43,48 @@ namespace HomeBudget.Accounting.Api.Controllers
             [FromBody] CreateOperationRequest request,
             CancellationToken token = default)
         {
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(Guid.Parse(paymentAccountId)) == 0);
-
-            if (paymentAccount == null)
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
                 return new Result<CreateOperationResponse>(
                     isSucceeded: false,
-                    message: $"The payment account '{paymentAccountId}' doesn't exist");
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            var responseResult = await paymentOperationsService.CreateAsync(paymentAccountId, operationPayload, token);
+            var saveResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, token);
 
             var response = new CreateOperationResponse
             {
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = responseResult.Payload.ToString()
+                PaymentOperationId = saveResponseResult.Payload.ToString()
             };
 
-            return new Result<CreateOperationResponse>(response, isSucceeded: responseResult.IsSucceeded);
+            return new Result<CreateOperationResponse>(response, isSucceeded: saveResponseResult.IsSucceeded);
         }
 
         [HttpDelete("{operationId}")]
-        public Result<RemoveOperationResponse> DeleteById(string paymentAccountId, string operationId)
+        public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(string paymentAccountId, string operationId, CancellationToken token = default)
         {
-            if (!Guid.TryParse(operationId, out var targetGuid))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
-                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<RemoveOperationResponse>(
+                    isSucceeded: false,
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
-            var operationForDelete = MockOperationsStore.Records
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefault(p => p.Key == targetGuid);
+            var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
 
-            var isRemoveSuccessful = MockOperationsStore.Records.Remove(operationForDelete);
-
-            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
-
-            if (paymentAccount == null)
-            {
-                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
-            }
-
-            paymentAccount.SyncBalanceOnDelete(operationForDelete);
+            var paymentAccount = MockAccountsStore.Records.Find(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new RemoveOperationResponse
             {
                 PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = operationForDelete.Key.ToString()
+                PaymentOperationId = removeResponseResult.ToString()
             };
 
-            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: isRemoveSuccessful);
+            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: removeResponseResult.IsSucceeded);
         }
 
         [HttpPatch("{operationId}")]

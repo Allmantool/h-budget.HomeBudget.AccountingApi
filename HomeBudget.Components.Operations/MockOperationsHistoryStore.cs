@@ -5,7 +5,7 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations
 {
-    public static class MockOperationHistoryWithBalanceStore
+    public static class MockOperationsHistoryStore
     {
         public static IEnumerable<PaymentOperationHistoryRecord> Records { get; private set; }
             = Enumerable.Empty<PaymentOperationHistoryRecord>();

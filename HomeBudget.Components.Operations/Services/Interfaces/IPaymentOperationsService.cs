@@ -9,6 +9,7 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
 {
     public interface IPaymentOperationsService
     {
-        Task<Result<Guid>> CreateAsync(string paymentAccountId, PaymentOperationPayload payload, CancellationToken token);
+        Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token);
+        Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token);
     }
 }

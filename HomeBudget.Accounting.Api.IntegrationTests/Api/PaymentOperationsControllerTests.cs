@@ -96,7 +96,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const string paymentAccountId = "c9b33506-9a98-4f76-ad8e-17c96858305b";
 
-            var operationsAmountBefore = MockOperationHistoryWithBalanceStore.Records
+            var operationsAmountBefore = MockOperationsHistoryStore.Records
                 .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0);
 
             foreach (var i in Enumerable.Range(1, 7))

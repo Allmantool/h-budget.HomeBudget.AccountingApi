@@ -11,5 +11,7 @@ namespace HomeBudget.Components.Operations.Models
         public long OperationUnixTime { get; set; }
 
         public PaymentOperation Payload { get; set; }
+
+        public EventTypes EventType { get; set; }
     }
 }

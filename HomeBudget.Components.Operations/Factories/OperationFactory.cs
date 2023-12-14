@@ -8,7 +8,7 @@ namespace HomeBudget.Components.Operations.Factories
     internal class OperationFactory : IOperationFactory
     {
         public PaymentOperation Create(
-            string paymentAccountId,
+            Guid paymentAccountId,
             decimal amount,
             string comment,
             string categoryId,
@@ -26,7 +26,7 @@ namespace HomeBudget.Components.Operations.Factories
                 OperationDay = operationDay,
                 Amount = amount,
                 Comment = comment,
-                PaymentAccountId = Guid.Parse(paymentAccountId),
+                PaymentAccountId = paymentAccountId,
                 CategoryId = categoryGuid,
                 ContractorId = contractorGuid
             };

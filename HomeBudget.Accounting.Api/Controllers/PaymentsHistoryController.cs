@@ -17,7 +17,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryPaymentOperations(string paymentAccountId)
         {
-            var paymentAccountOperations = MockOperationHistoryWithBalanceStore.Records
+            var paymentAccountOperations = MockOperationsHistoryStore.Records
                 .Where(op => op.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0)
                 .OrderBy(op => op.Record.OperationDay)
                 .ToList();

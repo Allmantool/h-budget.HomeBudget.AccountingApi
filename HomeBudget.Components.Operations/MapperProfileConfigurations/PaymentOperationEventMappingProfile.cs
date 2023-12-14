@@ -10,9 +10,16 @@ namespace HomeBudget.Components.Operations.MapperProfileConfigurations
         public PaymentOperationEventMappingProfile()
         {
             CreateMap<SavePaymentOperationCommand, PaymentOperationEvent>()
-                .ForMember(dest => dest.OperationUnixTime, opt => opt.MapFrom(src => src.NewOperation.OperationUnixTime))
-                .ForMember(dest => dest.PaymentOperationId, opt => opt.MapFrom(src => src.NewOperation.Key))
-                .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.NewOperation));
+                .ForMember(dest => dest.OperationUnixTime, opt => opt.MapFrom(src => src.OperationForAdd.OperationUnixTime))
+                .ForMember(dest => dest.PaymentOperationId, opt => opt.MapFrom(src => src.OperationForAdd.Key))
+                .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForAdd))
+                .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => EventTypes.Add));
+
+            CreateMap<RemovePaymentOperationCommand, PaymentOperationEvent>()
+                .ForMember(dest => dest.OperationUnixTime, opt => opt.MapFrom(src => src.OperationForDelete.OperationUnixTime))
+                .ForMember(dest => dest.PaymentOperationId, opt => opt.MapFrom(src => src.OperationForDelete.Key))
+                .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForDelete))
+                .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => EventTypes.Remove));
         }
     }
 }
