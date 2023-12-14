@@ -53,6 +53,15 @@ namespace HomeBudget.Components.Accounts
                 Balance = 1320.24m,
                 Currency = CurrencyTypes.BYN.ToString(),
                 Description = "Tech description"
+            },
+            new()
+            {
+                Key = Guid.Parse("aed5a7ff-cd0f-4c65-b5ab-a3d7b8f9ac07"),
+                Agent = "Techobank - For delete tests",
+                Type = AccountTypes.Bank,
+                Balance = 25.24m,
+                Currency = CurrencyTypes.BYN.ToString(),
+                Description = "Tech description"
             }
         };
     }

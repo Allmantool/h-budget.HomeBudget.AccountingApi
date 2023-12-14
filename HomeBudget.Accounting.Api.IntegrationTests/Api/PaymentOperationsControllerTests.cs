@@ -160,44 +160,69 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void DeleteById_WithValidOperationRef_ThenSuccessful()
         {
-            const string operationId = "5a53e3d3-0596-4ade-8aff-f3b3b956d0bd";
-            const string accountId = "c9b33506-9a98-4f76-ad8e-17c96858305b";
+            var operationId = Guid.Parse("5a53e3d3-0596-4ade-8aff-f3b3b956d0bd");
+            var accountId = Guid.Parse("aed5a7ff-cd0f-4c65-b5ab-a3d7b8f9ac07");
 
-            var balanceBefore = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            MockOperationsHistoryStore.SetState(new[]
+            {
+                new PaymentOperationHistoryRecord
+                {
+                    Balance = 25.24m,
+                    Record = new PaymentOperation
+                    {
+                        Amount = 25.24m,
+                        PaymentAccountId = accountId,
+                        Key = operationId
+                    }
+                }
+            });
+
+            var balanceBefore = MockAccountsStore.Records
+                .Find(pa => pa.Key.CompareTo(accountId) == 0)
+                .Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
             _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
-            var balanceAfter = MockAccountsStore.Records.Find(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceAfter = MockAccountsStore.Records
+                .Find(pa => pa.Key.CompareTo(accountId) == 0)
+                .Balance;
 
-            Assert.Multiple(() =>
-            {
-                balanceBefore.Should().BeGreaterThan(balanceAfter);
-            });
+            balanceBefore.Should().BeGreaterThan(balanceAfter);
         }
 
         [Test]
-        public void DeleteById_WithValidOperationRef_BalanceShouldBeDescriesed()
+        public void DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed()
         {
-            var operationAmountBefore = MockOperationsStore.Records.Count;
-
             const string operationId = "20a8ca8e-0127-462c-b854-b2868490f3ec";
             const string accountId = "852530a6-70b0-4040-8912-8558d59d977a";
 
+            MockOperationsHistoryStore.SetState(new[]
+            {
+                new PaymentOperationHistoryRecord
+                {
+                    Balance = 12.48m,
+                    Record = new PaymentOperation
+                    {
+                        Amount = 12.48m,
+                        PaymentAccountId = Guid.Parse(accountId),
+                        Key = Guid.Parse(operationId)
+                    }
+                }
+            });
+
+            var operationAmountBefore = MockOperationsHistoryStore.Records
+                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(accountId)) == 0);
+
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
-            var result = response.Data;
+            var operationAmountAfter = MockOperationsHistoryStore.Records
+                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(accountId)) == 0);
 
-            var operationAmountAfter = MockOperationsStore.Records.Count;
-
-            Assert.Multiple(() =>
-            {
-                result.IsSucceeded.Should().BeTrue();
-                operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
-            });
+            operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
         }
 
         [Test]

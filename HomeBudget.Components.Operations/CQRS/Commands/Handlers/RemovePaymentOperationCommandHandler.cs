@@ -25,7 +25,7 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 
             MockOperationEventsStore.Events.Add(paymentOperationEvent);
 
-            var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory();
+            var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(request.OperationForDelete.PaymentAccountId);
 
             sender.Send(
                 new UpdatePaymentAccountBalanceCommand(

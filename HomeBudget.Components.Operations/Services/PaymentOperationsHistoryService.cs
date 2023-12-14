@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using HomeBudget.Accounting.Domain.Models;
@@ -9,22 +10,25 @@ namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService : IPaymentOperationsHistoryService
     {
-        public Result<decimal> SyncHistory()
+        public Result<decimal> SyncHistory(Guid paymentAccountId)
         {
-            if (!MockOperationEventsStore.Events.Any())
+            var historyEventsForAccount = MockOperationEventsStore.Events
+                .Where(ev => ev.Payload.PaymentAccountId.CompareTo(paymentAccountId) == 0);
+
+            if (!historyEventsForAccount.Any())
             {
                 MockOperationsHistoryStore.SetState(Enumerable.Empty<PaymentOperationHistoryRecord>());
 
                 return new Result<decimal>();
             }
 
-            var historyEvents = MockOperationEventsStore.Events
+            var mostUpToDateHistoryRecords = historyEventsForAccount
                 .GroupBy(ev => ev.PaymentOperationId).Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
                 .Select(gr => gr.OrderBy(ev => ev.OperationUnixTime).Last());
 
-            if (historyEvents.Count() == 1)
+            if (mostUpToDateHistoryRecords.Count() == 1)
             {
-                var historyRecord = historyEvents.Single().Payload;
+                var historyRecord = mostUpToDateHistoryRecords.Single().Payload;
 
                 MockOperationsHistoryStore.SetState(new[]
                 {
@@ -40,7 +44,7 @@ namespace HomeBudget.Components.Operations.Services
 
             var operationsHistory = new SortedList<long, PaymentOperationHistoryRecord>();
 
-            foreach (var operationEvent in historyEvents)
+            foreach (var operationEvent in mostUpToDateHistoryRecords)
             {
                 var previousRecordBalance = operationsHistory.Any()
                     ? operationsHistory.Last().Value.Balance
@@ -57,7 +61,11 @@ namespace HomeBudget.Components.Operations.Services
 
             MockOperationsHistoryStore.SetState(operationsHistory.Values);
 
-            return new Result<decimal>(MockOperationsHistoryStore.Records.Last().Balance);
+            var historyOperationRecord = MockOperationsHistoryStore.Records.Any()
+                ? MockOperationsHistoryStore.Records.Last()
+                : default;
+
+            return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
         }
     }
 }

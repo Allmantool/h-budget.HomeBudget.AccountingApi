@@ -1,9 +1,11 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Services.Interfaces
 {
     public interface IPaymentOperationsHistoryService
     {
-        Result<decimal> SyncHistory();
+        Result<decimal> SyncHistory(Guid paymentAccountId);
     }
 }

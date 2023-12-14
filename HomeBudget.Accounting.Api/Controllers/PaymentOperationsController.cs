@@ -81,7 +81,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             {
                 PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = removeResponseResult.ToString()
+                PaymentOperationId = removeResponseResult.Payload.ToString()
             };
 
             return new Result<RemoveOperationResponse>(payload: response, isSucceeded: removeResponseResult.IsSucceeded);
