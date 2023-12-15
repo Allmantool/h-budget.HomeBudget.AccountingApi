@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Operations.Services
 
         public Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
         {
-            var operationForDelete = MockOperationsHistoryStore.Records
+            var operationForDelete = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId)
                 .Where(op => op.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0)
                 .SingleOrDefault(p => p.Record.Key.CompareTo(operationId) == 0);
 

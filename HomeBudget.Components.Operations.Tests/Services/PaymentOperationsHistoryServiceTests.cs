@@ -45,7 +45,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.Events.AddRange(events);
+            MockOperationEventsStore.SetState(paymentAccountId, events);
 
             var result = _sut.SyncHistory(paymentAccountId);
 
@@ -96,7 +96,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.Events.AddRange(events);
+            MockOperationEventsStore.SetState(paymentAccountId, events);
 
             var result = _sut.SyncHistory(paymentAccountId);
 
@@ -106,24 +106,40 @@ namespace HomeBudget.Components.Operations.Tests.Services
         [Test]
         public void SyncHistory_WhenTryToUpdateNotExistedOperation_ThenSkipForCalculation()
         {
-            var paymentAccountId = Guid.Parse("b3246d4e-7893-487e-8d88-adfab91a8c86");
+            var paymentAccountId = Guid.Parse("5f5af6ad-8a4f-47b9-ab90-2d884edc1aa4");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
 
-            var events = new List<PaymentOperationEvent>
-            {
-                new()
+            MockOperationEventsStore.SetState(
+                paymentAccountId,
+                new List<PaymentOperationEvent>
                 {
-                    EventType = EventTypes.Update,
-                    Payload = new PaymentOperation
+                    new()
                     {
-                        PaymentAccountId = paymentAccountId,
-                        Key = operationId,
-                        Amount = 12.10m,
-                    }
-                }
-            };
+                        EventType = EventTypes.Update,
+                        Payload = new PaymentOperation
+                        {
+                            PaymentAccountId = paymentAccountId,
+                            Key = operationId,
+                            Amount = 12.10m,
+                        }
+                    },
+                });
 
-            MockOperationEventsStore.Events.AddRange(events);
+            MockOperationEventsStore.SetState(
+                Guid.Parse("85cb76ea-e6e2-4b96-aabe-33f6c6cf2308"),
+                new List<PaymentOperationEvent>
+                {
+                    new()
+                    {
+                        EventType = EventTypes.Update,
+                        Payload = new PaymentOperation
+                        {
+                            PaymentAccountId = Guid.Parse("85cb76ea-e6e2-4b96-aabe-33f6c6cf2308"),
+                            Key = operationId,
+                            Amount = 12.10m,
+                        }
+                    },
+                });
 
             var result = _sut.SyncHistory(paymentAccountId);
 
@@ -149,7 +165,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.Events.AddRange(events);
+            MockOperationEventsStore.SetState(paymentAccountId, events);
 
             var result = _sut.SyncHistory(paymentAccountId);
 
@@ -185,7 +201,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.Events.AddRange(events);
+            MockOperationEventsStore.SetState(paymentAccountId, events);
 
             var result = _sut.SyncHistory(paymentAccountId);
 

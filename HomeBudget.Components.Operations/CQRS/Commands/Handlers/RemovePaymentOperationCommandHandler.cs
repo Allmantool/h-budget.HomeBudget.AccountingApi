@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,7 +26,9 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 
             var paymentOperationEvent = mapper.Map<PaymentOperationEvent>(request);
 
-            MockOperationEventsStore.Events.Add(paymentOperationEvent);
+            var eventsForAccount = MockOperationEventsStore.EventsForAccount(paymentAccountId).ToList();
+
+            MockOperationEventsStore.SetState(paymentAccountId, eventsForAccount.Append(paymentOperationEvent));
 
             var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(paymentAccountId);
 

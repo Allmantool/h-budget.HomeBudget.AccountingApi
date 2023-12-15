@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations;
 using HomeBudget.Components.Accounts;
+using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -18,9 +18,9 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryPaymentOperations(string paymentAccountId)
         {
-            var paymentAccountOperations = MockOperationsHistoryStore.Records
-                .Where(op => op.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0)
+            var paymentAccountOperations = MockOperationsHistoryStore.RecordsForAccount(Guid.Parse(paymentAccountId))
                 .OrderBy(op => op.Record.OperationDay)
+                .ThenBy(op => op.Record.OperationUnixTime)
                 .ToList();
 
             return new Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>(paymentAccountOperations);
@@ -43,7 +43,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                     message: $"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
-            var operationById = MockOperationsHistoryStore.Records
+            var operationById = MockOperationsHistoryStore.RecordsForAccount(targetAccountGuid)
                 .Where(op => op.Record.PaymentAccountId.CompareTo(targetAccountGuid) == 0)
                 .SingleOrDefault(rc => rc.Record.Key.CompareTo(targetOperationGuid) == 0);
 
