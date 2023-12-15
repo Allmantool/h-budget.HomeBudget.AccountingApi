@@ -9,7 +9,7 @@ namespace HomeBudget.Components.Operations
 {
     public static class MockOperationsHistoryStore
     {
-        private static readonly ConcurrentDictionary<Guid, IEnumerable<PaymentOperationHistoryRecord>> Store = new();
+        private static readonly Dictionary<Guid, IEnumerable<PaymentOperationHistoryRecord>> Store = new();
 
         public static IReadOnlyCollection<PaymentOperationHistoryRecord> RecordsForAccount(Guid paymentAccountId) =>
             Store.TryGetValue(paymentAccountId, out var paymentOperationEventsForAccount)
