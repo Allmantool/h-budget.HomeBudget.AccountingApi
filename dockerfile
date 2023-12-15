@@ -54,7 +54,7 @@ COPY ["HomeBudget.Accounting.Api.IntegrationTests/*.csproj", "HomeBudget.Account
 
 COPY . .
 
-RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental -o /app/build
+RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --framework:net8.0 -maxcpucount:1 -o /app/build
 
 RUN /tools/snitch
 

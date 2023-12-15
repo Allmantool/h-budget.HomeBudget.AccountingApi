@@ -5,16 +5,18 @@ on:
   push:
     branches:
       - master
+
+    tags: ["v*.*.*"]
+
+  pull_request:
+    branches:
+      - master
       - developed
       - feature/*
       - test/*
       - hotfix/*
       - fix/*
       - tech/
-    tags:
-      - "v*"
-
-  pull_request:
     types: [opened, synchronize, reopened]
 
 env:
