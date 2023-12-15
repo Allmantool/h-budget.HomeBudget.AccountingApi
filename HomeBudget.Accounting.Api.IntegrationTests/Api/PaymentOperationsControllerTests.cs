@@ -31,7 +31,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
         {
-            var operationAmountBefore = MockOperationEventsStore.Events.Count;
+            var operationAmountBefore = MockOperationEventsStore.Events.Count();
 
             var requestBody = new CreateOperationRequest
             {
@@ -51,7 +51,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
             var payload = result.Payload;
 
-            var operationAmountAfter = MockOperationEventsStore.Events.Count;
+            var operationAmountAfter = MockOperationEventsStore.Events.Count();
 
             Assert.Multiple(() =>
             {
@@ -64,10 +64,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationHistoryRecord()
         {
-            const string paymentAccountId = "c9b33506-9a98-4f76-ad8e-17c96858305b";
+            var paymentAccountId = Guid.Parse("c9b33506-9a98-4f76-ad8e-17c96858305b");
 
             var operationsAmountBefore = MockOperationsHistoryStore.Records
-                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0);
+                .Count(r => r.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0);
 
             foreach (var i in Enumerable.Range(1, 7))
             {
@@ -93,10 +93,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var operationAmountAfter = paymentsHistoryResponse.Data.Payload.Count;
 
-            Assert.Multiple(() =>
-            {
-                operationsAmountBefore.Should().BeLessThan(operationAmountAfter);
-            });
+            operationsAmountBefore.Should().BeLessThan(operationAmountAfter);
         }
 
         [Test]
@@ -121,31 +118,30 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var operationAmountAfter = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
-            Assert.Multiple(() =>
-            {
-                balanceBefore.Should().BeLessThan(operationAmountAfter);
-            });
+            balanceBefore.Should().BeLessThan(operationAmountAfter);
         }
 
         [Test]
         public void DeleteById_WithValidOperationRef_ThenSuccessful()
         {
             var operationId = Guid.Parse("5a53e3d3-0596-4ade-8aff-f3b3b956d0bd");
-            var accountId = Guid.Parse("aed5a7ff-cd0f-4c65-b5ab-a3d7b8f9ac07");
+            var accountId = Guid.Parse("0dbfb498-83e1-4e02-a2c1-c0761eab8529");
 
-            MockOperationsHistoryStore.SetState(new[]
-            {
-                new PaymentOperationHistoryRecord
+            MockOperationsHistoryStore.SetState(
+                accountId,
+                new[]
                 {
-                    Balance = 25.24m,
-                    Record = new PaymentOperation
+                    new PaymentOperationHistoryRecord
                     {
-                        Amount = 25.24m,
-                        PaymentAccountId = accountId,
-                        Key = operationId
+                        Balance = 25.24m,
+                        Record = new PaymentOperation
+                        {
+                            Amount = 25.24m,
+                            PaymentAccountId = accountId,
+                            Key = operationId
+                        }
                     }
-                }
-            });
+                });
 
             var balanceBefore = MockAccountsStore.Records
                 .Single(pa => pa.Key.CompareTo(accountId) == 0)
@@ -165,32 +161,34 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public void DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed()
         {
-            const string operationId = "20a8ca8e-0127-462c-b854-b2868490f3ec";
-            const string accountId = "852530a6-70b0-4040-8912-8558d59d977a";
+            var operationId = Guid.Parse("20a8ca8e-0127-462c-b854-b2868490f3ec");
+            var accountId = Guid.Parse("852530a6-70b0-4040-8912-8558d59d977a");
 
-            MockOperationsHistoryStore.SetState(new[]
-            {
-                new PaymentOperationHistoryRecord
+            MockOperationsHistoryStore.SetState(
+                accountId,
+                new[]
                 {
-                    Balance = 12.48m,
-                    Record = new PaymentOperation
+                    new PaymentOperationHistoryRecord
                     {
-                        Amount = 12.48m,
-                        PaymentAccountId = Guid.Parse(accountId),
-                        Key = Guid.Parse(operationId)
+                        Balance = 12.48m,
+                        Record = new PaymentOperation
+                        {
+                            Amount = 12.48m,
+                            PaymentAccountId = accountId,
+                            Key = operationId
+                        }
                     }
-                }
-            });
+                });
 
             var operationAmountBefore = MockOperationsHistoryStore.Records
-                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(accountId)) == 0);
+                .Count(r => r.Record.PaymentAccountId.CompareTo(accountId) == 0);
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
             _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
             var operationAmountAfter = MockOperationsHistoryStore.Records
-                .Count(r => r.Record.PaymentAccountId.CompareTo(Guid.Parse(accountId)) == 0);
+                .Count(r => r.Record.PaymentAccountId.CompareTo(accountId) == 0);
 
             operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
         }
@@ -255,10 +253,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var result = response.Data;
 
-            Assert.Multiple(() =>
-            {
-                result.IsSucceeded.Should().BeTrue();
-            });
+            result.IsSucceeded.Should().BeTrue();
         }
 
         [Test]
@@ -267,16 +262,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
             var accountId = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f");
 
-            MockOperationEventsStore.Events.Add(new PaymentOperationEvent
-            {
-                EventType = EventTypes.Add,
-                Payload = new PaymentOperation
+            MockOperationEventsStore.SetState(
+                accountId,
+                new[]
                 {
-                    PaymentAccountId = accountId,
-                    Key = operationId,
-                    Amount = 12.0m
-                }
-            });
+                    new PaymentOperationEvent
+                    {
+                        EventType = EventTypes.Add,
+                        Payload = new PaymentOperation
+                        {
+                            PaymentAccountId = accountId,
+                            Key = operationId,
+                            Amount = 12.0m
+                        }
+                    }
+                });
 
             var requestBody = new UpdateOperationRequest
             {

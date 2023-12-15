@@ -12,49 +12,48 @@ namespace HomeBudget.Components.Operations.Services
     {
         public Result<decimal> SyncHistory(Guid paymentAccountId)
         {
-            var historyEventsForAccount = MockOperationEventsStore.Events
-                .Where(ev => ev.Payload.PaymentAccountId.CompareTo(paymentAccountId) == 0);
+            var eventsForAccount = MockOperationEventsStore.EventsForAccount(paymentAccountId).ToList();
 
-            if (!historyEventsForAccount.Any())
+            if (!eventsForAccount.Any())
             {
-                MockOperationsHistoryStore.SetState(Enumerable.Empty<PaymentOperationHistoryRecord>());
-
+                MockOperationsHistoryStore.SetState(paymentAccountId, Enumerable.Empty<PaymentOperationHistoryRecord>());
                 return new Result<decimal>();
             }
 
-            var mostUpToDateHistoryRecords = historyEventsForAccount
-                .GroupBy(ev => ev.Payload.Key)
-                .Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
-                .Where(gr => gr.Any(ev => ev.EventType == EventTypes.Add))
-                .Select(gr => gr
-                    .OrderBy(ev => ev.Payload.OperationDay)
-                    .ThenBy(ev => ev.Payload.OperationUnixTime)
-                    .Last());
+            var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount);
 
-            if (mostUpToDateHistoryRecords.Count() == 1)
+            if (!validAndMostUpToDateOperations.Any())
             {
-                var historyRecord = mostUpToDateHistoryRecords.Single().Payload;
+                MockOperationsHistoryStore.SetState(paymentAccountId, Enumerable.Empty<PaymentOperationHistoryRecord>());
+                return new Result<decimal>();
+            }
 
-                MockOperationsHistoryStore.SetState(new[]
-                {
-                    new PaymentOperationHistoryRecord
+            if (validAndMostUpToDateOperations.Count == 1)
+            {
+                var historyRecord = validAndMostUpToDateOperations.Single().Payload;
+
+                MockOperationsHistoryStore.SetState(
+                    paymentAccountId,
+                    new[]
                     {
-                        Record = historyRecord,
-                        Balance = historyRecord.Amount
-                    }
-                });
+                        new PaymentOperationHistoryRecord
+                        {
+                            Record = historyRecord,
+                            Balance = historyRecord.Amount
+                        }
+                    });
 
                 return new Result<decimal>(MockOperationsHistoryStore.Records.Last().Balance);
             }
 
             var operationsHistory = new SortedList<long, PaymentOperationHistoryRecord>();
 
-            var previousRecordBalance = operationsHistory.Any()
-                ? operationsHistory.Last().Value.Balance
-                : 0;
-
-            foreach (var operationEvent in mostUpToDateHistoryRecords.Select(r => r.Payload))
+            foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
+                var previousRecordBalance = operationsHistory.Any()
+                    ? operationsHistory.Last().Value.Balance
+                    : 0;
+
                 operationsHistory.Add(
                     operationEvent.OperationUnixTime,
                     new PaymentOperationHistoryRecord
@@ -64,13 +63,29 @@ namespace HomeBudget.Components.Operations.Services
                     });
             }
 
-            MockOperationsHistoryStore.SetState(operationsHistory.Values);
+            MockOperationsHistoryStore.SetState(paymentAccountId, operationsHistory.Values);
 
             var historyOperationRecord = MockOperationsHistoryStore.Records.Any()
                 ? MockOperationsHistoryStore.Records.Last()
                 : default;
 
             return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
+        }
+
+        private static IReadOnlyCollection<PaymentOperationEvent> GetValidAndMostUpToDateOperations(
+            IEnumerable<PaymentOperationEvent> eventsForAccount)
+        {
+            var existedOperationEventGroups = eventsForAccount
+                .GroupBy(ev => ev.Payload.Key)
+                .Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
+                .Where(gr => gr.Any(ev => ev.EventType == EventTypes.Add));
+
+            return existedOperationEventGroups
+                .Select(gr => gr
+                    .OrderBy(ev => ev.Payload.OperationDay)
+                    .ThenBy(ev => ev.Payload.OperationUnixTime)
+                    .Last())
+                .ToList();
         }
     }
 }

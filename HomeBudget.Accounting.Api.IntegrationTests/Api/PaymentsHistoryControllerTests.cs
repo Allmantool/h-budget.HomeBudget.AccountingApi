@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using FluentAssertions;
 using NUnit.Framework;
@@ -7,7 +8,11 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+using HomeBudget.Accounting.Api.Models.Operations.Requests;
+using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Categories;
+using HomeBudget.Components.Contractors;
 using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -32,12 +37,50 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public void GetPaymentOperations_WithSeveralPaymentOperations_ThenBalanceHistoryHasBeenCalculatedCorrectly()
+        {
+            var paymentAccountId = Guid.Parse("aed5a7ff-cd0f-4c61-b5ab-a3d7b8f9ac64");
+
+            foreach (var i in Enumerable.Range(1, 7))
+            {
+                var requestBody = new CreateOperationRequest
+                {
+                    Amount = 10 + i,
+                    Comment = $"New operation - {i}",
+                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    OperationDate = new DateOnly(2023, 12, 15)
+                };
+
+                var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                    .AddJsonBody(requestBody);
+
+                _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+            }
+
+            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+
+            var paymentsHistoryResponse = _sut.RestHttpClient
+                .Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            var historyRecords = paymentsHistoryResponse.Data.Payload;
+
+            var accountHistoryRecords = MockOperationsHistoryStore.Records.Where(r => r.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0).ToList();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(() => accountHistoryRecords.Count, Is.EqualTo(7).After(1).Seconds.PollEvery(250).MilliSeconds);
+                Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(98).After(1).Seconds.PollEvery(250).MilliSeconds);
+            });
+        }
+
+        [Test]
         public void GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
             var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
             var accountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
 
-            MockOperationsHistoryStore.SetState(new List<PaymentOperationHistoryRecord>
+            MockOperationsHistoryStore.SetState(accountId, new List<PaymentOperationHistoryRecord>
             {
                 new()
                 {

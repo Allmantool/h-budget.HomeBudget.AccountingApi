@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations;
 using HomeBudget.Components.Accounts;
+using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -21,6 +21,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             var paymentAccountOperations = MockOperationsHistoryStore.Records
                 .Where(op => op.Record.PaymentAccountId.CompareTo(Guid.Parse(paymentAccountId)) == 0)
                 .OrderBy(op => op.Record.OperationDay)
+                .ThenBy(op => op.Record.OperationUnixTime)
                 .ToList();
 
             return new Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>(paymentAccountOperations);

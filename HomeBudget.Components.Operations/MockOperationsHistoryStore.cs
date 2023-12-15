@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using HomeBudget.Accounting.Domain.Models;
@@ -7,12 +8,14 @@ namespace HomeBudget.Components.Operations
 {
     public static class MockOperationsHistoryStore
     {
-        public static IEnumerable<PaymentOperationHistoryRecord> Records { get; private set; }
-            = Enumerable.Empty<PaymentOperationHistoryRecord>();
+        private static readonly Dictionary<Guid, IEnumerable<PaymentOperationHistoryRecord>> Store = new();
 
-        public static void SetState(IEnumerable<PaymentOperationHistoryRecord> payload)
+        public static IEnumerable<PaymentOperationHistoryRecord> Records { get; private set; }
+            = Store.Values.SelectMany(i => i);
+
+        public static void SetState(Guid paymentAccountId, IEnumerable<PaymentOperationHistoryRecord> payload)
         {
-            Records = payload;
+            Store[paymentAccountId] = payload;
         }
     }
 }
