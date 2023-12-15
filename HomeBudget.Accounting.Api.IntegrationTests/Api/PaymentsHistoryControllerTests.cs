@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Contractors;
 using HomeBudget.Components.Operations;
+using HomeBudget.Components.Accounts;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -39,8 +40,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetPaymentOperations_WithSeveralPaymentOperations_ThenBalanceHistoryHasBeenCalculatedCorrectly()
         {
-            // TODO: concurrency issue (skip for now)
-            const int createRequestAmount = 3;
+            const int createRequestAmount = 11;
+            const decimal expectedBalance = 176M;
             var paymentAccountId = Guid.Parse("aed5a7ff-cd0f-4c61-b5ab-a3d7b8f9ac64");
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
@@ -57,10 +58,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                _ = await _sut.RestHttpClient.ExecuteAsync(postCreateRequest);
-            }
+                var response = await _sut.RestHttpClient.ExecuteAsync(postCreateRequest);
 
-            await Task.Delay(TimeSpan.FromSeconds(3), CancellationToken.None);
+                // TODO: concurrency issue (skip for now) -- temp workaround
+                await Task.Delay(TimeSpan.FromSeconds(0.1), CancellationToken.None);
+            }
 
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
@@ -72,9 +74,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Assert.Multiple(() =>
             {
                 MockOperationEventsStore.EventsForAccount(paymentAccountId).Count.Should().Be(createRequestAmount);
+                MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(expectedBalance);
 
-                Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount).After(10));
-                Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(36).After(10));
+                Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
+                Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(expectedBalance).After(10));
             });
         }
 
