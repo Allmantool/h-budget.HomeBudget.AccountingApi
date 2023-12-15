@@ -43,7 +43,7 @@ namespace HomeBudget.Components.Operations.Services
                         }
                     });
 
-                return new Result<decimal>(MockOperationsHistoryStore.Records.Last().Balance);
+                return new Result<decimal>(MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last().Balance);
             }
 
             var operationsHistory = new SortedList<long, PaymentOperationHistoryRecord>();
@@ -65,8 +65,8 @@ namespace HomeBudget.Components.Operations.Services
 
             MockOperationsHistoryStore.SetState(paymentAccountId, operationsHistory.Values);
 
-            var historyOperationRecord = MockOperationsHistoryStore.Records.Any()
-                ? MockOperationsHistoryStore.Records.Last()
+            var historyOperationRecord = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Any()
+                ? MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last()
                 : default;
 
             return new Result<decimal>(historyOperationRecord?.Balance ?? 0);

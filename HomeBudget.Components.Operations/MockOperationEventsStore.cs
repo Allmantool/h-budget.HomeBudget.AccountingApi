@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,15 +9,12 @@ namespace HomeBudget.Components.Operations
 {
     internal static class MockOperationEventsStore
     {
-        private static readonly Dictionary<Guid, IEnumerable<PaymentOperationEvent>> Store = new();
+        private static readonly ConcurrentDictionary<Guid, IEnumerable<PaymentOperationEvent>> Store = new();
 
-        public static IEnumerable<PaymentOperationEvent> Events { get; private set; }
-            = Store.Values.SelectMany(i => i);
-
-        public static IEnumerable<PaymentOperationEvent> EventsForAccount(Guid paymentAccountId) =>
+        public static IReadOnlyCollection<PaymentOperationEvent> EventsForAccount(Guid paymentAccountId) =>
             Store.TryGetValue(paymentAccountId, out var paymentOperationEventsForAccount)
-            ? paymentOperationEventsForAccount
-            : Enumerable.Empty<PaymentOperationEvent>();
+            ? paymentOperationEventsForAccount.ToList()
+            : Enumerable.Empty<PaymentOperationEvent>().ToList();
 
         public static void SetState(Guid paymentAccountId, IEnumerable<PaymentOperationEvent> payload)
         {

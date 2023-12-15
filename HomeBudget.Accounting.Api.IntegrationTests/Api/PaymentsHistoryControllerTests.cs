@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Comment = $"New operation - {i}",
                     CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
                     ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
-                    OperationDate = new DateOnly(2023, 12, 15)
+                    OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
 
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
@@ -65,12 +65,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = paymentsHistoryResponse.Data.Payload;
 
-            var accountHistoryRecords = MockOperationsHistoryStore.Records.Where(r => r.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0).ToList();
-
             Assert.Multiple(() =>
             {
-                Assert.That(() => accountHistoryRecords.Count, Is.EqualTo(7).After(1).Seconds.PollEvery(250).MilliSeconds);
-                Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(98).After(1).Seconds.PollEvery(250).MilliSeconds);
+                MockOperationEventsStore.EventsForAccount(paymentAccountId).Count.Should().Be(7);
+                historyRecords.Count.Should().Be(7);
+                historyRecords.Last().Balance.Should().Be(98);
             });
         }
 
