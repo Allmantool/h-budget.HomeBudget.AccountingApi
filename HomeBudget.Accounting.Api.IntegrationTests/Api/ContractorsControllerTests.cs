@@ -29,7 +29,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Contractor>>>(getContractorsRequest);
 
-            Assert.IsTrue(response.IsSuccessful);
+            response.IsSuccessful.Should().BeTrue();
         }
 
         [Test]
@@ -41,7 +41,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var payload = response.Data;
 
-            Assert.IsTrue(payload.IsSucceeded);
+            payload.IsSucceeded.Should().BeTrue();
         }
 
         [Test]
@@ -53,7 +53,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var payload = response.Data;
 
-            Assert.IsFalse(payload.IsSucceeded);
+            payload.IsSucceeded.Should().BeFalse();
         }
 
         [Test]

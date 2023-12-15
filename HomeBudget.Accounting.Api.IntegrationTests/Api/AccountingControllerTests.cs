@@ -29,7 +29,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
 
-            Assert.IsTrue(response.IsSuccessful);
+            response.IsSuccessful.Should().BeTrue();
         }
 
         [Test]
@@ -90,12 +90,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<Guid>>(deletePaymentAccountRequest);
 
             var result = response.Data;
-            var payload = result.Payload;
 
-            payload.Should().BeTrue();
+            result.IsSucceeded.Should().BeTrue();
         }
 
         [Test]
@@ -105,12 +104,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<bool>>(deletePaymentAccountRequest);
+            var response = _sut.RestHttpClient.Execute<Result<Guid>>(deletePaymentAccountRequest);
 
             var result = response.Data;
-            var payload = result.Payload;
 
-            payload.Should().BeFalse();
+            result.IsSucceeded.Should().BeFalse();
         }
 
         [Test]

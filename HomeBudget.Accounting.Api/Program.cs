@@ -1,10 +1,14 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System.Collections.Generic;
+using System.Reflection;
+
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
-using HomeBudget.Accounting.Api.Configuration;
+using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var services = webAppBuilder.Services;
@@ -25,6 +29,13 @@ webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();
 
 services.SetupSwaggerGen();
+
+services.AddAutoMapper(new List<Assembly>
+{
+    typeof(Program).Assembly,
+    PaymentOperationsComponentMappingProfile.GetExecutingAssembly(),
+});
+
 configuration.InitializeLogger(environment, webAppBuilder.Host);
 
 var webApp = webAppBuilder.Build();

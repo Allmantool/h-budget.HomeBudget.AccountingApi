@@ -1,151 +1,104 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Accounts.Extensions;
-using HomeBudget.Components.Operations;
+using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
-    [Route(Endpoints.PaymentOperationsWithPaymentAccountId, Name = Endpoints.PaymentOperations)]
+    [Route(Endpoints.PaymentOperationsByPaymentAccountId, Name = Endpoints.PaymentOperations)]
     [ApiController]
-    public class PaymentOperationsController(IOperationFactory operationFactory) : ControllerBase
+    public class PaymentOperationsController(
+        IMapper mapper,
+        IPaymentOperationsService paymentOperationsService
+        ) : ControllerBase
     {
-        [HttpGet]
-        public Result<IReadOnlyCollection<PaymentOperation>> GetPaymentOperations(string paymentAccountId)
-        {
-            var paymentAccountOperations = MockOperationsStore.PaymentOperations
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return new Result<IReadOnlyCollection<PaymentOperation>>(paymentAccountOperations);
-        }
-
-        [HttpGet("byId/{operationId}")]
-        public Result<PaymentOperation> GetOperationById(string paymentAccountId, string operationId)
-        {
-            var operationById = MockOperationsStore.PaymentOperations
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .SingleOrDefault(c => string.Equals(c.Key.ToString(), operationId, StringComparison.OrdinalIgnoreCase));
-
-            return operationById == null
-                ? new Result<PaymentOperation>(isSucceeded: false, message: $"The operation with '{operationId}' hasn't been found")
-                : new Result<PaymentOperation>(payload: operationById);
-        }
-
         [HttpPost]
-        public Result<CreateOperationResponse> CreateNewOperation(string paymentAccountId, [FromBody] CreateOperationRequest request)
+        public async Task<Result<CreateOperationResponse>> CreateNewOperationAsync(
+            string paymentAccountId,
+            [FromBody] CreateOperationRequest request,
+            CancellationToken token = default)
         {
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
-
-            if (paymentAccount == null)
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
-                return new Result<CreateOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
+                return new Result<CreateOperationResponse>(
+                    isSucceeded: false,
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
-            var newOperation = operationFactory.Create(
-                request.Amount,
-                request.Comment,
-                request.CategoryId,
-                request.ContractorId,
-                paymentAccountId,
-                request.OperationDate);
+            var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            MockOperationsStore.PaymentOperations.Add(newOperation);
-
-            paymentAccount.SyncBalanceOnCreate(newOperation);
+            var saveResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, token);
 
             var response = new CreateOperationResponse
             {
-                PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = newOperation.Key.ToString()
+                PaymentOperationId = saveResponseResult.Payload.ToString()
             };
 
-            return new Result<CreateOperationResponse>(response, isSucceeded: true);
+            return new Result<CreateOperationResponse>(response, isSucceeded: saveResponseResult.IsSucceeded);
         }
 
         [HttpDelete("{operationId}")]
-        public Result<RemoveOperationResponse> DeleteById(string paymentAccountId, string operationId)
+        public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(string paymentAccountId, string operationId, CancellationToken token = default)
         {
-            if (!Guid.TryParse(operationId, out var targetGuid))
+            // TODO: Fluent validation
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
-                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<RemoveOperationResponse>(
+                    isSucceeded: false,
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
-            var operationForDelete = MockOperationsStore.PaymentOperations
-                .Where(op => string.Equals(op.PaymentAccountId.ToString(), paymentAccountId, StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefault(p => p.Key == targetGuid);
+            var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
 
-            var isRemoveSuccessful = MockOperationsStore.PaymentOperations.Remove(operationForDelete);
-
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
-
-            if (paymentAccount == null)
-            {
-                return new Result<RemoveOperationResponse>(isSucceeded: false, message: $"The payment account '{paymentAccountId}' doesn't exist");
-            }
-
-            paymentAccount.SyncBalanceOnDelete(operationForDelete);
+            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new RemoveOperationResponse
             {
                 PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = operationForDelete.Key.ToString()
+                PaymentOperationId = removeResponseResult.Payload.ToString()
             };
 
-            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: isRemoveSuccessful);
+            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: removeResponseResult.IsSucceeded);
         }
 
         [HttpPatch("{operationId}")]
-        public Result<UpdateOperationResponse> Update(string paymentAccountId, string operationId, [FromBody] UpdateOperationRequest request)
+        public async Task<Result<UpdateOperationResponse>> UpdateAsync(
+            string paymentAccountId,
+            string operationId,
+            [FromBody] UpdateOperationRequest request,
+            CancellationToken token = default)
         {
-            if (!Guid.TryParse(operationId, out var requestOperationGuid))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
             {
-                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"Invalid '{nameof(operationId)}' has been provided");
+                return new Result<UpdateOperationResponse>(
+                    isSucceeded: false,
+                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
-            var updatedOperation = new PaymentOperation
-            {
-                Key = requestOperationGuid,
-                Amount = request.Amount,
-                Comment = request.Comment,
-                PaymentAccountId = Guid.Parse(paymentAccountId),
-                CategoryId = Guid.Parse(request.CategoryId),
-                ContractorId = Guid.Parse(request.ContractorId),
-                OperationDay = request.OperationDate
-            };
+            var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            var elementForReplaceIndex = MockOperationsStore.PaymentOperations
-                .FindIndex(p => p.Key.CompareTo(requestOperationGuid) == 0);
+            var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, Guid.Parse(operationId), operationPayload, token);
 
-            if (elementForReplaceIndex == -1)
-            {
-                return new Result<UpdateOperationResponse>(isSucceeded: false, message: $"A operation with guid: '{nameof(operationId)}' hasn't been found");
-            }
-
-            var originOperation = MockOperationsStore.PaymentOperations[elementForReplaceIndex];
-
-            MockOperationsStore.PaymentOperations[elementForReplaceIndex] = updatedOperation;
-
-            var paymentAccount = MockAccountsStore.PaymentAccounts.Find(pa => pa.Key.Equals(Guid.Parse(paymentAccountId)));
-
-            paymentAccount.SyncBalanceOnUpdate(originOperation, updatedOperation);
+            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
 
             var response = new UpdateOperationResponse
             {
                 PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = updatedOperation.Key.ToString()
+                PaymentOperationId = updateResponseResult.Payload.ToString()
             };
 
             return new Result<UpdateOperationResponse>(response, isSucceeded: true);
