@@ -20,7 +20,10 @@ namespace HomeBudget.Components.Operations.Services
                 return new Result<decimal>();
             }
 
-            var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount);
+            var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount)
+                .OrderBy(ev => ev.Payload.OperationDay)
+                .ThenBy(ev => ev.Payload.OperationUnixTime)
+                .ToList();
 
             if (!validAndMostUpToDateOperations.Any())
             {
@@ -46,16 +49,15 @@ namespace HomeBudget.Components.Operations.Services
                 return new Result<decimal>(MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last().Balance);
             }
 
-            var operationsHistory = new SortedList<long, PaymentOperationHistoryRecord>();
+            var operationsHistory = new List<PaymentOperationHistoryRecord>();
 
             foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
                 var previousRecordBalance = operationsHistory.Any()
-                    ? operationsHistory.Last().Value.Balance
+                    ? operationsHistory.Last().Balance
                     : 0;
 
                 operationsHistory.Add(
-                    operationEvent.OperationUnixTime,
                     new PaymentOperationHistoryRecord
                     {
                         Record = operationEvent,
@@ -63,7 +65,7 @@ namespace HomeBudget.Components.Operations.Services
                     });
             }
 
-            MockOperationsHistoryStore.SetState(paymentAccountId, operationsHistory.Values);
+            MockOperationsHistoryStore.SetState(paymentAccountId, operationsHistory);
 
             var historyOperationRecord = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Any()
                 ? MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last()
