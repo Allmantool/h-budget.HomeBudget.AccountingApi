@@ -47,6 +47,15 @@ namespace HomeBudget.Components.Accounts
             },
             new PaymentAccount
             {
+                Key = Guid.Parse("e6739854-7191-4e0a-a655-7d067aecc220"),
+                Agent = "Bank - Negative balance",
+                Type = AccountTypes.Cash,
+                Balance = 0,
+                Currency = CurrencyTypes.USD.ToString(),
+                Description = "Negative balance"
+            },
+            new PaymentAccount
+            {
                 Key = Guid.Parse("c9b33506-9a98-4f76-ad8e-17c96858305b"),
                 Agent = "Priorbank",
                 Type = AccountTypes.Loan,
@@ -60,6 +69,15 @@ namespace HomeBudget.Components.Accounts
                 Agent = "Techobank",
                 Type = AccountTypes.Bank,
                 Balance = 1320.24m,
+                Currency = CurrencyTypes.BYN.ToString(),
+                Description = "Tech description"
+            },
+            new PaymentAccount
+            {
+                Key = Guid.Parse("f38f6c9d-3f1c-4e50-84f9-47d9b5e6a47d"),
+                Agent = "Ordering check",
+                Type = AccountTypes.Bank,
+                Balance = 0,
                 Currency = CurrencyTypes.BYN.ToString(),
                 Description = "Tech description"
             },
