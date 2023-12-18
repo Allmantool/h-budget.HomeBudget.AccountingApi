@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using RestSharp;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
+using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
@@ -90,7 +92,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new CreateOperationRequest
             {
                 Amount = expectedBalanceAmount,
-                Comment = $"New operation - expense",
+                Comment = "New operation - expense",
                 CategoryId = expenseCategoryId.ToString(),
                 ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
@@ -149,6 +151,69 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var historyRecords = paymentsHistoryResponse.Data.Payload;
 
             string.Join(',', historyRecords.Select(r => r.Balance)).Should().Be("11,20,28,38,50");
+        }
+
+        [Test]
+        public async Task GetPaymentOperations_WhenUpdateExistedOperation_ReturnsUpToDateOperationState()
+        {
+            const int createRequestAmount = 3;
+            var paymentAccountId = Guid.Parse("421f203b-fc78-4c7c-93c8-5d56e9aefc30");
+
+            var operationsGuids = new Collection<Guid>();
+
+            foreach (var i in Enumerable.Range(0, createRequestAmount))
+            {
+                var requestBody = new CreateOperationRequest
+                {
+                    Amount = 7,
+                    Comment = $"New operation - {i}",
+                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
+                };
+
+                var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                    .AddJsonBody(requestBody);
+
+                var saveResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                var operationGuid = Guid.Parse(saveResponse.Data.Payload.PaymentOperationId);
+
+                operationsGuids.Add(operationGuid);
+
+                await Task.Delay(TimeSpan.FromSeconds(0.1), CancellationToken.None);
+            }
+
+            var updateRequest = new UpdateOperationRequest
+            {
+                Amount = 9120,
+                OperationDate = new DateOnly(2027, 1, 17),
+                CategoryId = "66ce6a56-f61e-4530-8098-b8c58b61a381",
+                ContractorId = "238d0940-9d30-4dd2-b52c-c623d732daf4",
+                Comment = "updated state"
+            };
+
+            var operationForUpdateKey = operationsGuids.First();
+
+            var updateCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{operationForUpdateKey}", Method.Patch)
+                .AddJsonBody(updateRequest);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(updateCreateRequest);
+
+            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            var historyRecords = paymentsHistoryResponse.Data.Payload;
+
+            var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(operationForUpdateKey) == 0);
+
+            Assert.Multiple(() =>
+            {
+                operationsGuids.Count.Should().Be(3);
+                targetPaymentHistory.Record.Amount.Should().Be(9120);
+                targetPaymentHistory.Balance.Should().Be(-9106);
+            });
         }
 
         [Test]

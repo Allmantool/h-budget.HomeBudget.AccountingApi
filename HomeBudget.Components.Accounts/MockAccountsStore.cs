@@ -83,6 +83,15 @@ namespace HomeBudget.Components.Accounts
             },
             new PaymentAccount
             {
+                Key = Guid.Parse("421f203b-fc78-4c7c-93c8-5d56e9aefc30"),
+                Agent = "Ordering check",
+                Type = AccountTypes.Bank,
+                Balance = 0,
+                Currency = CurrencyTypes.BYN.ToString(),
+                Description = "Tech description"
+            },
+            new PaymentAccount
+            {
                 Key = Guid.Parse("5f5af6ad-8a4f-47b9-ab90-2d884edc1aa4"),
                 Agent = "Techobank Updaet with no existed",
                 Type = AccountTypes.Bank,

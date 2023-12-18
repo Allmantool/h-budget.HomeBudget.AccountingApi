@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -33,7 +34,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (validAndMostUpToDateOperations.Count == 1)
             {
-                var historyRecord = validAndMostUpToDateOperations.Single().Payload;
+                var paymentOperation = validAndMostUpToDateOperations.Single().Payload;
 
                 MockOperationsHistoryStore.SetState(
                     paymentAccountId,
@@ -41,8 +42,8 @@ namespace HomeBudget.Components.Operations.Services
                     {
                         new PaymentOperationHistoryRecord
                         {
-                            Record = historyRecord,
-                            Balance = historyRecord.Amount
+                            Record = paymentOperation,
+                            Balance = CalculateIncrement(paymentOperation)
                         }
                     });
 
@@ -61,7 +62,7 @@ namespace HomeBudget.Components.Operations.Services
                     new PaymentOperationHistoryRecord
                     {
                         Record = operationEvent,
-                        Balance = previousRecordBalance + operationEvent.Amount
+                        Balance = previousRecordBalance + CalculateIncrement(operationEvent)
                     });
             }
 
@@ -72,6 +73,15 @@ namespace HomeBudget.Components.Operations.Services
                 : default;
 
             return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
+        }
+
+        private static decimal CalculateIncrement(PaymentOperation operation)
+        {
+            var category = MockCategoriesStore.Categories.Find(c => c.Key.CompareTo(operation.CategoryId) == 0);
+
+            return category.CategoryType == CategoryTypes.Income
+                ? Math.Abs(operation.Amount)
+                : -Math.Abs(operation.Amount);
         }
 
         private static IReadOnlyCollection<PaymentOperationEvent> GetValidAndMostUpToDateOperations(

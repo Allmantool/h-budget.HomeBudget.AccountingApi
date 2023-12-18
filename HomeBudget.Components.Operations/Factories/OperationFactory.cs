@@ -2,7 +2,6 @@
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
-using HomeBudget.Components.Categories;
 
 namespace HomeBudget.Components.Operations.Factories
 {
@@ -21,14 +20,11 @@ namespace HomeBudget.Components.Operations.Factories
                 return default;
             }
 
-            var isExpenseOperation = MockCategoriesStore.Categories
-                .Find(c => c.Key.CompareTo(categoryGuid) == 0).CategoryType == CategoryTypes.Expense;
-
             return new PaymentOperation
             {
                 Key = Guid.NewGuid(),
                 OperationDay = operationDay,
-                Amount = isExpenseOperation ? -amount : amount,
+                Amount = amount,
                 Comment = comment,
                 PaymentAccountId = paymentAccountId,
                 CategoryId = categoryGuid,
