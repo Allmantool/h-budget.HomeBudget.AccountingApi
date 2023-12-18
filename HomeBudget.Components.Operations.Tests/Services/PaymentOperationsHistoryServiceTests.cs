@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using FluentAssertions;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 
@@ -30,6 +32,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
+                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
                         Amount = 12.10m,
                     }
                 },
@@ -40,6 +43,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
+                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
                         Amount = 12.10m,
                     }
                 }
@@ -68,6 +72,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
+                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
                         Amount = 12.10m,
                         OperationDay = new DateOnly(2023, 12, 12)
                     }
@@ -79,6 +84,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
+                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
                         Amount = 17.12m,
                         OperationDay = new DateOnly(2023, 12, 15)
                     }
@@ -90,6 +96,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
+                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
                         Amount = 98.98m,
                         OperationDay = new DateOnly(2023, 12, 12)
                     }
