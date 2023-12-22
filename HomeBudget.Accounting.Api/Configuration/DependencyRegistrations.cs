@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
@@ -15,10 +17,20 @@ namespace HomeBudget.Accounting.Api.Configuration
             IConfiguration configuration)
         {
             return services
+                .SetUpConfigurationOptions(configuration)
                 .RegisterPaymentAccountsIoCDependency()
                 .RegisterContractorsIoCDependency()
                 .RegisterOperationsIoCDependency()
                 .RegisterCategoriesIoCDependency();
+        }
+
+        public static IServiceCollection SetUpConfigurationOptions(
+            this IServiceCollection services,
+            IConfiguration configuration)
+        {
+            return services
+                .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
+                .Configure<EventStoreDbOptions>(configuration.GetSection(ConfigurationSectionKeys.EventStoreDb));
         }
     }
 }
