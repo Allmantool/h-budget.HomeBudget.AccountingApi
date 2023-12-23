@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -33,8 +34,11 @@ namespace HomeBudget.Components.Operations.Tests
         }
 
         [Test]
-        public async Task SendAsync_WhenAddParticularEvent_ThenCommitExpectedAmountOfData()
+        public async Task SendAsync_WithSeveralEventsUnderDifferentPaymentAccounts_ThenCommitExpectedEventsAtStore()
         {
+            var paymentAccountIdA = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43");
+            var paymentAccountIdB = Guid.Parse("91c3d1bc-ce45-415a-a97d-2a9d834c7e02");
+
             await using (_eventSourceDbContainer)
             {
                 await _eventSourceDbContainer.StartAsync();
@@ -45,29 +49,76 @@ namespace HomeBudget.Components.Operations.Tests
 
                 _sut = new PaymentOperationsEventStoreClient(client);
 
-                var payload = new PaymentOperationEvent
+                var paymentsEvents = new List<PaymentOperationEvent>
                 {
-                    EventType = EventTypes.Add,
-                    Payload = new PaymentOperation
+                    new()
                     {
-                        Key = Guid.Parse("8e41d373-3ef6-4cce-8bfd-e529a74b3aa7"),
-                        PaymentAccountId = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43"),
-                        Amount = 120.1m,
-                        CategoryId = Guid.Parse("5fa3c529-c8ed-49a7-bf5c-d8f404d6adb7"),
-                        Comment = "Comment",
-                        ContractorId = Guid.Parse("4913aea0-07d9-4c31-b7d5-20361347319e"),
-                        OperationDay = new DateOnly(2023, 12, 22)
-                    }
+                        EventType = EventTypes.Add,
+                        Payload = new PaymentOperation
+                        {
+                            Key = Guid.Parse("7683a5d4-ba29-4274-8e9a-50de5361d46c"),
+                            PaymentAccountId = paymentAccountIdA,
+                            Amount = 199.1m,
+                            CategoryId = Guid.Parse("5fa3c529-c8ed-49a7-bf5c-d8f404d6adb7"),
+                            ContractorId = Guid.Parse("4913aea0-07d9-4c31-b7d5-20361347319e"),
+                            Comment = "Account #1",
+                            OperationDay = new DateOnly(2023, 12, 22)
+                        }
+                    },
+                    new()
+                    {
+                        EventType = EventTypes.Remove,
+                        Payload = new PaymentOperation
+                        {
+                            Key = Guid.Parse("2c683dd6-3eea-40f3-918b-ab1b60ccebc4"),
+                            PaymentAccountId = paymentAccountIdA,
+                            Amount = 120.1m,
+                            CategoryId = Guid.Parse("5fa3c529-c8ed-49a7-bf5c-d8f404d6adb7"),
+                            ContractorId = Guid.Parse("4913aea0-07d9-4c31-b7d5-20361347319e"),
+                            Comment = "Account #1",
+                            OperationDay = new DateOnly(2023, 12, 22)
+                        }
+                    },
+                    new()
+                    {
+                        EventType = EventTypes.Update,
+                        Payload = new PaymentOperation
+                        {
+                            Key = Guid.Parse("2c683dd6-3eea-40f3-918b-ab1b60ccebc4"),
+                            PaymentAccountId = paymentAccountIdA,
+                            Amount = 160.1m,
+                            CategoryId = Guid.Parse("5fa3c529-c8ed-49a7-bf5c-d8f404d6adb7"),
+                            ContractorId = Guid.Parse("4913aea0-07d9-4c31-b7d5-20361347319e"),
+                            Comment = "Account #1",
+                            OperationDay = new DateOnly(2023, 12, 24)
+                        }
+                    },
+                    new()
+                    {
+                        EventType = EventTypes.Add,
+                        Payload = new PaymentOperation
+                        {
+                            Key = Guid.Parse("a2603450-7c16-4ac7-955a-5e261ccc0b89"),
+                            PaymentAccountId = paymentAccountIdB,
+                            Amount = 89.1m,
+                            CategoryId = Guid.Parse("5fa3c529-c8ed-49a7-bf5c-d8f404d6adb7"),
+                            ContractorId = Guid.Parse("4913aea0-07d9-4c31-b7d5-20361347319e"),
+                            Comment = "Account #2",
+                            OperationDay = new DateOnly(2023, 12, 27)
+                        }
+                    },
                 };
 
-                var eventType = $"{payload.EventType}_{payload.Payload.PaymentAccountId}_{payload.Payload.Key}";
+                foreach (var paymentEvent in paymentsEvents)
+                {
+                    await _sut.SendAsync(paymentEvent);
+                }
 
-                var writeResult = await _sut.SendAsync(payload, eventType);
+                var streamName = PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountIdA.ToString());
 
-                var readResult = await _sut.ReadAsync<PaymentOperationEvent>().ToListAsync();
+                var readResult = await _sut.ReadAsync(streamName).ToListAsync();
 
-                writeResult.LogPosition.CommitPosition.Should().Be(10505);
-                readResult.Count.Should().Be(1);
+                readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
 
                 await _eventSourceDbContainer.StopAsync();
             }

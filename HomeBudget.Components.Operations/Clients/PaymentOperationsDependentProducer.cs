@@ -2,8 +2,7 @@
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
-
-using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Clients
 {

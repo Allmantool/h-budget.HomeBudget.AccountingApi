@@ -5,9 +5,10 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
-using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Factories;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -44,7 +45,7 @@ namespace HomeBudget.Components.Operations.Configuration
             var dbConnection = new Uri(databaseOptions.Url);
 
             return services.AddEventStoreClient(dbConnection)
-                .AddSingleton<IEventStoreDbClient, PaymentOperationsEventStoreClient>();
+                .AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
         }
     }
 }

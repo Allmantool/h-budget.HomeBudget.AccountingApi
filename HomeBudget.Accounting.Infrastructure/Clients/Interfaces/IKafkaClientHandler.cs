@@ -2,7 +2,7 @@
 
 using Confluent.Kafka;
 
-namespace HomeBudget.Accounting.Infrastructure.Clients
+namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
 {
     public interface IKafkaClientHandler : IDisposable
     {

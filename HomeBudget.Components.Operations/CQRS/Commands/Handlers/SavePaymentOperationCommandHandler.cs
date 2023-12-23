@@ -8,18 +8,18 @@ using Confluent.Kafka;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Accounts.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 {
     internal class SavePaymentOperationCommandHandler(
         IMapper mapper,
         ISender sender,
-        IEventStoreDbClient eventStoreDbClient,
+        IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
         IKafkaDependentProducer<string, string> producer,
         IPaymentOperationsHistoryService paymentOperationsHistoryService)
         : IRequestHandler<SavePaymentOperationCommand, Result<Guid>>
@@ -40,7 +40,9 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
                 DeliveryReportHandler
             );
 
-            await eventStoreDbClient.SendAsync(paymentSavedEvent, paymentSavedEvent.EventType.ToString());
+            await eventStoreDbClient.SendAsync(
+                paymentSavedEvent,
+                token: cancellationToken);
 
             var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(paymentAccountId);
 

@@ -1,7 +1,6 @@
 ﻿using Confluent.Kafka;
 using HomeBudget.Accounting.Domain.Models;
-
-using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using Microsoft.Extensions.Options;
 
 namespace HomeBudget.Components.Operations.Clients
