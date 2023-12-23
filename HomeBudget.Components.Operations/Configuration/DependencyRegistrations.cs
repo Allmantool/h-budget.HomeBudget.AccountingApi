@@ -1,6 +1,5 @@
 ﻿using System;
 
-using EventStore.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -43,10 +42,6 @@ namespace HomeBudget.Components.Operations.Configuration
             var databaseOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
 
             var dbConnection = new Uri(databaseOptions.Url);
-
-            var settings = EventStoreClientSettings
-                .Create("esdb+discover://localhost:2113?keepAliveTimeout=10000&keepAliveInterval=10000");
-            var client = new EventStoreClient(settings);
 
             return services.AddEventStoreClient(dbConnection)
                 .AddSingleton<IEventStoreDbClient, PaymentOperationsEventStoreClient>();
