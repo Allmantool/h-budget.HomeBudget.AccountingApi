@@ -16,7 +16,6 @@ using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Contractors;
 using HomeBudget.Components.Operations;
-using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -28,12 +27,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
+        [OneTimeTearDown]
+        public async Task StopAsync() => await _sut.StopAsync();
+
         [Test]
-        public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
+        public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
         {
             var paymentAccountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
 
-            var operationAmountBefore = MockOperationEventsStore.EventsForAccount(paymentAccountId).Count();
+            var operationAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
             var requestBody = new CreateOperationRequest
             {
@@ -48,10 +50,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
 
+            response.IsSuccessful.Should().Be(true);
+
             var result = response.Data;
             var payload = result.Payload;
 
-            var operationAmountAfter = MockOperationEventsStore.EventsForAccount(paymentAccountId).Count;
+            var operationAmountAfter = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
             Assert.Multiple(() =>
             {
@@ -257,28 +261,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void Update_WithValid_BalanceShouldBeExpectedlyUpdated()
+        public async Task Update_WithValid_BalanceShouldBeExpectedlyUpdated()
         {
-            var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
             var accountId = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f");
 
-            MockOperationEventsStore.SetState(
-                accountId,
-                new[]
-                {
-                    new PaymentOperationEvent
-                    {
-                        EventType = EventTypes.Add,
-                        Payload = new PaymentOperation
-                        {
-                            PaymentAccountId = accountId,
-                            Key = operationId,
-                            Amount = 12.0m
-                        }
-                    }
-                });
+            var requestCreateBody = new CreateOperationRequest
+            {
+                Amount = 12.0m,
+                Comment = "New operation",
+                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+            };
 
-            var requestBody = new UpdateOperationRequest
+            var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                .AddJsonBody(requestCreateBody);
+
+            var saveResponseResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
+
+            var requestUpdateBody = new UpdateOperationRequest
             {
                 Amount = 17.22m,
                 Comment = "Some update description",
@@ -288,14 +288,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
-            var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
-                .AddJsonBody(requestBody);
+            var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{saveResponseResult.Data.Payload.PaymentOperationId}", Method.Patch)
+                .AddJsonBody(requestUpdateBody);
 
-            _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
             var balanceAfter = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryRecordsAsync(Guid paymentAccountId)
+        {
+            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            return paymentsHistoryResponse.Data.Payload;
         }
 
         public ValueTask DisposeAsync()

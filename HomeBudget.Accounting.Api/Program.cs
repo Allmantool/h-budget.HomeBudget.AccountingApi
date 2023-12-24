@@ -23,7 +23,7 @@ webAppBuilder.Services.AddControllers(o =>
     o.Conventions.Add(new SwaggerControllerDocConvention());
 });
 
-services.SetUpDi(configuration);
+services.SetUpDi(configuration, environment);
 
 webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();

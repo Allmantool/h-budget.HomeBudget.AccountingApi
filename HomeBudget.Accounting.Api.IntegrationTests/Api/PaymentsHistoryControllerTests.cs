@@ -64,16 +64,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 await _sut.RestHttpClient.ExecuteAsync(postCreateRequest);
             }
 
-            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
-
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
-
-            var historyRecords = paymentsHistoryResponse.Data.Payload;
+            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
             Assert.Multiple(() =>
             {
-                MockOperationEventsStore.EventsForAccount(paymentAccountId).Count.Should().Be(createRequestAmount);
                 MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(expectedBalance);
 
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
@@ -103,12 +97,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync(postCreateRequest);
 
-            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
-
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
-
-            var historyRecords = paymentsHistoryResponse.Data.Payload;
+            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
             Assert.Multiple(() =>
             {
@@ -143,12 +132,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 await Task.Delay(TimeSpan.FromSeconds(0.1), CancellationToken.None);
             }
 
-            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
-
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
-
-            var historyRecords = paymentsHistoryResponse.Data.Payload;
+            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
             string.Join(',', historyRecords.Select(r => r.Balance)).Should().Be("11,20,28,38,50");
         }
@@ -199,12 +183,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(updateCreateRequest);
 
-            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
-
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
-
-            var historyRecords = paymentsHistoryResponse.Data.Payload;
+            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
             var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(operationForUpdateKey) == 0);
 
@@ -214,6 +193,47 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 targetPaymentHistory.Record.Amount.Should().Be(9120);
                 targetPaymentHistory.Balance.Should().Be(-9106);
             });
+        }
+
+        [Test]
+        public async Task GetPaymentOperations_WhenAddAndThenUpdate_ReturnsUpToDateOperationState()
+        {
+            var paymentAccountId = Guid.Parse("4daf3bef-5ffc-4a24-a032-eb97e8593a24");
+
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 7,
+                Comment = "New operation - x",
+                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                OperationDate = new DateOnly(2023, 12, 15)
+            };
+
+            var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                .AddJsonBody(requestBody);
+
+            var addResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var newOperationId = Guid.Parse(addResponse.Data.Payload.PaymentOperationId);
+
+            var updateRequest = new UpdateOperationRequest
+            {
+                Amount = 11,
+                OperationDate = new DateOnly(2027, 1, 17),
+                CategoryId = "66ce6a56-f61e-4530-8098-b8c58b61a381",
+                ContractorId = "66e81106-9214-41a4-8297-82d6761f1d40",
+                Comment = "updated state"
+            };
+
+            var updateCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{newOperationId}", Method.Patch)
+                .AddJsonBody(updateRequest);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(updateCreateRequest);
+
+            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
+
+            var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(newOperationId) == 0);
+
+            targetPaymentHistory.Balance.Should().Be(-11);
         }
 
         [Test]
@@ -258,6 +278,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
 
             result.IsSucceeded.Should().BeFalse();
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryRecordsAsync(Guid paymentAccountId)
+        {
+            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            return paymentsHistoryResponse.Data.Payload;
         }
     }
 }

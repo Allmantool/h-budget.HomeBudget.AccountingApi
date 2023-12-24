@@ -1,19 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Services
 {
-    internal class PaymentOperationsHistoryService : IPaymentOperationsHistoryService
+    internal class PaymentOperationsHistoryService(IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient)
+        : IPaymentOperationsHistoryService
     {
-        public Result<decimal> SyncHistory(Guid paymentAccountId)
+        public async Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId)
         {
-            var eventsForAccount = MockOperationEventsStore.EventsForAccount(paymentAccountId).ToList();
+            var eventsForAccount = await eventStoreDbClient.ReadAsync(paymentAccountId.ToString()).ToListAsync();
 
             if (!eventsForAccount.Any())
             {

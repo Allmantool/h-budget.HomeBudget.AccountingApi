@@ -56,6 +56,15 @@ namespace HomeBudget.Components.Accounts
             },
             new PaymentAccount
             {
+                Key = Guid.Parse("4daf3bef-5ffc-4a24-a032-eb97e8593a24"),
+                Agent = "Test update after added new one record",
+                Type = AccountTypes.Cash,
+                Balance = 0,
+                Currency = CurrencyTypes.USD.ToString(),
+                Description = "Test update after added new one record"
+            },
+            new PaymentAccount
+            {
                 Key = Guid.Parse("c9b33506-9a98-4f76-ad8e-17c96858305b"),
                 Agent = "Priorbank",
                 Type = AccountTypes.Loan,
