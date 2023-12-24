@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using DotNet.Testcontainers.Containers;
 using EventStore.Client;
 using FluentAssertions;
 using NUnit.Framework;
@@ -25,11 +26,11 @@ namespace HomeBudget.Components.Operations.Tests
         {
             _eventSourceDbContainer = new EventStoreDbBuilder()
                 .WithImage("eventstore/eventstore:23.10.0-jammy")
-                .WithName("EventSourcingDb")
+                .WithName($"{nameof(PaymentOperationsEventStoreClientTests)}-container")
                 .WithAutoRemove(true)
                 .WithHostname("test-host")
                 .WithCleanUp(true)
-                .WithPortBinding(2113, 2113)
+                .WithPortBinding(3113, 2113)
                 .Build();
         }
 
@@ -41,7 +42,10 @@ namespace HomeBudget.Components.Operations.Tests
 
             await using (_eventSourceDbContainer)
             {
-                await _eventSourceDbContainer.StartAsync();
+                if (_eventSourceDbContainer.State != TestcontainersStates.Running)
+                {
+                    await _eventSourceDbContainer.StartAsync();
+                }
 
                 var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
 
@@ -114,9 +118,7 @@ namespace HomeBudget.Components.Operations.Tests
                     await _sut.SendAsync(paymentEvent);
                 }
 
-                var streamName = PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountIdA.ToString());
-
-                var readResult = await _sut.ReadAsync(streamName).ToListAsync();
+                var readResult = await _sut.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
 
                 readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
 

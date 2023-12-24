@@ -10,4 +10,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.16.0.82469" />
+  </ItemGroup>
+
 </Project>

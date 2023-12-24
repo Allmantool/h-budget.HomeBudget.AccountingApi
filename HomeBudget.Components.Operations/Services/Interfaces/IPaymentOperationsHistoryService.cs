@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
 
@@ -6,6 +7,6 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
 {
     public interface IPaymentOperationsHistoryService
     {
-        Result<decimal> SyncHistory(Guid paymentAccountId);
+        Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId);
     }
 }

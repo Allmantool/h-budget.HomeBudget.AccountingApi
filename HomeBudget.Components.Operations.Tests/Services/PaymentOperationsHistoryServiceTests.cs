@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
@@ -15,10 +19,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
     [TestFixture]
     public class PaymentOperationsHistoryServiceTests
     {
-        private readonly PaymentOperationsHistoryService _sut = new();
-
         [Test]
-        public void SyncHistory_WhenTryToAddOperationWithTheSameKey_ThenIgnoreTheDuplicateForSameAccount()
+        public async Task SyncHistoryAsync_WhenTryToAddOperationWithTheSameKey_ThenIgnoreTheDuplicateForSameAccount()
         {
             var paymentAccountId = Guid.Parse("db2d514d-f571-4876-936a-784f24fc3060");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
@@ -49,16 +51,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.SetState(paymentAccountId, events);
+            var sut = BuildServiceUnderTest(events);
+            var result = await sut.SyncHistoryAsync(paymentAccountId);
 
-            var result = _sut.SyncHistory(paymentAccountId);
-
-            // TODO: Ok for now, for mock< but should be re-think in future
             result.Payload.Should().Be(12.10m);
         }
 
         [Test]
-        public void SyncHistory_WhenUpdateSeveralTimes_ThenTheMostUpToDateDataShouldBeApplied()
+        public async Task SyncHistory_WhenUpdateSeveralTimes_ThenTheMostUpToDateDataShouldBeApplied()
         {
             var paymentAccountId = Guid.Parse("36ab7a9c-66ac-4b6e-8765-469572daa46b");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
@@ -103,58 +103,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.SetState(paymentAccountId, events);
-
-            var result = _sut.SyncHistory(paymentAccountId);
+            var sut = BuildServiceUnderTest(events);
+            var result = await sut.SyncHistoryAsync(paymentAccountId);
 
             result.Payload.Should().Be(17.12m);
         }
 
         [Test]
-        public void SyncHistory_WhenTryToUpdateNotExistedOperation_ThenSkipForCalculation()
-        {
-            var paymentAccountId = Guid.Parse("5f5af6ad-8a4f-47b9-ab90-2d884edc1aa4");
-            var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
-
-            MockOperationEventsStore.SetState(
-                paymentAccountId,
-                new List<PaymentOperationEvent>
-                {
-                    new()
-                    {
-                        EventType = EventTypes.Update,
-                        Payload = new PaymentOperation
-                        {
-                            PaymentAccountId = paymentAccountId,
-                            Key = operationId,
-                            Amount = 12.10m,
-                        }
-                    },
-                });
-
-            MockOperationEventsStore.SetState(
-                Guid.Parse("85cb76ea-e6e2-4b96-aabe-33f6c6cf2308"),
-                new List<PaymentOperationEvent>
-                {
-                    new()
-                    {
-                        EventType = EventTypes.Update,
-                        Payload = new PaymentOperation
-                        {
-                            PaymentAccountId = Guid.Parse("85cb76ea-e6e2-4b96-aabe-33f6c6cf2308"),
-                            Key = operationId,
-                            Amount = 12.10m,
-                        }
-                    },
-                });
-
-            var result = _sut.SyncHistory(paymentAccountId);
-
-            result.Payload.Should().Be(0);
-        }
-
-        [Test]
-        public void SyncHistory_WhenRemoveNotExisted_ThenSkipForCalculation()
+        public async Task SyncHistory_WhenRemoveNotExisted_ThenSkipForCalculation()
         {
             var paymentAccountId = Guid.Parse("1f34a993-8279-4f61-b86b-658c0d3703d7");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
@@ -172,15 +128,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.SetState(paymentAccountId, events);
-
-            var result = _sut.SyncHistory(paymentAccountId);
+            var sut = BuildServiceUnderTest(events);
+            var result = await sut.SyncHistoryAsync(paymentAccountId);
 
             result.Payload.Should().Be(0);
         }
 
         [Test]
-        public void SyncHistory_WhenRemoveExisted_ThenShouldBeRemoved()
+        public async Task SyncHistory_WhenRemoveExisted_ThenShouldBeRemoved()
         {
             var paymentAccountId = Guid.Parse("d6971a06-5ab1-48f1-a6f6-1cd0cd1df220");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
@@ -208,11 +163,21 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            MockOperationEventsStore.SetState(paymentAccountId, events);
-
-            var result = _sut.SyncHistory(paymentAccountId);
+            var sut = BuildServiceUnderTest(events);
+            var result = await sut.SyncHistoryAsync(paymentAccountId);
 
             result.Payload.Should().Be(0);
+        }
+
+        private PaymentOperationsHistoryService BuildServiceUnderTest(IEnumerable<PaymentOperationEvent> events)
+        {
+            var eventDbClient = new Mock<IEventStoreDbClient<PaymentOperationEvent>>();
+
+            eventDbClient
+                .Setup(cl => cl.ReadAsync(It.IsAny<string>(), CancellationToken.None))
+                .Returns(events.ToAsyncEnumerable());
+
+            return new PaymentOperationsHistoryService(eventDbClient.Object);
         }
     }
 }

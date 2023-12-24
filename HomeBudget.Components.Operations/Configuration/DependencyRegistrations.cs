@@ -3,6 +3,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
@@ -16,7 +17,7 @@ namespace HomeBudget.Components.Operations.Configuration
 {
     public static class DependencyRegistrations
     {
-        public static IServiceCollection RegisterOperationsIoCDependency(this IServiceCollection services)
+        public static IServiceCollection RegisterOperationsIoCDependency(this IServiceCollection services, string webHostEnvironment)
         {
             return services
                 .AddScoped<IOperationFactory, OperationFactory>()
@@ -27,7 +28,7 @@ namespace HomeBudget.Components.Operations.Configuration
                     configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
                 })
                 .RegisterOperationsClients()
-                .RegisterEventStoreDbClient();
+                .RegisterEventStoreDbClient(webHostEnvironment);
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
@@ -37,15 +38,21 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer<string, string>>();
         }
 
-        private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services)
+        private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
         {
+            services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
+
             var serviceProvider = services.BuildServiceProvider();
             var databaseOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
 
+            if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
+            {
+                return services;
+            }
+
             var dbConnection = new Uri(databaseOptions.Url);
 
-            return services.AddEventStoreClient(dbConnection)
-                .AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
+            return services.AddEventStoreClient(dbConnection);
         }
     }
 }

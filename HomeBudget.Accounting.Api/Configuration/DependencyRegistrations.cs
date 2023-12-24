@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Domain.Constants;
@@ -14,13 +15,14 @@ namespace HomeBudget.Accounting.Api.Configuration
     {
         public static IServiceCollection SetUpDi(
             this IServiceCollection services,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IWebHostEnvironment webHostEnvironment)
         {
             return services
                 .SetUpConfigurationOptions(configuration)
                 .RegisterPaymentAccountsIoCDependency()
                 .RegisterContractorsIoCDependency()
-                .RegisterOperationsIoCDependency()
+                .RegisterOperationsIoCDependency(webHostEnvironment.EnvironmentName)
                 .RegisterCategoriesIoCDependency();
         }
 

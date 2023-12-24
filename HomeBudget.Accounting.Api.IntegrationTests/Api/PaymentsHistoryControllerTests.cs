@@ -68,7 +68,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                MockOperationEventsStore.EventsForAccount(paymentAccountId).Count.Should().Be(createRequestAmount);
                 MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(expectedBalance);
 
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));

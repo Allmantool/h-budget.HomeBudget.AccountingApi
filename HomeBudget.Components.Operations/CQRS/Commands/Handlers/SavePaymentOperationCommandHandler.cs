@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,11 +7,11 @@ using Confluent.Kafka;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Accounts.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 {
@@ -30,10 +29,6 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 
             var paymentSavedEvent = mapper.Map<PaymentOperationEvent>(request);
 
-            var eventsForAccount = MockOperationEventsStore.EventsForAccount(paymentAccountId).ToList();
-
-            MockOperationEventsStore.SetState(paymentAccountId, eventsForAccount.Append(paymentSavedEvent));
-
             producer.Produce(
                 nameof(paymentSavedEvent),
                 PaymentEventToMessageConverter.Convert(paymentSavedEvent),
@@ -44,7 +39,7 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
                 paymentSavedEvent,
                 token: cancellationToken);
 
-            var upToDateBalanceResult = paymentOperationsHistoryService.SyncHistory(paymentAccountId);
+            var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId);
 
             await sender.Send(
                 new UpdatePaymentAccountBalanceCommand(

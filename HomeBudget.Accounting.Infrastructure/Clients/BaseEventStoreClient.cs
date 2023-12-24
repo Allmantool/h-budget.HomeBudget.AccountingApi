@@ -12,8 +12,8 @@ using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
-    public abstract class BaseEventStoreClient<T>(EventStoreClient client)
-        : IEventStoreDbClient<T>
+    public abstract class BaseEventStoreClient<T>(EventStoreClient client) : IEventStoreDbClient<T>
+        where T : new()
     {
         public virtual async Task<IWriteResult> SendAsync(
             T payload,
@@ -46,6 +46,11 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 StreamPosition.Start,
                 cancellationToken: token
             );
+
+            if ((await eventsAsyncStream.ReadState) == ReadState.StreamNotFound)
+            {
+                yield return default;
+            }
 
             await foreach (var paymentOperationEvent in eventsAsyncStream)
             {
