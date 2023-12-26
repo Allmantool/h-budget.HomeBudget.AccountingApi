@@ -2,6 +2,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using EventStore.Client;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
@@ -50,9 +51,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 return services;
             }
 
-            var dbConnection = new Uri(databaseOptions.Url);
-
-            return services.AddEventStoreClient(dbConnection);
+            return services.AddEventStoreClient(databaseOptions.Url, _ => EventStoreClientSettings.Create(databaseOptions.Url));
         }
     }
 }
