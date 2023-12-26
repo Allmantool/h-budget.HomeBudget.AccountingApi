@@ -1,8 +1,8 @@
 ﻿using System;
 
+using EventStore.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using EventStore.Client;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
@@ -10,6 +10,7 @@ using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Factories;
+using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -36,7 +37,8 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
-                .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer<string, string>>();
+                .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer>()
+                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
@@ -46,12 +48,9 @@ namespace HomeBudget.Components.Operations.Configuration
             var serviceProvider = services.BuildServiceProvider();
             var databaseOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
 
-            if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
-            {
-                return services;
-            }
-
-            return services.AddEventStoreClient(databaseOptions.Url, _ => EventStoreClientSettings.Create(databaseOptions.Url));
+            return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
+                ? services
+                : services.AddEventStoreClient(databaseOptions.Url, _ => EventStoreClientSettings.Create(databaseOptions.Url));
         }
     }
 }

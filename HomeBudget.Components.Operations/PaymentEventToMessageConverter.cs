@@ -1,5 +1,6 @@
-﻿using Confluent.Kafka;
-using Newtonsoft.Json;
+﻿using System.Text.Json;
+
+using Confluent.Kafka;
 
 using HomeBudget.Components.Operations.Models;
 
@@ -14,7 +15,7 @@ namespace HomeBudget.Components.Operations
             return new Message<string, string>
             {
                 Key = $"{eventPayload.PaymentAccountId}-{eventPayload.Key}",
-                Value = $"{paymentEvent.EventType}-{JsonConvert.SerializeObject(eventPayload)}"
+                Value = JsonSerializer.Serialize(eventPayload),
             };
         }
     }
