@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
@@ -20,6 +21,12 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             Message<K, V> message,
             Action<DeliveryReport<K, V>> deliveryHandler = null)
             => _kafkaHandle.Produce(topic, message, deliveryHandler);
+
+        public Task<DeliveryResult<K, V>> ProduceAsync(
+            string topic,
+            Message<K, V> message,
+            CancellationToken token)
+            => _kafkaHandle.ProduceAsync(topic, message, token);
 
         public void Flush(TimeSpan timeout) => _kafkaHandle.Flush(timeout);
     }

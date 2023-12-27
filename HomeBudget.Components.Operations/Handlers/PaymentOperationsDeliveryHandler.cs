@@ -1,23 +1,36 @@
-﻿using Confluent.Kafka;
+﻿using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
+using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Handlers
 {
-    internal class PaymentOperationsDeliveryHandler(ILogger<PaymentOperationsDeliveryHandler> logger) : IPaymentOperationsDeliveryHandler
+    internal class PaymentOperationsDeliveryHandler(
+        IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
+        ILogger<PaymentOperationsDeliveryHandler> logger)
+        : IPaymentOperationsDeliveryHandler
     {
-        public void Handle(DeliveryReport<string, string> deliveryReport)
+        public async Task HandleAsync(DeliveryResult<string, string> deliveryResult, CancellationToken cancellationToken)
         {
-            if (deliveryReport.Status == PersistenceStatus.Persisted)
+            if (deliveryResult.Status == PersistenceStatus.Persisted)
             {
-                logger.LogInformation($"'{deliveryReport.Key}' -- {typeof(PaymentOperationEvent)} has been stream successfully");
+                var paymentSavedEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(deliveryResult.Value);
+
+                await eventStoreDbClient.SendAsync(
+                    paymentSavedEvent,
+                    token: cancellationToken);
+
+                logger.LogInformation($"'{deliveryResult.Key}' -- {typeof(PaymentOperationEvent)} has been stream successfully");
             }
 
-            if (deliveryReport.Status == PersistenceStatus.NotPersisted)
+            if (deliveryResult.Status == PersistenceStatus.NotPersisted)
             {
-                logger.LogError($"'{deliveryReport.Key}' -- {typeof(PaymentOperationEvent)} streaming failed");
+                logger.LogError($"'{deliveryResult.Key}' -- {typeof(PaymentOperationEvent)} streaming failed");
             }
         }
     }
