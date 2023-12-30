@@ -1,7 +1,9 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿using System;
+
+namespace HomeBudget.Accounting.Domain.Models
 {
     public class EventStoreDbOptions
     {
-        public string Url { get; set; }
+        public Uri Url { get; set; }
     }
 }

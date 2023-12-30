@@ -1,11 +1,14 @@
-﻿using Confluent.Kafka;
+﻿using System;
+
+using Confluent.Kafka;
+using Microsoft.Extensions.Options;
+
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using Microsoft.Extensions.Options;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentOperationsClientHandlerHandler : IKafkaClientHandler
+    internal sealed class PaymentOperationsClientHandlerHandler : IKafkaClientHandler
     {
         private IProducer<byte[], byte[]> KafkaProducer { get; }
 
@@ -16,8 +19,11 @@ namespace HomeBudget.Components.Operations.Clients
 
             var conf = new ProducerConfig(new ProducerConfig
             {
+                ClientId = "PaymentOperationsClientId",
                 BootstrapServers = producerSettings.BootstrapServers,
+                MessageTimeoutMs = TimeSpan.FromSeconds(5).Microseconds,
             });
+
             KafkaProducer = new ProducerBuilder<byte[], byte[]>(conf).Build();
         }
 

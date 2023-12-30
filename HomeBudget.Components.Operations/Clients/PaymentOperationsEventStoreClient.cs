@@ -13,18 +13,18 @@ namespace HomeBudget.Components.Operations.Clients
         : BaseEventStoreClient<PaymentOperationEvent>(client)
     {
         public override async Task<IWriteResult> SendAsync(
-            PaymentOperationEvent payload,
+            PaymentOperationEvent eventForSending,
             string streamName = default,
             string eventType = default,
             CancellationToken token = default)
         {
-            var paymentAccountId = payload.Payload.PaymentAccountId;
-            var paymentOperationId = payload.Payload.Key;
+            var paymentAccountId = eventForSending.Payload.PaymentAccountId;
+            var paymentOperationId = eventForSending.Payload.Key;
 
             return await base.SendAsync(
-                payload,
+                eventForSending,
                 PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString()),
-                $"{payload.EventType}_{paymentOperationId}",
+                $"{eventForSending.EventType}_{paymentOperationId}",
                 token);
         }
 

@@ -8,15 +8,17 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWebApplicationFactory<TStartup>
-        (Func<string> webHostInitializationCallback) : WebApplicationFactory<TStartup>
+        (Func<TestContainersConnections> webHostInitializationCallback) : WebApplicationFactory<TStartup>
         where TStartup : class
     {
-        private string _eventDbConnection;
+        private TestContainersConnections _containersConnections;
 
         internal IConfiguration Configuration { get; private set; }
 
@@ -29,12 +31,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 Configuration = conf.Build();
 
-                _eventDbConnection = webHostInitializationCallback?.Invoke();
+                _containersConnections = webHostInitializationCallback?.Invoke();
             });
 
             builder.ConfigureTestServices(services =>
             {
-                services.AddEventStoreClient(_eventDbConnection, (_) => EventStoreClientSettings.Create(_eventDbConnection));
+                var kafkaOptions = new KafkaOptions
+                {
+                    ProducerSettings = new ProducerSettings
+                    {
+                        BootstrapServers = _containersConnections.KafkaContainer
+                    }
+                };
+
+                services.AddOptions<KafkaOptions>().Configure(options => options.ProducerSettings = kafkaOptions.ProducerSettings);
+
+                services.AddEventStoreClient(
+                    _containersConnections.EventSourceDbContainer,
+                    (_) => EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer));
             });
 
             base.ConfigureWebHost(builder);
