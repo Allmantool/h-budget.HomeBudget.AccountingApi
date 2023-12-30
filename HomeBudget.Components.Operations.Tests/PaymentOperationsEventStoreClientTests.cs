@@ -27,8 +27,8 @@ namespace HomeBudget.Components.Operations.Tests
             _eventSourceDbContainer = new EventStoreDbBuilder()
                 .WithImage("eventstore/eventstore:23.10.0-jammy")
                 .WithName($"{nameof(PaymentOperationsEventStoreClientTests)}-container")
+                .WithHostname("test-event-store-db-host")
                 .WithAutoRemove(true)
-                .WithHostname("test-host")
                 .WithCleanUp(true)
                 .WithPortBinding(3113, 2113)
                 .Build();

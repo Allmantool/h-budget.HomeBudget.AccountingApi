@@ -16,12 +16,12 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         where T : new()
     {
         public virtual async Task<IWriteResult> SendAsync(
-            T payload,
+            T eventForSending,
             string streamName = default,
             string eventType = default,
             CancellationToken token = default)
         {
-            var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
+            var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
 
             var eventData = new EventData(
                 Uuid.NewUuid(),

@@ -13,9 +13,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
     {
         private readonly IProducer<K, V> _kafkaHandle = new DependentProducerBuilder<K, V>(handle.Handle).Build();
 
-        public Task ProduceAsync(string topic, Message<K, V> message) =>
-            _kafkaHandle.ProduceAsync(topic, message);
-
         public void Produce(
             string topic,
             Message<K, V> message,

@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.Text.Json;
 
 using Confluent.Kafka;
 
@@ -15,7 +16,8 @@ namespace HomeBudget.Components.Operations
             return new Message<string, string>
             {
                 Key = $"{eventPayload.PaymentAccountId}-{eventPayload.Key}",
-                Value = JsonSerializer.Serialize(eventPayload),
+                Value = JsonSerializer.Serialize(paymentEvent),
+                Timestamp = new Timestamp(DateTime.Now),
             };
         }
     }

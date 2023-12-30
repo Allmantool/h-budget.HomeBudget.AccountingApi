@@ -50,7 +50,7 @@ namespace HomeBudget.Components.Operations.Configuration
 
             return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
                 ? services
-                : services.AddEventStoreClient(databaseOptions.Url, _ => EventStoreClientSettings.Create(databaseOptions.Url));
+                : services.AddEventStoreClient(databaseOptions.Url.ToString(), _ => EventStoreClientSettings.Create(databaseOptions.Url.ToString()));
         }
     }
 }

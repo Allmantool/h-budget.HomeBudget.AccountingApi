@@ -5,6 +5,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
@@ -36,7 +37,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
                     StartAsync().GetAwaiter().GetResult();
 
-                    return TestContainersService.EventSourceDbContainer.GetConnectionString();
+                    return new TestContainersConnections
+                    {
+                        KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString()
+                    };
                 });
 
             RestHttpClient = new RestClient(
