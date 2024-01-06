@@ -17,7 +17,6 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Contractors;
-using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -45,6 +44,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const int createRequestAmount = 11;
             const decimal expectedBalance = 176M;
+
             var paymentAccountId = Guid.Parse("aed5a7ff-cd0f-4c61-b5ab-a3d7b8f9ac64");
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
@@ -237,29 +237,31 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
+        public async Task GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
-            var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
-            var accountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
+            var paymentAccountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
 
-            MockOperationsHistoryStore.SetState(accountId, new List<PaymentOperationHistoryRecord>
+            var requestBody = new CreateOperationRequest
             {
-                new()
-                {
-                    Record = new PaymentOperation
-                    {
-                        PaymentAccountId = accountId,
-                        Key = operationId,
-                        Amount = 35.64m
-                    }
-                }
-            });
+                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                Comment = "Some test",
+                OperationDate = new DateOnly(2024, 1, 6),
+                Amount = 35.64m
+            };
 
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
+            var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
+            var postResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var result = response.Data;
+            var newOperationId = postResult.Data.Payload.PaymentOperationId;
+
+            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
+
+            var getResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
+
+            var result = getResponse.Data;
             var payload = result.Payload;
 
             payload.Record.Amount.Should().Be(35.64m);

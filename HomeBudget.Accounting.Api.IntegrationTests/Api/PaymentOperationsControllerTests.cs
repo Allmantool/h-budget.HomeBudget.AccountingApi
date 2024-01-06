@@ -15,7 +15,6 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Contractors;
-using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -66,12 +65,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationHistoryRecord()
+        public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationHistoryRecord()
         {
             var paymentAccountId = Guid.Parse("c9b33506-9a98-4f76-ad8e-17c96858305b");
 
-            var operationsAmountBefore = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId)
-                .Count(r => r.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0);
+            var operationsAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
             foreach (var i in Enumerable.Range(1, 7))
             {
@@ -126,73 +124,69 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void DeleteById_WithValidOperationRef_ThenSuccessful()
+        public async Task DeleteById_WithValidOperationRef_ThenSuccessful()
         {
-            var operationId = Guid.Parse("5a53e3d3-0596-4ade-8aff-f3b3b956d0bd");
-            var accountId = Guid.Parse("0dbfb498-83e1-4e02-a2c1-c0761eab8529");
+            var paymentAccountId = Guid.Parse("0dbfb498-83e1-4e02-a2c1-c0761eab8529");
 
-            MockOperationsHistoryStore.SetState(
-                accountId,
-                new[]
-                {
-                    new PaymentOperationHistoryRecord
-                    {
-                        Balance = 25.24m,
-                        Record = new PaymentOperation
-                        {
-                            Amount = 25.24m,
-                            PaymentAccountId = accountId,
-                            Key = operationId
-                        }
-                    }
-                });
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 25.24m,
+                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                Comment = "Some test",
+                OperationDate = new DateOnly(2024, 1, 6),
+            };
+
+            var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                .AddJsonBody(requestBody);
+
+            var postResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
+
+            var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
             var balanceBefore = MockAccountsStore.Records
-                .Single(pa => pa.Key.CompareTo(accountId) == 0)
+                .Single(pa => pa.Key.CompareTo(paymentAccountId) == 0)
                 .Balance;
 
-            var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
+            var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
-            _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            await _sut.RestHttpClient.ExecuteAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
             var balanceAfter = MockAccountsStore.Records
-                .Single(pa => pa.Key.CompareTo(accountId) == 0)
+                .Single(pa => pa.Key.CompareTo(paymentAccountId) == 0)
                 .Balance;
 
             balanceBefore.Should().BeGreaterThan(balanceAfter);
         }
 
         [Test]
-        public void DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed()
+        public async Task DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed()
         {
-            var operationId = Guid.Parse("20a8ca8e-0127-462c-b854-b2868490f3ec");
-            var accountId = Guid.Parse("852530a6-70b0-4040-8912-8558d59d977a");
+            var paymentAccountId = Guid.Parse("852530a6-70b0-4040-8912-8558d59d977a");
 
-            MockOperationsHistoryStore.SetState(
-                accountId,
-                new[]
-                {
-                    new PaymentOperationHistoryRecord
-                    {
-                        Balance = 12.48m,
-                        Record = new PaymentOperation
-                        {
-                            Amount = 12.48m,
-                            PaymentAccountId = accountId,
-                            Key = operationId
-                        }
-                    }
-                });
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 25.24m,
+                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                Comment = "Some test",
+                OperationDate = new DateOnly(2024, 1, 6),
+            };
 
-            var operationAmountBefore = MockOperationsHistoryStore.RecordsForAccount(accountId)
-                .Count(r => r.Record.PaymentAccountId.CompareTo(accountId) == 0);
+            var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                .AddJsonBody(requestBody);
 
-            var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
+            var postResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
-            _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
-            var operationAmountAfter = MockOperationsHistoryStore.RecordsForAccount(accountId)
-                .Count(r => r.Record.PaymentAccountId.CompareTo(accountId) == 0);
+            var operationAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
+
+            var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
+
+            var operationAmountAfter = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
             operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
         }

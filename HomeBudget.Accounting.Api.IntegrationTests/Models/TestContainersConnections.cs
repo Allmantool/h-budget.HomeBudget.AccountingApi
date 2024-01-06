@@ -4,5 +4,6 @@
     {
         public string EventSourceDbContainer { get; set; }
         public string KafkaContainer { get; set; }
+        public string MongoDbContainer { get; set; }
     }
 }

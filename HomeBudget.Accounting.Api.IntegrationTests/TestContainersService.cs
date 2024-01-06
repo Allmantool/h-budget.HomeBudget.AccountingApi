@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
+using Testcontainers.MongoDb;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
@@ -11,6 +12,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     {
         public EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public KafkaContainer KafkaContainer { get; private set; }
+        public MongoDbContainer MongoDbContainer { get; private set; }
 
         public async Task UpAndRunningContainersAsync()
         {
@@ -37,6 +39,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 .WithCleanUp(true)
                 .Build();
 
+            MongoDbContainer = new MongoDbBuilder()
+                .WithImage("mongo:7.0.5-rc0-jammy")
+                .WithName($"{nameof(TestContainersService)}-mongo-db-container")
+                .WithHostname("test-mongo-db-host")
+                .WithPortBinding(28017, 28017)
+                .WithAutoRemove(true)
+                .WithCleanUp(true)
+                .Build();
+
             if (EventSourceDbContainer != null)
             {
                 await EventSourceDbContainer.StartAsync();
@@ -45,6 +56,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             if (KafkaContainer != null)
             {
                 await KafkaContainer.StartAsync();
+            }
+
+            if (MongoDbContainer != null)
+            {
+                await MongoDbContainer.StartAsync();
             }
         }
 
@@ -63,6 +79,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             if (KafkaContainer != null)
             {
                 await KafkaContainer.DisposeAsync();
+            }
+
+            if (MongoDbContainer != null)
+            {
+                await MongoDbContainer.DisposeAsync();
             }
         }
     }

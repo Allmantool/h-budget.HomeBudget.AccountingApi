@@ -9,11 +9,15 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Operations.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Services
 {
-    internal class PaymentOperationsService(ISender mediator, IOperationFactory operationFactory)
+    internal class PaymentOperationsService(
+        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
+        ISender mediator,
+        IOperationFactory operationFactory)
         : IPaymentOperationsService
     {
         public Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
@@ -29,15 +33,17 @@ namespace HomeBudget.Components.Operations.Services
             return mediator.Send(new SavePaymentOperationCommand(operationForAdd), token);
         }
 
-        public Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
+        public async Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
         {
-            var operationForDelete = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId)
+            var documents = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
+
+            var operationForDelete = documents
                 .Where(op => op.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0)
                 .SingleOrDefault(p => p.Record.Key.CompareTo(operationId) == 0);
 
             return operationForDelete == null
-                ? Task.FromResult(new Result<Guid>(isSucceeded: false, message: $"The operation '{operationId}' doesn't exist"))
-                : mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Record), token);
+                ? new Result<Guid>(isSucceeded: false, message: $"The operation '{operationId}' doesn't exist")
+                : await mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Record), token);
         }
 
         public Task<Result<Guid>> UpdateAsync(Guid paymentAccountId, Guid operationId, PaymentOperationPayload payload, CancellationToken token)

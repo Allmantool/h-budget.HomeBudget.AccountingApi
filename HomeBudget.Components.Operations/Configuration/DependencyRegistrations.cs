@@ -1,6 +1,6 @@
 ﻿using System;
-
 using EventStore.Client;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +12,7 @@ using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -25,12 +26,14 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IOperationFactory, OperationFactory>()
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
+                .AddScoped<IOperationsHistoryProvider, OperationsHistoryProvider>()
                 .AddMediatR(configuration =>
                 {
                     configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
                 })
                 .RegisterOperationsClients()
-                .RegisterEventStoreDbClient(webHostEnvironment);
+                .RegisterEventStoreDbClient(webHostEnvironment)
+                .RegisterMongoDb(webHostEnvironment);
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
@@ -39,6 +42,11 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
                 .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+        }
+
+        public static IServiceCollection RegisterMongoDb(this IServiceCollection services, string webHostEnvironment)
+        {
+            return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
         }
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
@@ -50,7 +58,9 @@ namespace HomeBudget.Components.Operations.Configuration
 
             return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
                 ? services
-                : services.AddEventStoreClient(databaseOptions.Url.ToString(), _ => EventStoreClientSettings.Create(databaseOptions.Url.ToString()));
+                : services.AddEventStoreClient(
+                    databaseOptions.Url.ToString(),
+                    _ => EventStoreClientSettings.Create(databaseOptions.Url.ToString()));
         }
     }
 }

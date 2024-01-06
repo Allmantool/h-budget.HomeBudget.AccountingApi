@@ -21,7 +21,7 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 ClientId = "PaymentOperationsClientId",
                 BootstrapServers = producerSettings.BootstrapServers,
-                MessageTimeoutMs = TimeSpan.FromSeconds(5).Microseconds,
+                MessageTimeoutMs = producerSettings.MessageTimeoutMs ?? TimeSpan.FromSeconds(3).Microseconds,
             });
 
             KafkaProducer = new ProducerBuilder<byte[], byte[]>(conf).Build();

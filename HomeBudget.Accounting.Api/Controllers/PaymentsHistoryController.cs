@@ -1,24 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Operations;
+using HomeBudget.Components.Operations.Providers;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [Route(Endpoints.PaymentsHistoryByPaymentAccountId, Name = Endpoints.PaymentsHistory)]
     [ApiController]
-    public class PaymentsHistoryController : ControllerBase
+    public class PaymentsHistoryController(IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient) : ControllerBase
     {
         [HttpGet]
-        public Result<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryPaymentOperations(string paymentAccountId)
+        public async Task<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>> GetHistoryPaymentOperationsAsync(string paymentAccountId)
         {
-            var paymentAccountOperations = MockOperationsHistoryStore.RecordsForAccount(Guid.Parse(paymentAccountId))
+            var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
+
+            var paymentAccountOperations = documents
+                .Select(d => new PaymentOperationHistoryRecord
+                {
+                    Balance = d.Balance,
+                    Record = d.Record
+                })
                 .OrderBy(op => op.Record.OperationDay)
                 .ThenBy(op => op.Record.OperationUnixTime)
                 .ToList();
@@ -27,9 +34,9 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpGet("byId/{operationId}")]
-        public Result<PaymentOperationHistoryRecord> GetOperationById(string paymentAccountId, string operationId)
+        public async Task<Result<PaymentOperationHistoryRecord>> GetOperationByIdAsync(string paymentAccountId, string operationId)
         {
-            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return new Result<PaymentOperationHistoryRecord>(
                     isSucceeded: false,
@@ -43,7 +50,9 @@ namespace HomeBudget.Accounting.Api.Controllers
                     message: $"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
-            var operationById = MockOperationsHistoryStore.RecordsForAccount(targetAccountGuid)
+            var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
+
+            var operationById = documents
                 .Where(op => op.Record.PaymentAccountId.CompareTo(targetAccountGuid) == 0)
                 .SingleOrDefault(rc => rc.Record.Key.CompareTo(targetOperationGuid) == 0);
 

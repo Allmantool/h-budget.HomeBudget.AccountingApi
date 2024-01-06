@@ -7,11 +7,14 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Services
 {
-    internal class PaymentOperationsHistoryService(IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient)
+    internal class PaymentOperationsHistoryService(
+        IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
+        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient)
         : IPaymentOperationsHistoryService
     {
         public async Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId)
@@ -20,7 +23,6 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!eventsForAccount.Any())
             {
-                MockOperationsHistoryStore.SetState(paymentAccountId, Enumerable.Empty<PaymentOperationHistoryRecord>());
                 return new Result<decimal>();
             }
 
@@ -31,7 +33,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!validAndMostUpToDateOperations.Any())
             {
-                MockOperationsHistoryStore.SetState(paymentAccountId, Enumerable.Empty<PaymentOperationHistoryRecord>());
+                await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 return new Result<decimal>();
             }
 
@@ -39,21 +41,36 @@ namespace HomeBudget.Components.Operations.Services
             {
                 var paymentOperation = validAndMostUpToDateOperations.Single().Payload;
 
-                MockOperationsHistoryStore.SetState(
-                    paymentAccountId,
-                    new[]
-                    {
-                        new PaymentOperationHistoryRecord
-                        {
-                            Record = paymentOperation,
-                            Balance = CalculateIncrement(paymentOperation)
-                        }
-                    });
+                var record = new PaymentOperationHistoryRecord
+                {
+                    Record = paymentOperation,
+                    Balance = CalculateIncrement(paymentOperation)
+                };
 
-                return new Result<decimal>(MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last().Balance);
+                await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
+                await paymentsHistoryDocumentsClient.InsertOneAsync(paymentAccountId, record);
+
+                return new Result<decimal>(record.Balance);
             }
 
+            await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations);
+
+            var historyRecords = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
+
+            var historyOperationRecord = historyRecords.Any()
+                ? historyRecords.Last()
+                : default;
+
+            return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
+        }
+
+        private async Task InsertManyAsync(
+            Guid paymentAccountId,
+            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
+        {
             var operationsHistory = new List<PaymentOperationHistoryRecord>();
+
+            await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
 
             foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
@@ -69,13 +86,7 @@ namespace HomeBudget.Components.Operations.Services
                     });
             }
 
-            MockOperationsHistoryStore.SetState(paymentAccountId, operationsHistory);
-
-            var historyOperationRecord = MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Any()
-                ? MockOperationsHistoryStore.RecordsForAccount(paymentAccountId).Last()
-                : default;
-
-            return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
+            await paymentsHistoryDocumentsClient.RewriteAllAsync(paymentAccountId, operationsHistory);
         }
 
         private static decimal CalculateIncrement(PaymentOperation operation)

@@ -44,7 +44,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     }
                 };
 
+                var mongoDbOptions = new PaymentsHistoryDbOptions
+                {
+                    ConnectionString = _containersConnections.MongoDbContainer
+                };
+
                 services.AddOptions<KafkaOptions>().Configure(options => options.ProducerSettings = kafkaOptions.ProducerSettings);
+                services.AddOptions<PaymentsHistoryDbOptions>().Configure(options =>
+                {
+                    options.ConnectionString = mongoDbOptions.ConnectionString;
+                    options.DatabaseName = "payments-history";
+                });
 
                 services.AddEventStoreClient(
                     _containersConnections.EventSourceDbContainer,

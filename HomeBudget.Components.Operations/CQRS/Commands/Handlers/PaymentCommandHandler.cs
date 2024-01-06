@@ -27,9 +27,11 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
         {
             var paymentSavedEvent = mapper.Map<PaymentOperationEvent>(request);
 
+            var paymentMessageConversionResult = PaymentEventToMessageConverter.Convert(paymentSavedEvent);
+
             var result = await producer.ProduceAsync(
                 nameof(paymentSavedEvent),
-                PaymentEventToMessageConverter.Convert(paymentSavedEvent),
+                paymentMessageConversionResult.Payload,
                 cancellationToken
             );
 

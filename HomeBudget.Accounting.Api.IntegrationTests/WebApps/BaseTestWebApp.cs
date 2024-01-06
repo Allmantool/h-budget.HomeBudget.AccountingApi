@@ -40,7 +40,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     return new TestContainersConnections
                     {
                         KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
-                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString()
+                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                        MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                     };
                 });
 
