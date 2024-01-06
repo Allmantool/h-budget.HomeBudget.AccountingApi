@@ -72,9 +72,9 @@ namespace HomeBudget.Components.Operations.Tests
                     }
                 };
 
-                var messagePayload = PaymentEventToMessageConverter.Convert(paymentEvent);
+                var messagePayloadResult = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-                var deliveryResult = await _sut.ProduceAsync("test-topic", messagePayload, CancellationToken.None);
+                var deliveryResult = await _sut.ProduceAsync("test-topic", messagePayloadResult.Payload, CancellationToken.None);
 
                 deliveryResult.Status.Should().Be(PersistenceStatus.Persisted);
             }

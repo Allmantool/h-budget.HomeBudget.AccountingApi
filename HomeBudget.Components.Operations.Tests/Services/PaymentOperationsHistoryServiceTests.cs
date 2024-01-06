@@ -12,6 +12,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
 
 namespace HomeBudget.Components.Operations.Tests.Services
@@ -177,7 +178,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(cl => cl.ReadAsync(It.IsAny<string>(), CancellationToken.None))
                 .Returns(events.ToAsyncEnumerable());
 
-            return new PaymentOperationsHistoryService(eventDbClient.Object);
+            var mongoClient = new Mock<IPaymentsHistoryDocumentsClient>();
+
+            return new PaymentOperationsHistoryService(eventDbClient.Object, mongoClient.Object);
         }
     }
 }

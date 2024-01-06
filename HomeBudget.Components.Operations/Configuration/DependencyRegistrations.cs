@@ -32,7 +32,8 @@ namespace HomeBudget.Components.Operations.Configuration
                     configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
                 })
                 .RegisterOperationsClients()
-                .RegisterEventStoreDbClient(webHostEnvironment);
+                .RegisterEventStoreDbClient(webHostEnvironment)
+                .RegisterMongoDb(webHostEnvironment);
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
@@ -41,6 +42,11 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
                 .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+        }
+
+        public static IServiceCollection RegisterMongoDb(this IServiceCollection services, string webHostEnvironment)
+        {
+            return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
         }
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)

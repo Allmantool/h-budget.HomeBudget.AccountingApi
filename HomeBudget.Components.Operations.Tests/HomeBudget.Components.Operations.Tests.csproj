@@ -32,4 +32,10 @@
     <PackageReference Update="SonarAnalyzer.CSharp" Version="9.16.0.82469" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>HomeBudget.Accounting.Infrastructure</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

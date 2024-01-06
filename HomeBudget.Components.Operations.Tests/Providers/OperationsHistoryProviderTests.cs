@@ -8,7 +8,7 @@ using NUnit.Framework;
 using Testcontainers.MongoDb;
 
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations.Tests.Models;
+using HomeBudget.Accounting.Infrastructure.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Providers
 {
@@ -30,44 +30,109 @@ namespace HomeBudget.Components.Operations.Tests.Providers
                 .Build();
         }
 
-        [Test]
-        public async Task Should_InsertOne_PaymentRecordsSuccessfully()
+        [OneTimeTearDown]
+        public async Task DownAsync()
         {
-            await using (_mongoDbContainer)
+            await _mongoDbContainer.DisposeAsync();
+        }
+
+        [Test]
+        public async Task Should_InsertOneAsync_PaymentRecordsSuccessfully()
+        {
+            if (_mongoDbContainer.State != TestcontainersStates.Running)
             {
-                if (_mongoDbContainer.State != TestcontainersStates.Running)
-                {
-                    await _mongoDbContainer.StartAsync();
-                }
-
-                var dbConnection = _mongoDbContainer.GetConnectionString();
-
-                var client = new MongoClient(dbConnection);
-
-                var database = client.GetDatabase("Test-Db");
-                var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
-
-                var payload = new PaymentHistoryDocument
-                {
-                    Balance = 11.24m,
-                    Record = new PaymentOperation
-                    {
-                        PaymentAccountId = Guid.Empty,
-                        Key = Guid.Empty,
-                        CategoryId = Guid.Empty,
-                        ContractorId = Guid.Empty,
-                        Amount = 11.24m,
-                        Comment = "Comment test",
-                        OperationDay = new DateOnly(2023, 12, 31)
-                    }
-                };
-
-                await operationsHistoryCollection.InsertOneAsync(payload);
-
-                var operationRecords = await operationsHistoryCollection.Find(_ => true).ToListAsync();
-
-                operationRecords.Count.Should().Be(1);
+                await _mongoDbContainer.StartAsync();
             }
+
+            var dbConnection = _mongoDbContainer.GetConnectionString();
+
+            var client = new MongoClient(dbConnection);
+
+            var database = client.GetDatabase("Test-Db");
+            var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
+
+            var paymentAccount = Guid.Parse("7a9b408e-efab-4134-920c-b4734580ce14");
+
+            var payload = new PaymentHistoryDocument
+            {
+                Balance = 11.24m,
+                Record = new PaymentOperation
+                {
+                    PaymentAccountId = paymentAccount,
+                    Key = Guid.Empty,
+                    CategoryId = Guid.Empty,
+                    ContractorId = Guid.Empty,
+                    Amount = 11.24m,
+                    Comment = "Comment test",
+                    OperationDay = new DateOnly(2023, 12, 31)
+                }
+            };
+
+            await operationsHistoryCollection.InsertOneAsync(payload);
+
+            var operationRecords = await operationsHistoryCollection
+                .Find(p => p.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
+                .ToListAsync();
+
+            operationRecords.Count.Should().Be(1);
+        }
+
+        [Test]
+        public async Task Should_InsertManyAsync_PaymentRecordsSuccessfully()
+        {
+            if (_mongoDbContainer.State != TestcontainersStates.Running)
+            {
+                await _mongoDbContainer.StartAsync();
+            }
+
+            var dbConnection = _mongoDbContainer.GetConnectionString();
+
+            var client = new MongoClient(dbConnection);
+
+            var database = client.GetDatabase("Test-Db");
+            var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
+
+            var paymentAccount = Guid.Parse("1f6d8ce1-b604-4094-9211-634c5f948002");
+
+            var payload = new[]
+            {
+                    new PaymentHistoryDocument
+                    {
+                        Balance = 11.24m,
+                        Record = new PaymentOperation
+                        {
+                            PaymentAccountId = paymentAccount,
+                            Key = Guid.Empty,
+                            CategoryId = Guid.Empty,
+                            ContractorId = Guid.Empty,
+                            Amount = 11.24m,
+                            Comment = "Comment test",
+                            OperationDay = new DateOnly(2023, 12, 31)
+                        }
+                    },
+                    new PaymentHistoryDocument
+                    {
+                        Balance = 111.24m,
+                        Record = new PaymentOperation
+                        {
+                            PaymentAccountId = paymentAccount,
+                            Key = Guid.Empty,
+                            CategoryId = Guid.Empty,
+                            ContractorId = Guid.Empty,
+                            Amount = 100m,
+                            Comment = "Comment test 2",
+                            OperationDay = new DateOnly(2024, 1, 2)
+                        }
+                    }
+            };
+
+            await operationsHistoryCollection.InsertManyAsync(payload);
+
+            var operationRecords = await operationsHistoryCollection
+                .Find(p => p.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
+                .ToListAsync();
+
+            operationRecords.Count.Should().Be(payload.Length);
         }
     }
 }
