@@ -239,22 +239,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
-            var operationId = Guid.Parse("2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c");
             var paymentAccountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
 
             var requestBody = new CreateOperationRequest
             {
+                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                Comment = "Some test",
+                OperationDate = new DateOnly(2024, 1, 6),
                 Amount = 35.64m
             };
 
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            _ = _sut.RestHttpClient.Execute<Result<PaymentOperationHistoryRecord>>(postCreateRequest);
+            var postResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{operationId}");
+            var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
-            var getResponse = _sut.RestHttpClient.Execute<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
+            var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
+
+            var getResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
 
             var result = getResponse.Data;
             var payload = result.Payload;

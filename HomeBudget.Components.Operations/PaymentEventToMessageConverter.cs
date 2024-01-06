@@ -18,7 +18,7 @@ namespace HomeBudget.Components.Operations
             {
                 return new Result<Message<string, string>>(
                     isSucceeded: false,
-                    message: $"'${nameof(PaymentOperationEvent)}' can not be null");
+                    message: $"'{nameof(PaymentOperationEvent)}' can not be null");
             }
 
             var message = new Message<string, string>

@@ -23,7 +23,9 @@ namespace HomeBudget.Components.Operations.Providers
 
         public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountingId)
         {
-            return await GetPaymentAccountCollection(accountingId).Find(_ => true).ToListAsync();
+            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+
+            return await targetCollection.Find(_ => true).ToListAsync();
         }
 
         public async Task InsertOneAsync(Guid accountingId, PaymentOperationHistoryRecord payload)
@@ -34,11 +36,17 @@ namespace HomeBudget.Components.Operations.Providers
                 Balance = payload.Balance
             };
 
-            await GetPaymentAccountCollection(accountingId).InsertOneAsync(document);
+            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+
+            await targetCollection.InsertOneAsync(document);
         }
 
-        public async Task RemoveAsync(Guid accountingId) =>
-            await GetPaymentAccountCollection(accountingId).DeleteManyAsync(_ => true);
+        public async Task RemoveAsync(Guid accountingId)
+        {
+            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+
+            await targetCollection.DeleteManyAsync(_ => true);
+        }
 
         public async Task RewriteAllAsync(Guid accountingId, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords)
         {
@@ -50,7 +58,22 @@ namespace HomeBudget.Components.Operations.Providers
             }
         }
 
-        private IMongoCollection<PaymentHistoryDocument> GetPaymentAccountCollection(Guid accountingId)
-            => _mongoDatabase.GetCollection<PaymentHistoryDocument>(accountingId.ToString());
+        private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionAsync(Guid accountingId)
+        {
+            var collection = _mongoDatabase.GetCollection<PaymentHistoryDocument>(accountingId.ToString());
+
+            var collectionIndexes = await collection.Indexes.ListAsync();
+
+            if (await collectionIndexes.AnyAsync())
+            {
+                return collection;
+            }
+
+            var indexKeysDefinition = Builders<PaymentHistoryDocument>.IndexKeys.Ascending(paymentsHistory => paymentsHistory.Record.Key);
+
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(indexKeysDefinition));
+
+            return collection;
+        }
     }
 }

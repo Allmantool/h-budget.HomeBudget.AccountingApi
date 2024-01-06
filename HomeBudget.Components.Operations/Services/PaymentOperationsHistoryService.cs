@@ -33,6 +33,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!validAndMostUpToDateOperations.Any())
             {
+                await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 return new Result<decimal>();
             }
 
