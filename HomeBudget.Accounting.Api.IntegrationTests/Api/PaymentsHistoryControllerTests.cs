@@ -81,7 +81,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const decimal expectedBalanceAmount = 12.13M;
             var paymentAccountId = Guid.Parse("e6739854-7191-4e0a-a655-7d067aecc220");
 
-            var expenseCategoryId = MockCategoriesStore.Categories.Find(c => c.CategoryType == CategoryTypes.Expense).Key;
+            var expenseCategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Expense).Key;
 
             var requestBody = new CreateOperationRequest
             {

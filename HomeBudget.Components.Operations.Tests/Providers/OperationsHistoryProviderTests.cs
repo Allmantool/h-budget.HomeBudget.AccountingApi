@@ -8,7 +8,7 @@ using NUnit.Framework;
 using Testcontainers.MongoDb;
 
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Models;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Providers
 {
@@ -53,25 +53,28 @@ namespace HomeBudget.Components.Operations.Tests.Providers
 
             var paymentAccount = Guid.Parse("7a9b408e-efab-4134-920c-b4734580ce14");
 
-            var payload = new PaymentHistoryDocument
+            var historyDocument = new PaymentHistoryDocument
             {
-                Balance = 11.24m,
-                Record = new PaymentOperation
+                Payload = new PaymentOperationHistoryRecord
                 {
-                    PaymentAccountId = paymentAccount,
-                    Key = Guid.Empty,
-                    CategoryId = Guid.Empty,
-                    ContractorId = Guid.Empty,
-                    Amount = 11.24m,
-                    Comment = "Comment test",
-                    OperationDay = new DateOnly(2023, 12, 31)
+                    Balance = 11.24m,
+                    Record = new PaymentOperation
+                    {
+                        PaymentAccountId = paymentAccount,
+                        Key = Guid.Empty,
+                        CategoryId = Guid.Empty,
+                        ContractorId = Guid.Empty,
+                        Amount = 11.24m,
+                        Comment = "Comment test",
+                        OperationDay = new DateOnly(2023, 12, 31)
+                    }
                 }
             };
 
-            await operationsHistoryCollection.InsertOneAsync(payload);
+            await operationsHistoryCollection.InsertOneAsync(historyDocument);
 
             var operationRecords = await operationsHistoryCollection
-                .Find(p => p.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
+                .Find(p => p.Payload.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
                 .ToListAsync();
 
             operationRecords.Count.Should().Be(1);
@@ -98,30 +101,36 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             {
                     new PaymentHistoryDocument
                     {
-                        Balance = 11.24m,
-                        Record = new PaymentOperation
+                        Payload = new PaymentOperationHistoryRecord
                         {
-                            PaymentAccountId = paymentAccount,
-                            Key = Guid.Empty,
-                            CategoryId = Guid.Empty,
-                            ContractorId = Guid.Empty,
-                            Amount = 11.24m,
-                            Comment = "Comment test",
-                            OperationDay = new DateOnly(2023, 12, 31)
+                            Balance = 11.24m,
+                            Record = new PaymentOperation
+                            {
+                                PaymentAccountId = paymentAccount,
+                                Key = Guid.Empty,
+                                CategoryId = Guid.Empty,
+                                ContractorId = Guid.Empty,
+                                Amount = 11.24m,
+                                Comment = "Comment test",
+                                OperationDay = new DateOnly(2023, 12, 31)
+                            }
                         }
                     },
                     new PaymentHistoryDocument
                     {
-                        Balance = 111.24m,
-                        Record = new PaymentOperation
+                        Payload = new PaymentOperationHistoryRecord
                         {
-                            PaymentAccountId = paymentAccount,
-                            Key = Guid.Empty,
-                            CategoryId = Guid.Empty,
-                            ContractorId = Guid.Empty,
-                            Amount = 100m,
-                            Comment = "Comment test 2",
-                            OperationDay = new DateOnly(2024, 1, 2)
+                            Balance = 111.24m,
+                            Record = new PaymentOperation
+                            {
+                                PaymentAccountId = paymentAccount,
+                                Key = Guid.Empty,
+                                CategoryId = Guid.Empty,
+                                ContractorId = Guid.Empty,
+                                Amount = 100m,
+                                Comment = "Comment test 2",
+                                OperationDay = new DateOnly(2024, 1, 2)
+                            }
                         }
                     }
             };
@@ -129,7 +138,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             await operationsHistoryCollection.InsertManyAsync(payload);
 
             var operationRecords = await operationsHistoryCollection
-                .Find(p => p.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
+                .Find(p => p.Payload.Record.PaymentAccountId.CompareTo(paymentAccount) == 0)
                 .ToListAsync();
 
             operationRecords.Count.Should().Be(payload.Length);

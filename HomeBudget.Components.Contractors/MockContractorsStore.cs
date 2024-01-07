@@ -7,8 +7,8 @@ namespace HomeBudget.Components.Contractors
 {
     public static class MockContractorsStore
     {
-        public static readonly List<Contractor> Contractors = new()
-        {
+        public static ICollection<Contractor> Contractors { get; } =
+        [
             new Contractor(new[] { "Work", "GodelTech" })
             {
                 Key = Guid.Parse("728c684e-cc1f-422d-b4e7-eb7e466e5e78")
@@ -25,6 +25,6 @@ namespace HomeBudget.Components.Contractors
             {
                 Key = Guid.Parse("20275637-3f7b-444e-b08b-0ca612afcd61")
             },
-        };
+        ];
     }
 }

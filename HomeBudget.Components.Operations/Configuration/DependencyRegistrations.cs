@@ -15,6 +15,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
@@ -33,7 +34,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 })
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
-                .RegisterMongoDb(webHostEnvironment);
+                .RegisterMongoDbClient(webHostEnvironment);
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
@@ -44,7 +45,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
-        public static IServiceCollection RegisterMongoDb(this IServiceCollection services, string webHostEnvironment)
+        public static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
         {
             return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
         }

@@ -7,8 +7,8 @@ namespace HomeBudget.Components.Categories
 {
     public static class MockCategoriesStore
     {
-        public static readonly List<Category> Categories = new()
-        {
+        public static ICollection<Category> Categories { get; } =
+        [
             new Category(CategoryTypes.Income, new[] { "Income", "Salary" })
             {
                 Key = Guid.Parse("0eb283e2-fa49-403d-b7ea-8d6326b3b742")
@@ -29,6 +29,6 @@ namespace HomeBudget.Components.Categories
             {
                 Key = Guid.Parse("b4a1bc33-a50f-4c9d-aac4-761dfec063dc")
             },
-        };
+        ];
     }
 }

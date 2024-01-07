@@ -3,9 +3,7 @@
     public class PaymentsHistoryDbOptions
     {
         public string ConnectionString { get; set; }
-        public string DatabaseName { get; set; }
-        public string CollectionName { get; set; }
-        public string Host { get; set; }
-        public int Port { get; set; }
+        public string PaymentsHistoryDatabaseName { get; set; }
+        public string HandBooksDatabaseName { get; set; }
     }
 }
