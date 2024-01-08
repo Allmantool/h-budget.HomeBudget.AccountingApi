@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
+    <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations.Providers;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -21,11 +21,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
 
             var paymentAccountOperations = documents
-                .Select(d => new PaymentOperationHistoryRecord
-                {
-                    Balance = d.Balance,
-                    Record = d.Record
-                })
+                .Select(d => d.Payload)
                 .OrderBy(op => op.Record.OperationDay)
                 .ThenBy(op => op.Record.OperationUnixTime)
                 .ToList();
@@ -50,11 +46,9 @@ namespace HomeBudget.Accounting.Api.Controllers
                     message: $"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
-            var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
+            var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetOperationGuid);
 
-            var operationById = documents
-                .Where(op => op.Record.PaymentAccountId.CompareTo(targetAccountGuid) == 0)
-                .SingleOrDefault(rc => rc.Record.Key.CompareTo(targetOperationGuid) == 0);
+            var operationById = document.Payload;
 
             return operationById == null
                 ? new Result<PaymentOperationHistoryRecord>(isSucceeded: false, message: $"The operation with '{operationId}' hasn't been found")

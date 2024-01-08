@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public Result<IReadOnlyCollection<Category>> GetCategories()
         {
-            return new Result<IReadOnlyCollection<Category>>(MockCategoriesStore.Categories);
+            return new Result<IReadOnlyCollection<Category>>(MockCategoriesStore.Categories.ToList());
         }
 
         [HttpGet("byId/{categoryId}")]

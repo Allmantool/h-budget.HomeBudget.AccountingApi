@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Services
@@ -57,11 +57,11 @@ namespace HomeBudget.Components.Operations.Services
 
             var historyRecords = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
 
-            var historyOperationRecord = historyRecords.Any()
+            var historyOperationDocument = historyRecords.Any()
                 ? historyRecords.Last()
                 : default;
 
-            return new Result<decimal>(historyOperationRecord?.Balance ?? 0);
+            return new Result<decimal>(historyOperationDocument?.Payload.Balance ?? 0);
         }
 
         private async Task InsertManyAsync(
@@ -91,7 +91,7 @@ namespace HomeBudget.Components.Operations.Services
 
         private static decimal CalculateIncrement(PaymentOperation operation)
         {
-            var category = MockCategoriesStore.Categories.Find(c => c.Key.CompareTo(operation.CategoryId) == 0);
+            var category = MockCategoriesStore.Categories.First(c => c.Key.CompareTo(operation.CategoryId) == 0);
 
             return category.CategoryType == CategoryTypes.Income
                 ? Math.Abs(operation.Amount)

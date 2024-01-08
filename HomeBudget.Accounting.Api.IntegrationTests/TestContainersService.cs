@@ -43,7 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 .WithImage("mongo:7.0.5-rc0-jammy")
                 .WithName($"{nameof(TestContainersService)}-mongo-db-container")
                 .WithHostname("test-mongo-db-host")
-                .WithPortBinding(28017, 28017)
+                .WithPortBinding(28117, 28117)
                 .WithAutoRemove(true)
                 .WithCleanUp(true)
                 .Build();

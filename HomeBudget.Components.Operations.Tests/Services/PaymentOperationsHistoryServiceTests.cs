@@ -12,8 +12,8 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Tests.Services
 {
