@@ -7,7 +7,7 @@ namespace HomeBudget.Components.Operations.Factories
 {
     internal class OperationFactory : IOperationFactory
     {
-        public PaymentOperation Create(
+        public Result<PaymentOperation> Create(
             Guid paymentAccountId,
             decimal amount,
             string comment,
@@ -17,10 +17,12 @@ namespace HomeBudget.Components.Operations.Factories
         {
             if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
             {
-                return default;
+                return new Result<PaymentOperation>(
+                    isSucceeded: false,
+                    message: $"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
             }
 
-            return new PaymentOperation
+            var payload = new PaymentOperation
             {
                 Key = Guid.NewGuid(),
                 OperationDay = operationDay,
@@ -30,6 +32,8 @@ namespace HomeBudget.Components.Operations.Factories
                 CategoryId = categoryGuid,
                 ContractorId = contractorGuid
             };
+
+            return new Result<PaymentOperation>(payload);
         }
     }
 }

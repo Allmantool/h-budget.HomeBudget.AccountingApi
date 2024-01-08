@@ -46,7 +46,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             response.IsSuccessful.Should().Be(true);
 
@@ -84,7 +84,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+                await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
             }
 
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");

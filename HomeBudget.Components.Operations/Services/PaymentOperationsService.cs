@@ -22,7 +22,7 @@ namespace HomeBudget.Components.Operations.Services
     {
         public Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
         {
-            var operationForAdd = operationFactory.Create(
+            var operationForAddResult = operationFactory.Create(
                 paymentAccountId,
                 payload.Amount,
                 payload.Comment,
@@ -30,7 +30,12 @@ namespace HomeBudget.Components.Operations.Services
                 payload.ContractorId,
                 payload.OperationDate);
 
-            return mediator.Send(new SavePaymentOperationCommand(operationForAdd), token);
+            if (!operationForAddResult.IsSucceeded)
+            {
+                return Task.FromResult(new Result<Guid>(isSucceeded: false, message: "'operation' hasn't been created successfully"));
+            }
+
+            return mediator.Send(new SavePaymentOperationCommand(operationForAddResult.Payload), token);
         }
 
         public async Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)

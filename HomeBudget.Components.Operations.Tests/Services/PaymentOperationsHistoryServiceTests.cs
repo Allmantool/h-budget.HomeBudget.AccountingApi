@@ -10,11 +10,11 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Categories;
 using HomeBudget.Components.Categories.Clients.Interfaces;
+using HomeBudget.Components.Categories.Models;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
-using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Tests.Services
 {
@@ -186,6 +186,13 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var paymentsHistoryClient = new Mock<IPaymentsHistoryDocumentsClient>();
 
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
+
+            categoriesClient
+                .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync(() => new Result<CategoryDocument>(new CategoryDocument
+                {
+                    Payload = new Category(CategoryTypes.Income, new[] { "test-category" })
+                }));
 
             return new PaymentOperationsHistoryService(eventDbClient.Object, paymentsHistoryClient.Object, categoriesClient.Object);
         }

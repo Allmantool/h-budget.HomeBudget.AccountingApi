@@ -12,7 +12,7 @@ using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentsHistoryDocumentsClient(IOptions<PaymentsHistoryDbOptions> dbOptions)
+    internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
         : BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.PaymentsHistoryDatabaseName),
             IPaymentsHistoryDocumentsClient
     {

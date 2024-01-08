@@ -44,16 +44,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     }
                 };
 
-                var mongoDbOptions = new PaymentsHistoryDbOptions
+                var mongoDbOptions = new MongoDbOptions
                 {
                     ConnectionString = _containersConnections.MongoDbContainer
                 };
 
                 services.AddOptions<KafkaOptions>().Configure(options => options.ProducerSettings = kafkaOptions.ProducerSettings);
-                services.AddOptions<PaymentsHistoryDbOptions>().Configure(options =>
+                services.AddOptions<MongoDbOptions>().Configure(options =>
                 {
                     options.ConnectionString = mongoDbOptions.ConnectionString;
                     options.PaymentsHistoryDatabaseName = "payments-history";
+                    options.HandBooksDatabaseName = "handbooks";
                 });
 
                 services.AddEventStoreClient(

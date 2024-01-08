@@ -4,11 +4,11 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class Category : DomainEntity
     {
-        public CategoryTypes CategoryType { get; }
+        public CategoryTypes CategoryType { get; protected set; }
 
-        public IEnumerable<string> NameNodes { get; }
+        public IEnumerable<string> NameNodes { get; protected set; }
 
-        public string CategoryKey { get; }
+        public string CategoryKey { get; protected set; }
 
         public Category(CategoryTypes categoryType, IEnumerable<string> nameNodes)
         {
