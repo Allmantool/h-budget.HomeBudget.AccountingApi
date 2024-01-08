@@ -15,7 +15,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Categories;
+using HomeBudget.Accounting.Api.Models.Category;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -52,7 +52,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
@@ -80,7 +80,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const decimal expectedBalanceAmount = 12.13M;
             var paymentAccountId = Guid.Parse("e6739854-7191-4e0a-a655-7d067aecc220");
 
-            var expenseCategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Expense).Key;
+            var expenseCategoryId = await SaveCategoryAsync(CategoryTypes.Expense);
 
             var requestBody = new CreateOperationRequest
             {
@@ -117,7 +117,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 7 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
@@ -150,7 +150,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 7,
                     Comment = $"New operation - {i}",
-                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
@@ -203,7 +203,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 7,
                 Comment = "New operation - x",
-                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
                 ContractorId = Guid.NewGuid().ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
             };
@@ -242,7 +242,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var requestBody = new CreateOperationRequest
             {
-                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -287,6 +287,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
                 .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+
+            return paymentsHistoryResponse.Data.Payload;
+        }
+
+        private async Task<string> SaveCategoryAsync(CategoryTypes categoryType)
+        {
+            var requestSaveBody = new CreateCategoryRequest
+            {
+                CategoryType = (int)categoryType,
+                NameNodes = new[]
+                {
+                    nameof(categoryType),
+                    "test-category"
+                }
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data.Payload;
         }
