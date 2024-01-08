@@ -14,7 +14,6 @@ using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
-using HomeBudget.Components.Contractors;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -41,7 +40,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "New operation",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
@@ -78,7 +77,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15)
                 };
 
@@ -106,7 +105,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "New operation",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
             };
 
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
@@ -132,7 +131,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 25.24m,
                 CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
             };
@@ -168,7 +167,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 25.24m,
                 CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
             };
@@ -217,7 +216,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "Some description",
                 CategoryId = MockCategoriesStore.Categories.First().CategoryKey,
-                ContractorId = MockContractorsStore.Contractors.First().ContractorKey
+                ContractorId = Guid.NewGuid().ToString()
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
@@ -241,7 +240,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "Some update description",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString()
+                ContractorId = Guid.NewGuid().ToString()
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
@@ -264,7 +263,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 12.0m,
                 Comment = "New operation",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
@@ -277,7 +276,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 17.22m,
                 Comment = "Some update description",
                 CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString()
+                ContractorId = Guid.NewGuid().ToString()
             };
 
             var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;

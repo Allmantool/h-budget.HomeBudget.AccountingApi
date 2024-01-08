@@ -13,7 +13,6 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
-    // [Ignore("Intend to be used only for local testing. Not appropriate infrastructure has been setup")]
     [TestFixture]
     [Category("Integration")]
     public class ContractorsControllerTests : IAsyncDisposable
@@ -35,7 +34,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetContractorById_WhenTryToGetExistedById_ThenIsSuccessStatusCode()
         {
-            var getContractorsRequest = new RestRequest($"{ApiHost}/byId/66e81106-9214-41a4-8297-82d6761f1d40");
+            var saveRequestBody = new CreateContractorRequest
+            {
+                NameNodes = new[] { "Node-1", "Node-2" }
+            };
+
+            var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
+                .AddJsonBody(saveRequestBody);
+
+            var saveResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+
+            var getContractorsRequest = new RestRequest($"{ApiHost}/byId/{saveResponse.Data.Payload}");
 
             var response = await _sut.RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
 
@@ -57,7 +66,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void CreateNewContractor_WhenCreateANewOneContractor_ReturnsNewGeneratedGuid()
+        public async Task CreateNewContractor_WhenCreateANewOneContractor_ReturnsNewGeneratedGuid()
         {
             var requestBody = new CreateContractorRequest
             {
@@ -66,12 +75,29 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<string>>(postCreateContractorRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
 
             var result = response.Data;
             var payload = result.Payload;
 
             Guid.TryParse(payload, out _).Should().BeTrue();
+        }
+
+        [Test]
+        public async Task CreateNewContractor_WhenTheSameContractorAlreadyExists_ReturnsExpectedExceptions()
+        {
+            var requestBody = new CreateContractorRequest
+            {
+                NameNodes = new[] { "Node1", "Node2" }
+            };
+
+            var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
+                .AddJsonBody(requestBody);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            var secondResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+
+            secondResponse.Data.IsSucceeded.Should().BeFalse();
         }
 
         public async ValueTask DisposeAsync()

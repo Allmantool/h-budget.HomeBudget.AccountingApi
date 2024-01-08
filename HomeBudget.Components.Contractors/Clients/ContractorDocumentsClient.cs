@@ -20,25 +20,29 @@ namespace HomeBudget.Components.Contractors.Clients
         {
             var targetCollection = await GetPaymentAccountCollectionAsync();
 
-            var payload = await targetCollection.Find(_ => true).ToListAsync();
+            var payload = await targetCollection.FindAsync(_ => true);
 
-            return new Result<IReadOnlyCollection<ContractorDocument>>(payload);
+            return new Result<IReadOnlyCollection<ContractorDocument>>(await payload.ToListAsync());
         }
 
         public async Task<Result<ContractorDocument>> GetByIdAsync(Guid contractorId)
         {
             var targetCollection = await GetPaymentAccountCollectionAsync();
 
-            var payload = await targetCollection.Find(d => d.Payload.Key.CompareTo(contractorId) == 0).SingleAsync();
+            var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
 
-            return new Result<ContractorDocument>(payload);
+            return new Result<ContractorDocument>(await payload.SingleOrDefaultAsync());
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
         {
+            var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, contractorKey);
+
             var targetCollection = await GetPaymentAccountCollectionAsync();
 
-            return await targetCollection.Find(d => string.Equals(d.Payload.ContractorKey, contractorKey, StringComparison.OrdinalIgnoreCase)).AnyAsync();
+            var payload = await targetCollection.FindAsync(filter);
+
+            return await payload.AnyAsync();
         }
 
         public async Task<Result<string>> InsertOneAsync(Contractor payload)
@@ -67,7 +71,8 @@ namespace HomeBudget.Components.Contractors.Clients
             }
 
             var indexKeysDefinition = Builders<ContractorDocument>.IndexKeys
-                .Ascending(paymentsHistory => paymentsHistory.Payload.Key);
+                .Ascending(c => c.Payload.Key)
+                .Ascending(c => c.Payload.ContractorKey);
 
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<ContractorDocument>(indexKeysDefinition));
 

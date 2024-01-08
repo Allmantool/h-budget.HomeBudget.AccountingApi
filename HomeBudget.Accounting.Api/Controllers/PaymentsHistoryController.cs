@@ -46,7 +46,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                     message: $"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
-            var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetAccountGuid);
+            var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetOperationGuid);
 
             var operationById = document.Payload;
 

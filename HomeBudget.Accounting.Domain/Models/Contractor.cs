@@ -4,9 +4,9 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class Contractor : DomainEntity
     {
-        public IEnumerable<string> NameNodes { get; }
+        public IEnumerable<string> NameNodes { get; protected set; }
 
-        public string ContractorKey { get; }
+        public string ContractorKey { get; protected set; }
 
         public Contractor(IEnumerable<string> nameNodes)
         {

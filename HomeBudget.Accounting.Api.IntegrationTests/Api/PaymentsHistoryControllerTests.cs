@@ -16,7 +16,6 @@ using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Categories;
-using HomeBudget.Components.Contractors;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -54,7 +53,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
 
@@ -88,7 +87,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = expectedBalanceAmount,
                 Comment = "New operation - expense",
                 CategoryId = expenseCategoryId.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
             };
 
@@ -119,7 +118,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 7 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
 
@@ -152,7 +151,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 7,
                     Comment = $"New operation - {i}",
                     CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
-                    ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                    ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
 
@@ -205,7 +204,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 7,
                 Comment = "New operation - x",
                 CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
             };
 
@@ -244,7 +243,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new CreateOperationRequest
             {
                 CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
-                ContractorId = MockContractorsStore.Contractors.First().Key.ToString(),
+                ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
                 Amount = 35.64m

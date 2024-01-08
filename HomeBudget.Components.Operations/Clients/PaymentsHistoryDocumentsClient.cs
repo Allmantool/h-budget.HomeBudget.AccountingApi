@@ -20,14 +20,18 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
 
-            return await targetCollection.Find(_ => true).ToListAsync();
+            var payload = await targetCollection.FindAsync(_ => true);
+
+            return await payload.ToListAsync();
         }
 
         public async Task<PaymentHistoryDocument> GetByIdAsync(Guid accountingId, Guid operationId)
         {
             var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
 
-            return await targetCollection.Find(d => d.Payload.Record.Key.CompareTo(operationId) == 0).SingleAsync();
+            var payload = await targetCollection.FindAsync(d => d.Payload.Record.Key.CompareTo(operationId) == 0);
+
+            return await payload.SingleOrDefaultAsync();
         }
 
         public async Task InsertOneAsync(Guid accountingId, PaymentOperationHistoryRecord payload)

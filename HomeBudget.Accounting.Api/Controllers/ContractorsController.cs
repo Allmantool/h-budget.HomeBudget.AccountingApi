@@ -25,13 +25,18 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var documentsResult = await contractorDocumentsClient.GetAsync();
 
-            var contractors = documentsResult.Payload
-                .Select(d => d.Payload)
-                .OrderBy(op => op.NameNodes)
-                .ThenBy(op => op.OperationUnixTime)
-                .ToList();
+            if (documentsResult.IsSucceeded)
+            {
+                var contractors = documentsResult.Payload
+                    .Select(d => d.Payload)
+                    .OrderBy(op => op.ContractorKey)
+                    .ThenBy(op => op.OperationUnixTime)
+                    .ToList();
 
-            return new Result<IReadOnlyCollection<Contractor>>(contractors);
+                return new Result<IReadOnlyCollection<Contractor>>(contractors);
+            }
+
+            return new Result<IReadOnlyCollection<Contractor>>(isSucceeded: false);
         }
 
         [HttpGet("byId/{contractorId}")]
@@ -46,7 +51,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var documentResult = await contractorDocumentsClient.GetByIdAsync(targetContractorId);
 
-            if (!documentResult.IsSucceeded)
+            if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
                 return new Result<Contractor>(isSucceeded: false, message: $"The contractor with '{contractorId}' hasn't been found");
             }
