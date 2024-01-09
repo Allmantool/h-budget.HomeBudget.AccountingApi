@@ -34,7 +34,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetCategoryById_WhenTryToGetExistedCategoryById_ThenIsSuccessStatusCode()
         {
-            var existedCategoryId = await SaveCategoryAsync(CategoryTypes.Income, "some-test-nodes");
+            var saveResult = await SaveCategoryAsync(CategoryTypes.Income, "some-test-nodes");
+
+            var existedCategoryId = saveResult.Payload;
 
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/{existedCategoryId}");
 
@@ -60,29 +62,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task CreateNewCategory_WhenCreateANewOneCategory_ReturnsNewGeneratedGuid()
         {
-            var requestBody = new CreateCategoryRequest
-            {
-                CategoryType = (int)CategoryTypes.Expense,
-                NameNodes = new[] { "Node1", "Node2", "Node3" }
-            };
+            var result = await SaveCategoryAsync(CategoryTypes.Expense, "Node1,Node2, Node3");
 
-            var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
-
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateCategoryRequest);
-
-            var result = response.Data;
-            var payload = result.Payload;
-
-            Guid.TryParse(payload, out _).Should().BeTrue();
+            Guid.TryParse(result.Payload, out _).Should().BeTrue();
         }
 
-        [TestCase(1, CategoryTypes.Expense)]
-        [TestCase(0, CategoryTypes.Income)]
-        public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(int requestOperationType, CategoryTypes outcomeOperationType)
+        [Test]
+        public async Task CreateNewCategory_WhenTryCreateAlreadyExistedCategory_FailsWithExpectedMessage()
         {
-            var createdCategoryId = await SaveCategoryAsync(outcomeOperationType, "Node1,Node2");
+            _ = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
 
-            var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{createdCategoryId}");
+            var duplicatedCategoryResult = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
+
+            Assert.Multiple(() =>
+            {
+                duplicatedCategoryResult.IsSucceeded.Should().BeFalse();
+                duplicatedCategoryResult.Message.Should().BeEquivalentTo("The category with '1-categoryType,duplicated,nodes' key already exists");
+            });
+        }
+
+        [TestCase(CategoryTypes.Expense)]
+        [TestCase(CategoryTypes.Income)]
+        public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(CategoryTypes outcomeOperationType)
+        {
+            var result = await SaveCategoryAsync(outcomeOperationType, "Node1,Node2");
+
+            var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{result.Payload}");
 
             var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
 
@@ -91,7 +96,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType);
         }
 
-        private async Task<string> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
+        private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
         {
             var requestSaveBody = new CreateCategoryRequest
             {
@@ -109,7 +114,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var paymentsHistoryResponse = await _sut.RestHttpClient
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
-            return paymentsHistoryResponse.Data.Payload;
+            return paymentsHistoryResponse.Data;
         }
 
         public async ValueTask DisposeAsync()
