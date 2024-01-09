@@ -62,18 +62,18 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<string>> CreateNewContractorAsync([FromBody] CreateContractorRequest request)
+        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateContractorRequest request)
         {
             var newContractor = contractorFactory.Create(request.NameNodes);
 
             if (await contractorDocumentsClient.CheckIfExistsAsync(newContractor.ContractorKey))
             {
-                return new Result<string>(isSucceeded: false, message: $"The contractor with '{newContractor.ContractorKey}' key already exists");
+                return new Result<Guid>(isSucceeded: false, message: $"The contractor with '{newContractor.ContractorKey}' key already exists");
             }
 
-            await contractorDocumentsClient.InsertOneAsync(newContractor);
+            var saveResult = await contractorDocumentsClient.InsertOneAsync(newContractor);
 
-            return new Result<string>(newContractor.Key.ToString());
+            return new Result<Guid>(saveResult.Payload);
         }
     }
 }

@@ -3,7 +3,8 @@
     public enum AccountTypes
     {
         Cash = 0,
-        Bank = 1,
+        Virtual = 1,
         Loan = 2,
+        Deposit = 3
     }
 }

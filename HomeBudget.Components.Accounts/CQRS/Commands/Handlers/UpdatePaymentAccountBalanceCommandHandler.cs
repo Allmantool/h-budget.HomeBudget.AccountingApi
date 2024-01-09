@@ -1,27 +1,31 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.CQRS.Commands.Models;
 
 namespace HomeBudget.Components.Accounts.CQRS.Commands.Handlers
 {
-    internal class UpdatePaymentAccountBalanceCommandHandler
+    internal class UpdatePaymentAccountBalanceCommandHandler(IPaymentAccountDocumentClient paymentAccountDocumentClient)
         : IRequestHandler<UpdatePaymentAccountBalanceCommand, Result<Guid>>
     {
-        public Task<Result<Guid>> Handle(
+        public async Task<Result<Guid>> Handle(
             UpdatePaymentAccountBalanceCommand request,
             CancellationToken cancellationToken)
         {
-            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(request.PaymentAccountId) == 0);
+            var paymentAccountDocumentResult = await paymentAccountDocumentClient.GetByIdAsync(request.PaymentAccountId.ToString());
+            var document = paymentAccountDocumentResult.Payload;
+            var paymentAccountForUpdate = document.Payload;
 
-            paymentAccount.Balance = request.Balance;
+            paymentAccountForUpdate.Balance = request.Balance;
 
-            return Task.FromResult(new Result<Guid>(payload: paymentAccount.Key));
+            var updateResult = await paymentAccountDocumentClient.UpdateAsync(request.PaymentAccountId.ToString(), paymentAccountForUpdate);
+
+            return new Result<Guid>(payload: updateResult.Payload);
         }
     }
 }

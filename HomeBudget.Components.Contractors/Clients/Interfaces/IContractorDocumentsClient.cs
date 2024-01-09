@@ -14,7 +14,7 @@ namespace HomeBudget.Components.Contractors.Clients.Interfaces
 
         Task<Result<ContractorDocument>> GetByIdAsync(Guid contractorId);
 
-        Task<Result<string>> InsertOneAsync(Contractor payload);
+        Task<Result<Guid>> InsertOneAsync(Contractor payload);
 
         Task<bool> CheckIfExistsAsync(string contractorKey);
     }

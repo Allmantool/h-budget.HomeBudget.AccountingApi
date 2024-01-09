@@ -61,18 +61,18 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<string>> CreateNewCategoryAsync([FromBody] CreateCategoryRequest request)
+        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateCategoryRequest request)
         {
             var newCategory = categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
 
             if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))
             {
-                return new Result<string>(isSucceeded: false, message: $"The category with '{newCategory.CategoryKey}' key already exists");
+                return new Result<Guid>(isSucceeded: false, message: $"The category with '{newCategory.CategoryKey}' key already exists");
             }
 
-            await categoryDocumentsClient.InsertOneAsync(newCategory);
+            var saveResult = await categoryDocumentsClient.InsertOneAsync(newCategory);
 
-            return new Result<string>(newCategory.Key.ToString());
+            return new Result<Guid>(saveResult.Payload);
         }
     }
 }

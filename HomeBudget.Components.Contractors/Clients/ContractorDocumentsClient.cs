@@ -45,7 +45,7 @@ namespace HomeBudget.Components.Contractors.Clients
             return await payload.AnyAsync();
         }
 
-        public async Task<Result<string>> InsertOneAsync(Contractor payload)
+        public async Task<Result<Guid>> InsertOneAsync(Contractor payload)
         {
             var document = new ContractorDocument
             {
@@ -56,7 +56,7 @@ namespace HomeBudget.Components.Contractors.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<string>(document.Payload.ContractorKey);
+            return new Result<Guid>(document.Payload.Key);
         }
 
         private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()

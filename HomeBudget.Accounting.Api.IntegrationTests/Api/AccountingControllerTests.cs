@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -23,28 +24,34 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private readonly AccountingTestWebApp _sut = new();
 
         [Test]
-        public void GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
+        public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
         {
+            var paymentAccountIdResult = await SavePaymentAccountAsync();
+
             var getPaymentAccountsRequest = new RestRequest(ApiHost);
 
-            var response = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
 
-            response.IsSuccessful.Should().BeTrue();
+            Assert.Multiple(() =>
+            {
+                response.IsSuccessful.Should().BeTrue();
+                response.Data?.Payload.Count(ac => ac.Key.CompareTo(paymentAccountIdResult.Payload) == 0).Should().Be(1);
+            });
         }
 
         [Test]
-        public void GetPaymentAccountById_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
+        public async Task GetPaymentAccountById_WhenValidFilterById_ReturnsAccountWithExpectedBalance()
         {
-            const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
+            var paymentAccountIdResult = await SavePaymentAccountAsync();
 
-            var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
+            var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountIdResult.Payload}");
 
-            var response = _sut.RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
             var payload = result.Payload;
 
-            payload.Balance.Should().Be(20.24m);
+            payload.Balance.Should().Be(11.2m);
         }
 
         [Test]
@@ -84,9 +91,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void RemovePaymentAccount_WithValidPaymentAccountRef_ThenSuccessful()
+        public async Task RemovePaymentAccount_WithValidPaymentAccountRef_ThenSuccessful()
         {
-            const string paymentAccountId = "47d84ccf-7f79-4b6b-a691-3c2b313b0905";
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
@@ -136,9 +143,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void Update_WithValid_ThenSuccessful()
+        public async Task Update_WithValid_ThenSuccessful()
         {
-            const string paymentAccountId = "257f78da-1e0f-4ce7-9c50-b494804a6830";
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var requestBody = new UpdatePaymentAccountRequest
             {
@@ -165,6 +172,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 await _sut.DisposeAsync();
             }
+        }
+
+        private async Task<Result<Guid>> SavePaymentAccountAsync()
+        {
+            var requestSaveBody = new CreatePaymentAccountRequest
+            {
+               Balance = 11.2m,
+               Description = "test-account",
+               AccountType = AccountTypes.Deposit,
+               Agent = "Personal",
+               Currency = "usd"
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+
+            return paymentsHistoryResponse.Data;
         }
     }
 }

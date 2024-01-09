@@ -1,84 +1,104 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
+using HomeBudget.Accounting.Domain.Services;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route(Endpoints.PaymentAccounts, Name = Endpoints.PaymentAccounts)]
-    public class PaymentAccountsController : ControllerBase
+    public class PaymentAccountsController(
+        IPaymentAccountDocumentClient paymentAccountDocumentClient,
+        IPaymentAccountFactory paymentAccountFactory) : ControllerBase
     {
         [HttpGet]
-        public Result<IReadOnlyCollection<PaymentAccount>> Get()
+        public async Task<Result<IReadOnlyCollection<PaymentAccount>>> GetAsync()
         {
-            return new Result<IReadOnlyCollection<PaymentAccount>>(MockAccountsStore.Records.ToList());
+            var documentsResult = await paymentAccountDocumentClient.GetAsync();
+
+            if (!documentsResult.IsSucceeded)
+            {
+                return new Result<IReadOnlyCollection<PaymentAccount>>(isSucceeded: false);
+            }
+
+            var paymentAccounts = documentsResult.Payload
+                .Select(d => d.Payload)
+                .OrderBy(c => c.Type)
+                .ThenBy(c => c.Description)
+                .ThenBy(op => op.OperationUnixTime)
+                .ToList();
+
+            return new Result<IReadOnlyCollection<PaymentAccount>>(paymentAccounts);
         }
 
         [HttpGet("byId/{paymentAccountId}")]
-        public Result<PaymentAccount> GetById(string paymentAccountId)
+        public async Task<Result<PaymentAccount>> GetByIdAsync(string paymentAccountId)
         {
-            if (!Guid.TryParse(paymentAccountId, out var targetGuid))
+            if (!Guid.TryParse(paymentAccountId, out _))
             {
                 return new Result<PaymentAccount>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
-            var payload = MockAccountsStore.Records.SingleOrDefault(p => p.Key == targetGuid);
+            var documentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
 
-            return payload == null
-                ? new Result<PaymentAccount>(isSucceeded: false, message: "Payment account with provided guid is not exist")
-                : new Result<PaymentAccount>(payload);
+            if (!documentResult.IsSucceeded || documentResult.Payload == null)
+            {
+                return new Result<PaymentAccount>(isSucceeded: false, message: $"The payment account with '{paymentAccountId}' hasn't been found");
+            }
+
+            var document = documentResult.Payload;
+
+            return new Result<PaymentAccount>(document.Payload);
         }
 
         [HttpPost]
-        public Result<string> CreateNew([FromBody] CreatePaymentAccountRequest request)
+        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreatePaymentAccountRequest request)
         {
-            var newPaymentAccount = new PaymentAccount
-            {
-                Key = Guid.NewGuid(),
-                Agent = request.Agent,
-                Balance = request.Balance,
-                Currency = request.Currency,
-                Description = request.Description,
-                Type = request.AccountType
-            };
+            var newPaymentAccount = paymentAccountFactory.Create(
+                request.Agent,
+                request.Balance,
+                request.Currency,
+                request.Description,
+                request.AccountType);
 
-            MockAccountsStore.Records.Add(newPaymentAccount);
+            var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 
-            return new Result<string>(newPaymentAccount.Key.ToString());
+            return new Result<Guid>(saveResult.Payload);
         }
 
         [HttpDelete("{paymentAccountId}")]
-        public Result<Guid> DeleteById(string paymentAccountId)
+        public async Task<Result<Guid>> DeleteByIdAsync(string paymentAccountId)
         {
-            if (!Guid.TryParse(paymentAccountId, out var targetGuid))
+            if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return new Result<Guid>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+                return new Result<Guid>(isSucceeded: false, message: $"Invalid '{nameof(paymentAccountId)}' has been provided");
             }
 
-            var paymentAccountForDelete = MockAccountsStore.Records.FirstOrDefault(p => p.Key.CompareTo(targetGuid) == 0);
-            MockAccountsStore.Records.Remove(paymentAccountForDelete);
+            var deleteResult = await paymentAccountDocumentClient.RemoveAsync(paymentAccountId);
 
-            return new Result<Guid>(payload: targetGuid);
+            return new Result<Guid>(payload: deleteResult.Payload);
         }
 
         [HttpPatch("{paymentAccountId}")]
-        public Result<string> Update(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
+        public async Task<Result<Guid>> UpdateAsync(string paymentAccountId, [FromBody] UpdatePaymentAccountRequest request)
         {
-            if (!Guid.TryParse(paymentAccountId, out var requestPaymentAccountGuid))
+            if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return new Result<string>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+                return new Result<Guid>(
+                    isSucceeded: false,
+                    message: $"Invalid '{nameof(paymentAccountId)}' has been provided");
             }
 
-            var updatedPaymentAccount = new PaymentAccount
+            var paymentAccountForUpdate = new PaymentAccount
             {
-                Key = requestPaymentAccountGuid,
                 Agent = request.Agent,
                 Balance = request.Balance,
                 Currency = request.Currency,
@@ -86,17 +106,9 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Type = request.AccountType
             };
 
-            var itemForDelete = MockAccountsStore.Records.FirstOrDefault(p => p.Key.CompareTo(requestPaymentAccountGuid) == 0);
+            var updateResult = await paymentAccountDocumentClient.UpdateAsync(paymentAccountId, paymentAccountForUpdate);
 
-            if (itemForDelete == null)
-            {
-                return new Result<string>(isSucceeded: false, message: $"A payment account with guid: '{nameof(paymentAccountId)}' hasn't been found");
-            }
-
-            MockAccountsStore.Records.Remove(itemForDelete);
-            MockAccountsStore.Records.Add(updatedPaymentAccount);
-
-            return new Result<string>(paymentAccountId);
+            return new Result<Guid>(updateResult.Payload);
         }
     }
 }

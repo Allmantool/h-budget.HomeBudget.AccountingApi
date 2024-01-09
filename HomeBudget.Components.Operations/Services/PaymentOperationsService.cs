@@ -7,6 +7,7 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.CQRS.Commands.Models;
 using HomeBudget.Components.Operations.Models;
@@ -15,13 +16,23 @@ using HomeBudget.Components.Operations.Services.Interfaces;
 namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsService(
+        IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ISender mediator,
         IOperationFactory operationFactory)
         : IPaymentOperationsService
     {
-        public Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
+        public async Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
         {
+            var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
+
+            if (!isPaymentAccountExist)
+            {
+                return new Result<Guid>(
+                    isSucceeded: false,
+                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+            }
+
             var operationForAddResult = operationFactory.Create(
                 paymentAccountId,
                 payload.Amount,
@@ -32,14 +43,23 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!operationForAddResult.IsSucceeded)
             {
-                return Task.FromResult(new Result<Guid>(isSucceeded: false, message: "'operation' hasn't been created successfully"));
+                return new Result<Guid>(isSucceeded: false, message: "'operation' hasn't been created successfully");
             }
 
-            return mediator.Send(new SavePaymentOperationCommand(operationForAddResult.Payload), token);
+            return await mediator.Send(new SavePaymentOperationCommand(operationForAddResult.Payload), token);
         }
 
         public async Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
         {
+            var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
+
+            if (!isPaymentAccountExist)
+            {
+                return new Result<Guid>(
+                    isSucceeded: false,
+                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+            }
+
             var documents = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
 
             var operationForDelete = documents
@@ -51,8 +71,17 @@ namespace HomeBudget.Components.Operations.Services
                 : await mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Payload.Record), token);
         }
 
-        public Task<Result<Guid>> UpdateAsync(Guid paymentAccountId, Guid operationId, PaymentOperationPayload payload, CancellationToken token)
+        public async Task<Result<Guid>> UpdateAsync(Guid paymentAccountId, Guid operationId, PaymentOperationPayload payload, CancellationToken token)
         {
+            var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
+
+            if (!isPaymentAccountExist)
+            {
+                return new Result<Guid>(
+                    isSucceeded: false,
+                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+            }
+
             var operationForUpdate = new PaymentOperation
             {
                 PaymentAccountId = paymentAccountId,
@@ -64,7 +93,14 @@ namespace HomeBudget.Components.Operations.Services
                 OperationDay = payload.OperationDate
             };
 
-            return mediator.Send(new UpdatePaymentOperationCommand(operationForUpdate), token);
+            return await mediator.Send(new UpdatePaymentOperationCommand(operationForUpdate), token);
+        }
+
+        private async Task<bool> IsPaymentAccountExistAsync(string paymentAccountId)
+        {
+            var isPaymentAccountExist = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
+
+            return isPaymentAccountExist.IsSucceeded && isPaymentAccountExist.Payload != null;
         }
     }
 }

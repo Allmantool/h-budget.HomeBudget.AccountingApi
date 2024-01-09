@@ -14,8 +14,8 @@ using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
+using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -44,7 +44,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const int createRequestAmount = 11;
             const decimal expectedBalance = 176M;
 
-            var paymentAccountId = Guid.Parse("aed5a7ff-cd0f-4c61-b5ab-a3d7b8f9ac64");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var categoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-6");
 
@@ -67,9 +67,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
+            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+
             Assert.Multiple(() =>
             {
-                MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(expectedBalance);
+                balanceAfter.Should().Be(expectedBalance);
 
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
                 Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(expectedBalance).After(10));
@@ -80,7 +82,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WithExpenseOperations_ReturnsNegativeBalance()
         {
             const decimal expectedBalanceAmount = 12.13M;
-            var paymentAccountId = Guid.Parse("e6739854-7191-4e0a-a655-7d067aecc220");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var expenseCategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-5");
 
@@ -100,10 +102,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
+            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+
             Assert.Multiple(() =>
             {
                 historyRecords.Single().Balance.Should().Be(-expectedBalanceAmount);
-                MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(-expectedBalanceAmount);
+                balanceAfter.Should().Be(-expectedBalanceAmount);
             });
         }
 
@@ -111,7 +115,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WithSeveralOperations_ShouldReturnExpectedBalanceOperationsOrdering()
         {
             const int createRequestAmount = 5;
-            var paymentAccountId = Guid.Parse("f38f6c9d-3f1c-4e50-84f9-47d9b5e6a47d");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
             {
@@ -139,7 +143,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WhenUpdateExistedOperation_ReturnsUpToDateOperationState()
         {
             const int createRequestAmount = 3;
-            var paymentAccountId = Guid.Parse("421f203b-fc78-4c7c-93c8-5d56e9aefc30");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var operationsGuids = new Collection<Guid>();
 
@@ -196,7 +200,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetPaymentOperations_WhenAddAndThenUpdate_ReturnsUpToDateOperationState()
         {
-            var paymentAccountId = Guid.Parse("4daf3bef-5ffc-4a24-a032-eb97e8593a24");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var requestBody = new CreateOperationRequest
             {
@@ -237,7 +241,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
-            var paymentAccountId = Guid.Parse("92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84");
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var requestBody = new CreateOperationRequest
             {
@@ -309,6 +313,36 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data.Payload;
+        }
+
+        private async Task<Result<Guid>> SavePaymentAccountAsync()
+        {
+            var requestSaveBody = new CreatePaymentAccountRequest
+            {
+                Balance = 11.2m,
+                Description = "test-account",
+                AccountType = AccountTypes.Deposit,
+                Agent = "Personal",
+                Currency = "usd"
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+
+            return paymentsHistoryResponse.Data;
+        }
+
+        private async Task<PaymentAccount> GetPaymentsAccountAsync(Guid paymentAccountId)
+        {
+            var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
+
+            var getResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+
+            return getResponse.Data.Payload;
         }
     }
 }

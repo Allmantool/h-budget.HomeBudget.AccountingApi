@@ -34,7 +34,7 @@ namespace HomeBudget.Components.Categories.Clients
             return new Result<CategoryDocument>(await payload.SingleOrDefaultAsync());
         }
 
-        public async Task<Result<string>> InsertOneAsync(Category payload)
+        public async Task<Result<Guid>> InsertOneAsync(Category payload)
         {
             var document = new CategoryDocument
             {
@@ -45,7 +45,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<string>(document.Payload.CategoryKey);
+            return new Result<Guid>(document.Payload.Key);
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
