@@ -29,7 +29,9 @@ namespace HomeBudget.Components.Accounts.Clients
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
 
-            var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(paymentAccountId) == 0);
+            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, Guid.Parse(paymentAccountId));
+
+            var payload = await targetCollection.FindAsync(filter);
 
             return new Result<PaymentAccountDocument>(await payload.SingleOrDefaultAsync());
         }
@@ -67,14 +69,17 @@ namespace HomeBudget.Components.Accounts.Clients
 
             var paymentAccountIdForUpdate = Guid.Parse(requestPaymentAccountGuid);
 
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, paymentAccountIdForUpdate);
+            var documentResult = await GetByIdAsync(requestPaymentAccountGuid);
 
-            var document = new PaymentAccountDocument
+            var replacement = new PaymentAccountDocument
             {
+                Id = documentResult.Payload.Id,
                 Payload = paymentAccountForUpdate
             };
 
-            await targetCollection.ReplaceOneAsync(filter, document);
+            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Id, replacement.Id);
+
+            await targetCollection.ReplaceOneAsync(filter, replacement);
 
             return new Result<Guid>(paymentAccountIdForUpdate);
         }

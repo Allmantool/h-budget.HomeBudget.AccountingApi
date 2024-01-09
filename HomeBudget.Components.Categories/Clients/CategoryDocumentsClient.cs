@@ -45,7 +45,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<Guid>(Guid.Parse(document.Payload.CategoryKey));
+            return new Result<Guid>(document.Payload.Key);
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
