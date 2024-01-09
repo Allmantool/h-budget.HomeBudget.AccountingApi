@@ -2,18 +2,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
 using FluentAssertions;
+
 using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Components.Categories;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -35,18 +35,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var operationAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 100,
                 Comment = "New operation",
-                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             response.IsSuccessful.Should().Be(true);
 
@@ -76,7 +78,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                    CategoryId = (await SaveCategoryAsync(CategoryTypes.Income, $"{nameof(CreateOperationRequest)}-{i}")).Payload,
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15)
                 };
@@ -84,7 +86,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+                await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
             }
 
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
@@ -98,13 +100,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased()
+        public async Task CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased()
         {
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 100,
                 Comment = "New operation",
-                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
@@ -115,7 +119,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            _sut.RestHttpClient.Execute<Result<CreateOperationResponse>>(postCreateRequest);
+            await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             var operationAmountAfter = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
 
@@ -127,10 +131,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = Guid.Parse("0dbfb498-83e1-4e02-a2c1-c0761eab8529");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_ThenSuccessful));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 25.24m,
-                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -163,10 +169,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = Guid.Parse("852530a6-70b0-4040-8912-8558d59d977a");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 25.24m,
-                CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -191,14 +199,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void DeleteById_WithInValidOperationRef_ThenFail()
+        public async Task DeleteById_WithInValidOperationRef_ThenFail()
         {
             const string operationId = "invalid-operation-ref";
             const string accountId = "invalid-acc-ref";
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
             var result = response.Data;
 
@@ -206,23 +214,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void Update_WithInvalid_ThenFail()
+        public async Task Update_WithInvalid_ThenFail()
         {
             const string operationId = "invalid-operation-ref";
             const string accountId = "invalid-acc-ref";
+
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithInvalid_ThenFail));
 
             var requestBody = new UpdateOperationRequest
             {
                 Amount = 100,
                 Comment = "Some description",
-                CategoryId = MockCategoriesStore.Categories.First().CategoryKey,
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
             var result = response.Data;
 
@@ -230,23 +240,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void Update_WithValid_ThenSuccessful()
+        public async Task Update_WithValid_ThenSuccessful()
         {
             const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithValid_ThenSuccessful));
 
             var requestBody = new UpdateOperationRequest
             {
                 Amount = 100,
                 Comment = "Some update description",
-                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
             var result = response.Data;
 
@@ -258,11 +270,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var accountId = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithValid_BalanceShouldBeExpectedlyUpdated));
+
             var requestCreateBody = new CreateOperationRequest
             {
                 Amount = 12.0m,
                 Comment = "New operation",
-                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
@@ -275,7 +289,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 17.22m,
                 Comment = "Some update description",
-                CategoryId = MockCategoriesStore.Categories.First().Key.ToString(),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
@@ -299,6 +313,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
 
             return paymentsHistoryResponse.Data.Payload;
+        }
+
+        private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string category)
+        {
+            var requestSaveBody = new CreateCategoryRequest
+            {
+                CategoryType = (int)categoryType,
+                NameNodes = new[]
+                {
+                    nameof(categoryType),
+                    category
+                }
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<string>>(saveCategoryRequest);
+
+            return paymentsHistoryResponse.Data;
         }
 
         public ValueTask DisposeAsync()

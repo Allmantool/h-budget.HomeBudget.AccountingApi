@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,41 +9,68 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
-using HomeBudget.Components.Categories;
+using HomeBudget.Components.Categories.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
     [ApiController]
     [Route(Endpoints.Categories, Name = Endpoints.Categories)]
-    public class CategoriesController(ICategoryFactory categoryFactory) : ControllerBase
+    public class CategoriesController(
+        ICategoryDocumentsClient categoryDocumentsClient,
+        ICategoryFactory categoryFactory) : ControllerBase
     {
         [HttpGet]
-        public Result<IReadOnlyCollection<Category>> GetCategories()
+        public async Task<Result<IReadOnlyCollection<Category>>> GetCategoriesAsync()
         {
-            return new Result<IReadOnlyCollection<Category>>(MockCategoriesStore.Categories.ToList());
+            var documentsResult = await categoryDocumentsClient.GetAsync();
+
+            if (!documentsResult.IsSucceeded)
+            {
+                return new Result<IReadOnlyCollection<Category>>(isSucceeded: false);
+            }
+
+            var categories = documentsResult.Payload
+                .Select(d => d.Payload)
+                .OrderBy(c => c.CategoryKey)
+                .ThenBy(op => op.OperationUnixTime)
+                .ToList();
+
+            return new Result<IReadOnlyCollection<Category>>(categories);
         }
 
         [HttpGet("byId/{categoryId}")]
-        public Result<Category> GetCategoryById(string categoryId)
+        public async Task<Result<Category>> GetCategoryByIdAsync(string categoryId)
         {
-            var categoryById = MockCategoriesStore.Categories.SingleOrDefault(c => string.Equals(c.Key.ToString(), categoryId, StringComparison.OrdinalIgnoreCase));
+            if (!Guid.TryParse(categoryId, out var targetCategoryId))
+            {
+                return new Result<Category>(
+                    isSucceeded: false,
+                    message: $"Invalid '{nameof(targetCategoryId)}' has been provided");
+            }
 
-            return categoryById == null
-                ? new Result<Category>(isSucceeded: false, message: $"The category with '{categoryId}' hasn't been found")
-                : new Result<Category>(payload: categoryById);
+            var documentResult = await categoryDocumentsClient.GetByIdAsync(targetCategoryId);
+
+            if (!documentResult.IsSucceeded || documentResult.Payload == null)
+            {
+                return new Result<Category>(isSucceeded: false, message: $"The contractor with '{targetCategoryId}' hasn't been found");
+            }
+
+            var document = documentResult.Payload;
+
+            return new Result<Category>(document.Payload);
         }
 
         [HttpPost]
-        public Result<string> CreateNewContractor([FromBody] CreateCategoryRequest request)
+        public async Task<Result<string>> CreateNewCategoryAsync([FromBody] CreateCategoryRequest request)
         {
             var newCategory = categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
 
-            if (MockCategoriesStore.Categories.Select(c => c.CategoryKey).Contains(newCategory.CategoryKey))
+            if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))
             {
                 return new Result<string>(isSucceeded: false, message: $"The category with '{newCategory.CategoryKey}' key already exists");
             }
 
-            MockCategoriesStore.Categories.Add(newCategory);
+            await categoryDocumentsClient.InsertOneAsync(newCategory);
 
             return new Result<string>(newCategory.Key.ToString());
         }

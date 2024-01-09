@@ -25,18 +25,18 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var documentsResult = await contractorDocumentsClient.GetAsync();
 
-            if (documentsResult.IsSucceeded)
+            if (!documentsResult.IsSucceeded)
             {
-                var contractors = documentsResult.Payload
-                    .Select(d => d.Payload)
-                    .OrderBy(op => op.ContractorKey)
-                    .ThenBy(op => op.OperationUnixTime)
-                    .ToList();
-
-                return new Result<IReadOnlyCollection<Contractor>>(contractors);
+                return new Result<IReadOnlyCollection<Contractor>>(isSucceeded: false);
             }
 
-            return new Result<IReadOnlyCollection<Contractor>>(isSucceeded: false);
+            var contractors = documentsResult.Payload
+                .Select(d => d.Payload)
+                .OrderBy(op => op.ContractorKey)
+                .ThenBy(op => op.OperationUnixTime)
+                .ToList();
+
+            return new Result<IReadOnlyCollection<Contractor>>(contractors);
         }
 
         [HttpGet("byId/{contractorId}")]

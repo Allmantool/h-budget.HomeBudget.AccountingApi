@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Domain.Services;
+using HomeBudget.Components.Categories.Clients;
+using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Factories;
 
 namespace HomeBudget.Components.Categories.Configuration
@@ -11,7 +13,13 @@ namespace HomeBudget.Components.Categories.Configuration
             this IServiceCollection services)
         {
             return services
-                .AddScoped<ICategoryFactory, CategoryFactory>();
+                .AddScoped<ICategoryFactory, CategoryFactory>()
+                .RegisterMongoDbClient();
+        }
+
+        public static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)
+        {
+            return services.AddSingleton<ICategoryDocumentsClient, CategoryDocumentsClient>();
         }
     }
 }

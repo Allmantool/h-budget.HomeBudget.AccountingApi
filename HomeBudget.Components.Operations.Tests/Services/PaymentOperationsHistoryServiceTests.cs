@@ -10,10 +10,11 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Categories;
+using HomeBudget.Components.Categories.Clients.Interfaces;
+using HomeBudget.Components.Categories.Models;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
-using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Tests.Services
 {
@@ -26,6 +27,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var paymentAccountId = Guid.Parse("db2d514d-f571-4876-936a-784f24fc3060");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
 
+            var categoryId = Guid.NewGuid();
+
             var events = new List<PaymentOperationEvent>
             {
                 new()
@@ -35,7 +38,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
-                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
+                        CategoryId = categoryId,
                         Amount = 12.10m,
                     }
                 },
@@ -46,7 +49,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
-                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
+                        CategoryId = categoryId,
                         Amount = 12.10m,
                     }
                 }
@@ -64,6 +67,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var paymentAccountId = Guid.Parse("36ab7a9c-66ac-4b6e-8765-469572daa46b");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
 
+            var categoryId = Guid.NewGuid();
+
             var events = new List<PaymentOperationEvent>
             {
                 new()
@@ -73,7 +78,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
-                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
+                        CategoryId = categoryId,
                         Amount = 12.10m,
                         OperationDay = new DateOnly(2023, 12, 12)
                     }
@@ -85,7 +90,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
-                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
+                        CategoryId = categoryId,
                         Amount = 17.12m,
                         OperationDay = new DateOnly(2023, 12, 15)
                     }
@@ -97,7 +102,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
-                        CategoryId = MockCategoriesStore.Categories.First(c => c.CategoryType == CategoryTypes.Income).Key,
+                        CategoryId = categoryId,
                         Amount = 98.98m,
                         OperationDay = new DateOnly(2023, 12, 12)
                     }
@@ -178,9 +183,18 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(cl => cl.ReadAsync(It.IsAny<string>(), CancellationToken.None))
                 .Returns(events.ToAsyncEnumerable());
 
-            var mongoClient = new Mock<IPaymentsHistoryDocumentsClient>();
+            var paymentsHistoryClient = new Mock<IPaymentsHistoryDocumentsClient>();
 
-            return new PaymentOperationsHistoryService(eventDbClient.Object, mongoClient.Object);
+            var categoriesClient = new Mock<ICategoryDocumentsClient>();
+
+            categoriesClient
+                .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
+                .ReturnsAsync(() => new Result<CategoryDocument>(new CategoryDocument
+                {
+                    Payload = new Category(CategoryTypes.Income, new[] { "test-category" })
+                }));
+
+            return new PaymentOperationsHistoryService(eventDbClient.Object, paymentsHistoryClient.Object, categoriesClient.Object);
         }
     }
 }

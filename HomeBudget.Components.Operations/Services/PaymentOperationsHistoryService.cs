@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Categories;
+using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -14,7 +14,8 @@ namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
         IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
-        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient)
+        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
+        ICategoryDocumentsClient categoryDocumentsClient)
         : IPaymentOperationsHistoryService
     {
         public async Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId)
@@ -44,7 +45,7 @@ namespace HomeBudget.Components.Operations.Services
                 var record = new PaymentOperationHistoryRecord
                 {
                     Record = paymentOperation,
-                    Balance = CalculateIncrement(paymentOperation)
+                    Balance = await CalculateIncrementAsync(paymentOperation)
                 };
 
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
@@ -82,16 +83,18 @@ namespace HomeBudget.Components.Operations.Services
                     new PaymentOperationHistoryRecord
                     {
                         Record = operationEvent,
-                        Balance = previousRecordBalance + CalculateIncrement(operationEvent)
+                        Balance = previousRecordBalance + await CalculateIncrementAsync(operationEvent)
                     });
             }
 
             await paymentsHistoryDocumentsClient.RewriteAllAsync(paymentAccountId, operationsHistory);
         }
 
-        private static decimal CalculateIncrement(PaymentOperation operation)
+        private async Task<decimal> CalculateIncrementAsync(PaymentOperation operation)
         {
-            var category = MockCategoriesStore.Categories.First(c => c.Key.CompareTo(operation.CategoryId) == 0);
+            var documentResult = await categoryDocumentsClient.GetByIdAsync(operation.CategoryId);
+            var documentPayload = documentResult.Payload;
+            var category = documentPayload.Payload;
 
             return category.CategoryType == CategoryTypes.Income
                 ? Math.Abs(operation.Amount)

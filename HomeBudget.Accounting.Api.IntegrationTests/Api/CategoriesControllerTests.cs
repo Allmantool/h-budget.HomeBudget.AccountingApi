@@ -34,7 +34,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetCategoryById_WhenTryToGetExistedCategoryById_ThenIsSuccessStatusCode()
         {
-            var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/d5a7f8c7-8b5b-422b-92fa-49a81563f60a");
+            var saveResult = await SaveCategoryAsync(CategoryTypes.Income, "some-test-nodes");
+
+            var existedCategoryId = saveResult.Payload;
+
+            var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/{existedCategoryId}");
 
             var response = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
 
@@ -56,48 +60,61 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void CreateNewCategory_WhenCreateANewOneCategory_ReturnsNewGeneratedGuid()
+        public async Task CreateNewCategory_WhenCreateANewOneCategory_ReturnsNewGeneratedGuid()
         {
-            var requestBody = new CreateCategoryRequest
-            {
-                CategoryType = (int)CategoryTypes.Expense,
-                NameNodes = new[] { "Node1", "Node2", "Node3" }
-            };
+            var result = await SaveCategoryAsync(CategoryTypes.Expense, "Node1,Node2, Node3");
 
-            var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
-
-            var response = _sut.RestHttpClient.Execute<Result<string>>(postCreateCategoryRequest);
-
-            var result = response.Data;
-            var payload = result.Payload;
-
-            Guid.TryParse(payload, out _).Should().BeTrue();
+            Guid.TryParse(result.Payload, out _).Should().BeTrue();
         }
 
-        [TestCase(1, CategoryTypes.Expense)]
-        [TestCase(0, CategoryTypes.Income)]
-        public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(int requestOperationType, CategoryTypes outcomeOperationType)
+        [Test]
+        public async Task CreateNewCategory_WhenTryCreateAlreadyExistedCategory_FailsWithExpectedMessage()
         {
-            var requestBody = new CreateCategoryRequest
+            _ = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
+
+            var duplicatedCategoryResult = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
+
+            Assert.Multiple(() =>
             {
-                CategoryType = requestOperationType,
-                NameNodes = new[] { "Node1", "Node2" }
-            };
+                duplicatedCategoryResult.IsSucceeded.Should().BeFalse();
+                duplicatedCategoryResult.Message.Should().BeEquivalentTo("The category with '1-categoryType,duplicated,nodes' key already exists");
+            });
+        }
 
-            var postCreateCategoryRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
+        [TestCase(CategoryTypes.Expense)]
+        [TestCase(CategoryTypes.Income)]
+        public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(CategoryTypes outcomeOperationType)
+        {
+            var result = await SaveCategoryAsync(outcomeOperationType, "Node1,Node2");
 
-            var saveResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateCategoryRequest);
-
-            var result = saveResponse.Data;
-            var createdCategoryId = result.Payload;
-
-            var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{createdCategoryId}");
+            var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{result.Payload}");
 
             var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
 
             var getByIdPayload = getByIdResponse.Data;
 
             getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType);
+        }
+
+        private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
+        {
+            var requestSaveBody = new CreateCategoryRequest
+            {
+                CategoryType = (int)categoryType,
+                NameNodes = new[]
+                {
+                    nameof(categoryType),
+                    categoryNode
+                }
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<string>>(saveCategoryRequest);
+
+            return paymentsHistoryResponse.Data;
         }
 
         public async ValueTask DisposeAsync()

@@ -12,13 +12,13 @@ using HomeBudget.Components.Contractors.Models;
 
 namespace HomeBudget.Components.Contractors.Clients
 {
-    internal class ContractorDocumentsClient(IOptions<PaymentsHistoryDbOptions> dbOptions) :
+    internal class ContractorDocumentsClient(IOptions<MongoDbOptions> dbOptions) :
         BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.HandBooksDatabaseName),
         IContractorDocumentsClient
     {
         public async Task<Result<IReadOnlyCollection<ContractorDocument>>> GetAsync()
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync();
+            var targetCollection = await GetContractorsCollectionAsync();
 
             var payload = await targetCollection.FindAsync(_ => true);
 
@@ -27,7 +27,7 @@ namespace HomeBudget.Components.Contractors.Clients
 
         public async Task<Result<ContractorDocument>> GetByIdAsync(Guid contractorId)
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync();
+            var targetCollection = await GetContractorsCollectionAsync();
 
             var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
 
@@ -38,7 +38,7 @@ namespace HomeBudget.Components.Contractors.Clients
         {
             var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, contractorKey);
 
-            var targetCollection = await GetPaymentAccountCollectionAsync();
+            var targetCollection = await GetContractorsCollectionAsync();
 
             var payload = await targetCollection.FindAsync(filter);
 
@@ -52,14 +52,14 @@ namespace HomeBudget.Components.Contractors.Clients
                 Payload = payload
             };
 
-            var targetCollection = await GetPaymentAccountCollectionAsync();
+            var targetCollection = await GetContractorsCollectionAsync();
 
             await targetCollection.InsertOneAsync(document);
 
             return new Result<string>(document.Payload.ContractorKey);
         }
 
-        private async Task<IMongoCollection<ContractorDocument>> GetPaymentAccountCollectionAsync()
+        private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<ContractorDocument>("contractors");
 
