@@ -11,11 +11,11 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts;
-using HomeBudget.Accounting.Api.Models.Category;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {

@@ -35,11 +35,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var operationAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 100,
                 Comment = "New operation",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
@@ -76,7 +78,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                    CategoryId = (await SaveCategoryAsync(CategoryTypes.Income, $"{nameof(CreateOperationRequest)}-{i}")).Payload,
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15)
                 };
@@ -100,11 +102,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased()
         {
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 100,
                 Comment = "New operation",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
@@ -127,10 +131,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = Guid.Parse("0dbfb498-83e1-4e02-a2c1-c0761eab8529");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_ThenSuccessful));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 25.24m,
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -163,10 +169,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = Guid.Parse("852530a6-70b0-4040-8912-8558d59d977a");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 25.24m,
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -211,11 +219,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const string operationId = "invalid-operation-ref";
             const string accountId = "invalid-acc-ref";
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithInvalid_ThenFail));
+
             var requestBody = new UpdateOperationRequest
             {
                 Amount = 100,
                 Comment = "Some description",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
@@ -235,11 +245,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithValid_ThenSuccessful));
+
             var requestBody = new UpdateOperationRequest
             {
                 Amount = 100,
                 Comment = "Some update description",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
@@ -258,11 +270,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var accountId = Guid.Parse("35a40606-3782-4f53-8f64-49649b71ab6f");
 
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithValid_BalanceShouldBeExpectedlyUpdated));
+
             var requestCreateBody = new CreateOperationRequest
             {
                 Amount = 12.0m,
                 Comment = "New operation",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
@@ -275,7 +289,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 17.22m,
                 Comment = "Some update description",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString()
             };
 
@@ -301,7 +315,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return paymentsHistoryResponse.Data.Payload;
         }
 
-        private async Task<string> SaveCategoryAsync(CategoryTypes categoryType)
+        private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string category)
         {
             var requestSaveBody = new CreateCategoryRequest
             {
@@ -309,7 +323,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 NameNodes = new[]
                 {
                     nameof(categoryType),
-                    "test-category"
+                    category
                 }
             };
 
@@ -319,7 +333,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var paymentsHistoryResponse = await _sut.RestHttpClient
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
-            return paymentsHistoryResponse.Data.Payload;
+            return paymentsHistoryResponse.Data;
         }
 
         public ValueTask DisposeAsync()
