@@ -13,7 +13,6 @@ using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -114,14 +113,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
 
-            var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var balanceBefore = (await GetPaymentsAccountAsync(Guid.Parse(accountId))).Balance;
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
             await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var operationAmountAfter = MockAccountsStore.Records.Single(pa => pa.Key.Equals(Guid.Parse(accountId))).Balance;
+            var operationAmountAfter = (await GetPaymentsAccountAsync(Guid.Parse(accountId))).Balance;
 
             balanceBefore.Should().BeLessThan(operationAmountAfter);
         }
@@ -149,17 +148,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
-            var balanceBefore = MockAccountsStore.Records
-                .Single(pa => pa.Key.CompareTo(paymentAccountId) == 0)
-                .Balance;
+            var balanceBefore = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
             await _sut.RestHttpClient.ExecuteAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
 
-            var balanceAfter = MockAccountsStore.Records
-                .Single(pa => pa.Key.CompareTo(paymentAccountId) == 0)
-                .Balance;
+            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
             balanceBefore.Should().BeGreaterThan(balanceAfter);
         }
@@ -293,26 +288,41 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = Guid.NewGuid().ToString()
             };
 
-            var balanceBefore = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{saveResponseResult.Data.Payload.PaymentOperationId}", Method.Patch)
                 .AddJsonBody(requestUpdateBody);
 
             await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
-            var balanceAfter = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(accountId) == 0).Balance;
+            var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryRecordsAsync(Guid paymentAccountId)
         {
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
-            var paymentsHistoryResponse = await _sut.RestHttpClient
+            var getResponse = await _sut.RestHttpClient
                 .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
 
-            return paymentsHistoryResponse.Data.Payload;
+            return getResponse.Data.Payload;
+        }
+
+        private async Task<PaymentAccount> GetPaymentsAccountAsync(Guid paymentAccountId)
+        {
+            var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/{paymentAccountId}");
+
+            var getResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+
+            return getResponse.Data.Payload;
         }
 
         private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string category)
@@ -334,11 +344,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
     }
 }

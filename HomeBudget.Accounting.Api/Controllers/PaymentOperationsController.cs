@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,7 +9,6 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -29,11 +27,11 @@ namespace HomeBudget.Accounting.Api.Controllers
             [FromBody] CreateOperationRequest request,
             CancellationToken token = default)
         {
-            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return new Result<CreateOperationResponse>(
                     isSucceeded: false,
-                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
+                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
@@ -52,21 +50,17 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpDelete("{operationId}")]
         public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(string paymentAccountId, string operationId, CancellationToken token = default)
         {
-            // TODO: Fluent validation
-            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return new Result<RemoveOperationResponse>(
                     isSucceeded: false,
-                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
+                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
 
-            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
-
             var response = new RemoveOperationResponse
             {
-                PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
                 PaymentOperationId = removeResponseResult.Payload.ToString()
             };
@@ -81,22 +75,19 @@ namespace HomeBudget.Accounting.Api.Controllers
             [FromBody] UpdateOperationRequest request,
             CancellationToken token = default)
         {
-            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid) || MockAccountsStore.Records.All(pa => pa.Key.CompareTo(targetAccountGuid) != 0))
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return new Result<UpdateOperationResponse>(
                     isSucceeded: false,
-                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
+                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
             var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, Guid.Parse(operationId), operationPayload, token);
 
-            var paymentAccount = MockAccountsStore.Records.Single(pa => pa.Key.CompareTo(targetAccountGuid) == 0);
-
             var response = new UpdateOperationResponse
             {
-                PaymentAccountBalance = paymentAccount.Balance,
                 PaymentAccountId = paymentAccountId,
                 PaymentOperationId = updateResponseResult.Payload.ToString()
             };

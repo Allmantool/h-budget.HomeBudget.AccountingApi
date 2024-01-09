@@ -15,7 +15,6 @@ using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -67,9 +66,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
+            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+
             Assert.Multiple(() =>
             {
-                MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(expectedBalance);
+                balanceAfter.Should().Be(expectedBalance);
 
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
                 Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(expectedBalance).After(10));
@@ -100,10 +101,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
+            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+
             Assert.Multiple(() =>
             {
                 historyRecords.Single().Balance.Should().Be(-expectedBalanceAmount);
-                MockAccountsStore.Records.Single(ac => ac.Key.CompareTo(paymentAccountId) == 0).Balance.Should().Be(-expectedBalanceAmount);
+                balanceAfter.Should().Be(-expectedBalanceAmount);
             });
         }
 
@@ -309,6 +312,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data.Payload;
+        }
+
+        private async Task<PaymentAccount> GetPaymentsAccountAsync(Guid paymentAccountId)
+        {
+            var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/{paymentAccountId}");
+
+            var getResponse = await _sut.RestHttpClient
+                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+
+            return getResponse.Data.Payload;
         }
     }
 }
