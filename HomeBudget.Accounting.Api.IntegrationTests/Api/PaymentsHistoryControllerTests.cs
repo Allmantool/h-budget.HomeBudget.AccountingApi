@@ -46,13 +46,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var paymentAccountId = Guid.Parse("aed5a7ff-cd0f-4c61-b5ab-a3d7b8f9ac64");
 
+            var categoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-6");
+
             foreach (var i in Enumerable.Range(1, createRequestAmount))
             {
                 var requestBody = new CreateOperationRequest
                 {
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                    CategoryId = categoryId,
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
@@ -80,13 +82,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             const decimal expectedBalanceAmount = 12.13M;
             var paymentAccountId = Guid.Parse("e6739854-7191-4e0a-a655-7d067aecc220");
 
-            var expenseCategoryId = await SaveCategoryAsync(CategoryTypes.Expense);
+            var expenseCategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-5");
 
             var requestBody = new CreateOperationRequest
             {
                 Amount = expectedBalanceAmount,
                 Comment = "New operation - expense",
-                CategoryId = expenseCategoryId.ToString(),
+                CategoryId = expenseCategoryId,
                 ContractorId = Guid.NewGuid().ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
             };
@@ -117,7 +119,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 7 + i,
                     Comment = $"New operation - {i}",
-                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-loop-{i}"),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
@@ -126,9 +128,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     .AddJsonBody(requestBody);
 
                 await _sut.RestHttpClient.ExecuteAsync(postCreateRequest);
-
-                // TODO: concurrency issue (skip for now) -- temp workaround
-                await Task.Delay(TimeSpan.FromSeconds(0.1), CancellationToken.None);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
@@ -150,7 +149,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 {
                     Amount = 7,
                     Comment = $"New operation - {i}",
-                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                    CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-3s-{i}"),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
@@ -170,7 +169,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 9120,
                 OperationDate = new DateOnly(2027, 1, 17),
-                CategoryId = "66ce6a56-f61e-4530-8098-b8c58b61a381",
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-3s-0"),
                 ContractorId = "238d0940-9d30-4dd2-b52c-c623d732daf4",
                 Comment = "updated state"
             };
@@ -203,7 +202,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 7,
                 Comment = "New operation - x",
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-2"),
                 ContractorId = Guid.NewGuid().ToString(),
                 OperationDate = new DateOnly(2023, 12, 15)
             };
@@ -218,7 +217,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 11,
                 OperationDate = new DateOnly(2027, 1, 17),
-                CategoryId = "66ce6a56-f61e-4530-8098-b8c58b61a381",
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-2"),
                 ContractorId = "66e81106-9214-41a4-8297-82d6761f1d40",
                 Comment = "updated state"
             };
@@ -242,7 +241,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var requestBody = new CreateOperationRequest
             {
-                CategoryId = await SaveCategoryAsync(CategoryTypes.Income),
+                CategoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-1"),
                 ContractorId = Guid.NewGuid().ToString(),
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
@@ -291,7 +290,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return paymentsHistoryResponse.Data.Payload;
         }
 
-        private async Task<string> SaveCategoryAsync(CategoryTypes categoryType)
+        private async Task<string> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
         {
             var requestSaveBody = new CreateCategoryRequest
             {
@@ -299,7 +298,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 NameNodes = new[]
                 {
                     nameof(categoryType),
-                    "test-category"
+                    categoryNode
                 }
             };
 
