@@ -32,7 +32,7 @@ namespace HomeBudget.Accounting.Api.Configuration
         {
             return services
                 .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
-                .Configure<MongoDbOptions>(configuration.GetSection(ConfigurationSectionKeys.PaymentsHistoryDbOptions))
+                .Configure<MongoDbOptions>(configuration.GetSection(ConfigurationSectionKeys.MongoDbOptions))
                 .Configure<EventStoreDbOptions>(configuration.GetSection(ConfigurationSectionKeys.EventStoreDb));
         }
     }
