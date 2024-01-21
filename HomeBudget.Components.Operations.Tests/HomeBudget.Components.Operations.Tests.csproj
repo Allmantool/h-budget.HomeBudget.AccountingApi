@@ -18,10 +18,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
-    <PackageReference Include="Testcontainers" Version="3.6.0" />
-    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.6.0" />
-    <PackageReference Include="Testcontainers.Kafka" Version="3.6.0" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="3.6.0" />
+    <PackageReference Include="Testcontainers" Version="3.7.0" />
+    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.7.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="3.7.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="3.7.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.16.0.82469" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.17.0.82934" />
   </ItemGroup>
 
   <ItemGroup>
