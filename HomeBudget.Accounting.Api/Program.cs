@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 using Microsoft.AspNetCore.Builder;
@@ -27,7 +28,10 @@ webAppBuilder.Services.AddControllers(o =>
 services.SetUpDi(configuration, environment);
 
 webAppBuilder.Services.AddEndpointsApiExplorer();
-webAppBuilder.Services.AddSwaggerGen();
+webAppBuilder.Services
+    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+    .AddResponseCaching()
+    .AddSwaggerGen();
 
 services.SetupSwaggerGen();
 
