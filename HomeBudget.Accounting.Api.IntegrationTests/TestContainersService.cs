@@ -23,7 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
             EventSourceDbContainer = new EventStoreDbBuilder()
                 .WithImage("eventstore/eventstore:23.10.0-jammy")
-                .WithName($"{nameof(TestContainersService)}-event-store-db-container")
+                .WithName($"{nameof(TestContainersService)}-event-store-db-container-${DateTimeOffset.UtcNow.ToUnixTimeSeconds()}")
                 .WithHostname("test-eventsource-db-host")
                 .WithPortBinding(2113, 2113)
                 .WithAutoRemove(true)
