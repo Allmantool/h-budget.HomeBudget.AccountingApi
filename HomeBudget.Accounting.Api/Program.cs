@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,12 @@ webAppBuilder.Services.AddEndpointsApiExplorer();
 webAppBuilder.Services.AddSwaggerGen();
 
 services.SetupSwaggerGen();
+
+services.AddHeaderPropagation(options =>
+{
+    options.Headers.Add(HttpHeaderKeys.HostService, "HomeBudget-Accounting-Api");
+    options.Headers.Add(HttpHeaderKeys.CorrelationId);
+});
 
 services.AddAutoMapper(new List<Assembly>
 {
