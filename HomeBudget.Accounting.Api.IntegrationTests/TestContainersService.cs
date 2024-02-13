@@ -25,7 +25,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 .WithImage("eventstore/eventstore:23.10.0-jammy")
                 .WithName($"{nameof(TestContainersService)}-event-store-db-container")
                 .WithHostname("test-eventsource-db-host")
-                .WithPortBinding(2113, 2113)
+                .WithPortBinding(2117, 2117)
                 .WithAutoRemove(true)
                 .WithCleanUp(true)
                 .Build();

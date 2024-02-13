@@ -10,5 +10,7 @@
         public const string PaymentAccounts = "payment-accounts";
         public const string Contractors = "contractors";
         public const string Categories = "categories";
+
+        public const string HealthCheckSource = "/health";
     }
 }

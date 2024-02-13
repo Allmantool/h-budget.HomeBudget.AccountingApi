@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
 
+using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Domain.Constants;
 
@@ -37,7 +38,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                         .WithOrigins(allowedUiOrigins)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
-                        .WithExposedHeaders(HttpHeaderKeys.CorrelationIdHeaderKey);
+                        .WithExposedHeaders(HttpHeaderKeys.CorrelationId);
                 });
             }
 
@@ -46,8 +47,9 @@ namespace HomeBudget.Accounting.Api.Extensions
                 .UseHttpsRedirection()
                 .UseResponseCaching()
                 .UseAuthorization()
-                .UseRouting()
                 .UseCorrelationId()
+                .UseHeaderPropagation()
+                .UseRouting()
                 .UseSerilogRequestLogging(options =>
                 {
                     // Customize the message template
@@ -63,9 +65,8 @@ namespace HomeBudget.Accounting.Api.Extensions
                         diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
                     };
                 })
+                .SetUpHealthCheckEndpoints()
                 .UseEndpoints(endpoints => { endpoints.MapControllers(); });
-
-            // .SetUpHealthCheckEndpoints()
         }
     }
 }

@@ -13,11 +13,11 @@ namespace HomeBudget.Accounting.Api.Middlewares
         {
             var requestHeaders = context.Request.Headers;
 
-            _ = requestHeaders.TryGetValue(HttpHeaderKeys.CorrelationIdHeaderKey, out var correlationId);
+            _ = requestHeaders.TryGetValue(HttpHeaderKeys.CorrelationId, out var correlationId);
 
             var responseHeaders = context.Response.Headers;
 
-            responseHeaders.TryAdd(HttpHeaderKeys.CorrelationIdHeaderKey, correlationId);
+            responseHeaders.TryAdd(HttpHeaderKeys.CorrelationId, correlationId);
 
             await next.Invoke(context);
         }
