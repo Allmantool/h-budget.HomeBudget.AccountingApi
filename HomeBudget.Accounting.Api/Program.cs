@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Api.Configuration;
+using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Domain.Constants;
@@ -37,7 +38,7 @@ services.SetupSwaggerGen();
 
 services.AddHeaderPropagation(options =>
 {
-    options.Headers.Add(HttpHeaderKeys.HostService, "HomeBudget-Accounting-Api");
+    options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.Name);
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 
@@ -52,9 +53,7 @@ configuration.InitializeLogger(environment, webAppBuilder.Host);
 var webApp = webAppBuilder.Build();
 
 webApp.SetUpBaseApplication(services, environment, configuration);
-
 webApp.UseAuthorization();
-
 webApp.MapControllers();
 
 webApp.Run();

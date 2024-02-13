@@ -9,6 +9,8 @@ using Serilog.Enrichers.Span;
 using Serilog.Exceptions;
 using Serilog.Sinks.Elasticsearch;
 
+using HomeBudget.Accounting.Api.Constants;
+
 namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
     internal static class CustomLoggerExtensions
@@ -23,6 +25,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithMachineName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithProperty("Environment", environment)
+                .Enrich.WithProperty("Host-service", HostServiceOptions.Name)
                 .Enrich.WithSpan()
                 .WriteTo.Debug()
                 .WriteTo.Console()
