@@ -33,7 +33,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             {
                 new()
                 {
-                    EventType = EventTypes.Add,
+                    EventType = PaymentEventTypes.Added,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -44,7 +44,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 },
                 new()
                 {
-                    EventType = EventTypes.Add,
+                    EventType = PaymentEventTypes.Added,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -73,7 +73,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             {
                 new()
                 {
-                    EventType = EventTypes.Add,
+                    EventType = PaymentEventTypes.Added,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -85,7 +85,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 },
                 new()
                 {
-                    EventType = EventTypes.Update,
+                    EventType = PaymentEventTypes.Updated,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -97,7 +97,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 },
                 new()
                 {
-                    EventType = EventTypes.Update,
+                    EventType = PaymentEventTypes.Updated,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -125,7 +125,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             {
                 new()
                 {
-                    EventType = EventTypes.Remove,
+                    EventType = PaymentEventTypes.Removed,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -150,7 +150,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             {
                 new()
                 {
-                    EventType = EventTypes.Add,
+                    EventType = PaymentEventTypes.Added,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,
@@ -160,7 +160,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 },
                 new()
                 {
-                    EventType = EventTypes.Remove,
+                    EventType = PaymentEventTypes.Removed,
                     Payload = new PaymentOperation
                     {
                         PaymentAccountId = paymentAccountId,

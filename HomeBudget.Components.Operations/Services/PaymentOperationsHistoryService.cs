@@ -106,8 +106,8 @@ namespace HomeBudget.Components.Operations.Services
         {
             var existedOperationEventGroups = eventsForAccount
                 .GroupBy(ev => ev.Payload.Key)
-                .Where(gr => gr.All(ev => ev.EventType != EventTypes.Remove))
-                .Where(gr => gr.Any(ev => ev.EventType == EventTypes.Add));
+                .Where(gr => gr.All(ev => ev.EventType != PaymentEventTypes.Removed))
+                .Where(gr => gr.Any(ev => ev.EventType == PaymentEventTypes.Added));
 
             return existedOperationEventGroups
                 .Select(gr => gr

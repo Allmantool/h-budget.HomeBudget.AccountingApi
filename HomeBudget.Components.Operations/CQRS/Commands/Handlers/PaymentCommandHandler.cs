@@ -25,27 +25,29 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
             T request,
             CancellationToken cancellationToken)
         {
-            var paymentSavedEvent = mapper.Map<PaymentOperationEvent>(request);
+            var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
 
-            var paymentMessageConversionResult = PaymentEventToMessageConverter.Convert(paymentSavedEvent);
+            var paymentAccountId = paymentEvent.Payload.PaymentAccountId;
+
+            var paymentMessageConversionResult = PaymentEventToMessageConverter.Convert(paymentEvent);
 
             var result = await producer.ProduceAsync(
-                nameof(paymentSavedEvent),
+                paymentAccountId.ToString(),
                 paymentMessageConversionResult.Payload,
                 cancellationToken
             );
 
             await operationsDeliveryHandler.HandleAsync(result, cancellationToken);
 
-            var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentSavedEvent.Payload.PaymentAccountId);
+            var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId);
 
             await sender.Send(
                 new UpdatePaymentAccountBalanceCommand(
-                    paymentSavedEvent.Payload.PaymentAccountId,
+                    paymentAccountId,
                     upToDateBalanceResult.Payload),
                 cancellationToken);
 
-            return new Result<Guid>(paymentSavedEvent.Payload.Key);
+            return new Result<Guid>(paymentEvent.Payload.Key);
         }
     }
 }
