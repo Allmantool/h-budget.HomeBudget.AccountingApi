@@ -24,7 +24,7 @@ namespace HomeBudget.Components.Operations.Clients
             return await base.SendAsync(
                 eventForSending,
                 PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString()),
-                $"{eventForSending.EventType}_{paymentOperationId}",
+                $"{eventForSending.PaymentEventType}_{paymentOperationId}",
                 token);
         }
 
