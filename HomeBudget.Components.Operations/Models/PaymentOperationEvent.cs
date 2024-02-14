@@ -6,6 +6,6 @@ namespace HomeBudget.Components.Operations.Models
     {
         public PaymentOperation Payload { get; set; }
 
-        public PaymentEventTypes PaymentEventType { get; set; }
+        public PaymentEventTypes EventType { get; set; }
     }
 }

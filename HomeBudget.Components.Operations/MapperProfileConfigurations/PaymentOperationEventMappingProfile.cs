@@ -11,15 +11,15 @@ namespace HomeBudget.Components.Operations.MapperProfileConfigurations
         {
             CreateMap<SavePaymentOperationCommand, PaymentOperationEvent>()
                 .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForAdd))
-                .ForMember(dest => dest.PaymentEventType, opt => opt.MapFrom(src => PaymentEventTypes.Added));
+                .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => PaymentEventTypes.Added));
 
             CreateMap<RemovePaymentOperationCommand, PaymentOperationEvent>()
                 .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForDelete))
-                .ForMember(dest => dest.PaymentEventType, opt => opt.MapFrom(src => PaymentEventTypes.Removed));
+                .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => PaymentEventTypes.Removed));
 
             CreateMap<UpdatePaymentOperationCommand, PaymentOperationEvent>()
                 .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForUpdate))
-                .ForMember(dest => dest.PaymentEventType, opt => opt.MapFrom(src => PaymentEventTypes.Updated));
+                .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => PaymentEventTypes.Updated));
         }
     }
 }
