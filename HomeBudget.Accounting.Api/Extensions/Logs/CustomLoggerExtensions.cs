@@ -47,15 +47,15 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
 
             return string.IsNullOrWhiteSpace(elasticNodeUrl)
                 ? loggerConfiguration
-                : loggerConfiguration.WriteTo.Elasticsearch(ConfigureElasticSink(environment, elasticNodeUrl));
+                : loggerConfiguration.WriteTo.Elasticsearch(ConfigureElasticSink(environment, new Uri(elasticNodeUrl)));
         }
 
-        private static ElasticsearchSinkOptions ConfigureElasticSink(IHostEnvironment environment, string elasticNodeUrl)
+        private static ElasticsearchSinkOptions ConfigureElasticSink(IHostEnvironment environment, Uri elasticNodeUri)
         {
             var formattedExecuteAssemblyName = typeof(Program).Assembly.GetName().Name;
             var dateIndexPostfix = DateTime.UtcNow.ToString("MM-yyyy-dd");
 
-            return new ElasticsearchSinkOptions(new Uri(elasticNodeUrl))
+            return new ElasticsearchSinkOptions(elasticNodeUri)
             {
                 AutoRegisterTemplate = true,
                 TypeName = null,
