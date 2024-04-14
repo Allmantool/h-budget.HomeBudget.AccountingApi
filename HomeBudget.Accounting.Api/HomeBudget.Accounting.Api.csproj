@@ -5,6 +5,7 @@
     <RootNamespace>HomeBudget.Accounting.Api</RootNamespace>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <PublishReadyToRun>true</PublishReadyToRun>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
