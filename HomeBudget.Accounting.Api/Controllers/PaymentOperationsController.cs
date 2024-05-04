@@ -48,7 +48,10 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpDelete("{operationId}")]
-        public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(string paymentAccountId, string operationId, CancellationToken token = default)
+        public async Task<Result<RemoveOperationResponse>> DeleteByIdAsync(
+            string paymentAccountId,
+            string operationId,
+            CancellationToken token = default)
         {
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {

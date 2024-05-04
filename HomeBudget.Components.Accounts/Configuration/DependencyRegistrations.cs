@@ -9,7 +9,7 @@ namespace HomeBudget.Components.Accounts.Configuration
 {
     public static class DependencyRegistrations
     {
-        public static IServiceCollection RegisterPaymentAccountsIoCDependency(
+        public static IServiceCollection RegisterPaymentAccountsDependencies(
             this IServiceCollection services)
         {
             return services

@@ -43,7 +43,9 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!operationForAddResult.IsSucceeded)
             {
-                return new Result<Guid>(isSucceeded: false, message: "'operation' hasn't been created successfully");
+                return new Result<Guid>(
+                    isSucceeded: false,
+                    message: $"'operation' hasn't been created successfully. Details: {operationForAddResult.Message}");
             }
 
             return await mediator.Send(new SavePaymentOperationCommand(operationForAddResult.Payload), token);

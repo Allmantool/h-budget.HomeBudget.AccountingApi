@@ -34,6 +34,7 @@
     <ProjectReference Include="..\HomeBudget.Components.Categories\HomeBudget.Components.Categories.csproj" />
     <ProjectReference Include="..\HomeBudget.Components.Contractors\HomeBudget.Components.Contractors.csproj" />
     <ProjectReference Include="..\HomeBudget.Components.Operations\HomeBudget.Components.Operations.csproj" />
+    <ProjectReference Include="..\HomeBudget.Components.Transfers\HomeBudget.Components.Transfers.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,7 +44,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.23.2.88755" />
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>$(AssemblyName).Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.24.0.89429" />
   </ItemGroup>
 
 </Project>
