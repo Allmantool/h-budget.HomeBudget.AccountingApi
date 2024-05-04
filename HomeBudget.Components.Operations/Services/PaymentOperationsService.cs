@@ -9,7 +9,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
-using HomeBudget.Components.Operations.CQRS.Commands.Models;
+using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -33,7 +33,7 @@ namespace HomeBudget.Components.Operations.Services
                     message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
-            var operationForAddResult = operationFactory.Create(
+            var operationForAddResult = operationFactory.CreatePaymentOperation(
                 paymentAccountId,
                 payload.Amount,
                 payload.Comment,
@@ -45,13 +45,16 @@ namespace HomeBudget.Components.Operations.Services
             {
                 return new Result<Guid>(
                     isSucceeded: false,
-                    message: $"'operation' hasn't been created successfully. Details: {operationForAddResult.Message}");
+                    message: $"An 'operation' hasn't been created successfully. Details: '{operationForAddResult.Message}'");
             }
 
-            return await mediator.Send(new SavePaymentOperationCommand(operationForAddResult.Payload), token);
+            return await mediator.Send(new AddPaymentOperationCommand(operationForAddResult.Payload), token);
         }
 
-        public async Task<Result<Guid>> RemoveAsync(Guid paymentAccountId, Guid operationId, CancellationToken token)
+        public async Task<Result<Guid>> RemoveAsync(
+            Guid paymentAccountId,
+            Guid operationId,
+            CancellationToken token)
         {
             var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
 
@@ -73,7 +76,11 @@ namespace HomeBudget.Components.Operations.Services
                 : await mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Payload.Record), token);
         }
 
-        public async Task<Result<Guid>> UpdateAsync(Guid paymentAccountId, Guid operationId, PaymentOperationPayload payload, CancellationToken token)
+        public async Task<Result<Guid>> UpdateAsync(
+            Guid paymentAccountId,
+            Guid operationId,
+            PaymentOperationPayload payload,
+            CancellationToken token)
         {
             var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
 

@@ -4,7 +4,7 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget.Components.Accounts.CQRS.Commands.Models
+namespace HomeBudget.Components.Accounts.Commands.Models
 {
     public class UpdatePaymentAccountBalanceCommand(Guid paymentAccountId, decimal balance)
         : IRequest<Result<Guid>>

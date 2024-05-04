@@ -7,7 +7,7 @@ namespace HomeBudget.Components.Operations.Factories
 {
     internal class OperationFactory : IOperationFactory
     {
-        public Result<PaymentOperation> Create(
+        public Result<PaymentOperation> CreatePaymentOperation(
             Guid paymentAccountId,
             decimal amount,
             string comment,
@@ -34,6 +34,22 @@ namespace HomeBudget.Components.Operations.Factories
             };
 
             return new Result<PaymentOperation>(payload);
+        }
+
+        public Result<TransferOperation> CreateTransferOperation(
+            Guid paymentAccountId,
+            decimal amount,
+            DateOnly operationDay)
+        {
+            var payload = new TransferOperation
+            {
+                Key = Guid.NewGuid(),
+                OperationDay = operationDay,
+                Amount = amount,
+                PaymentAccountId = paymentAccountId,
+            };
+
+            return new Result<TransferOperation>(payload);
         }
     }
 }

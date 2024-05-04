@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Api.Models.Operations.Requests
 {
-    public class CreateOperationRequest
+    public record CreateOperationRequest
     {
         public decimal Amount { get; set; }
         public string Comment { get; set; }

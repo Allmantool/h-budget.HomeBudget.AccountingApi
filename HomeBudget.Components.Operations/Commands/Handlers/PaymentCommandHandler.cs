@@ -7,12 +7,12 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Accounts.CQRS.Commands.Models;
+using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
-namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
+namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
         IMapper mapper,
