@@ -8,7 +8,6 @@ using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
-using HomeBudget.Components.Transfers.Configuration;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -24,8 +23,7 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterPaymentAccountsDependencies()
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
-                .RegisterCategoriesDependencies()
-                .RegisterTransfersDependencies();
+                .RegisterCategoriesDependencies();
         }
 
         public static IServiceCollection SetUpConfigurationOptions(

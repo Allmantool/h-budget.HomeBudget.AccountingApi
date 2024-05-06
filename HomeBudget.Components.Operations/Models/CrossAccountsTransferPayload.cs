@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Components.Transfers.Models
+﻿using System;
+
+namespace HomeBudget.Components.Operations.Models
 {
     public class CrossAccountsTransferPayload
     {

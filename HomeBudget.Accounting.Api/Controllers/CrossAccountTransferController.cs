@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
@@ -9,8 +8,8 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Transfers.Models;
-using HomeBudget.Components.Transfers.Services.Interfaces;
+using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {
@@ -29,7 +28,13 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var responseResult = await crossAccountsTransferService.ApplyAsync(operationPayload, token);
 
-            throw new NotImplementedException();
+            var response = new CrossAccountsTransferResponse
+            {
+                PaymentOperationId = responseResult.Payload.ToString(),
+                PaymentAccountIds = new[] { request.Sender, request.Recipient }
+            };
+
+            return new Result<CrossAccountsTransferResponse>(response, isSucceeded: responseResult.IsSucceeded);
         }
     }
 }

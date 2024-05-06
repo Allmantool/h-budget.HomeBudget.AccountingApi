@@ -1,11 +1,20 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace HomeBudget.Accounting.Domain.Models
 {
     public class TransferOperation : DomainEntity
     {
-        public DateOnly OperationDay { get; set; }
-        public Guid PaymentAccountId { get; set; }
-        public decimal Amount { get; set; }
+        public TransferOperation(Guid key)
+        {
+            Key = key;
+        }
+
+        public TransferOperation()
+        {
+            Key = Guid.NewGuid();
+        }
+
+        public IReadOnlyCollection<PaymentOperation> PaymentOperations { get; set; }
     }
 }

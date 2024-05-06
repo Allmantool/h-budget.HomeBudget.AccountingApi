@@ -3,8 +3,8 @@ using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentOperationsDependentProducer(IKafkaClientHandler handle)
-        : BaseKafkaDependentProducer<string, string>(handle)
+    internal class PaymentOperationsProducer(IKafkaClientHandler handle)
+        : BaseKafkaProducer<string, string>(handle)
     {
     }
 }

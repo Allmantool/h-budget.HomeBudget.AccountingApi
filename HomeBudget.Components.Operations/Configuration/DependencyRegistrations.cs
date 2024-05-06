@@ -29,6 +29,8 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<IOperationsHistoryProvider, OperationsHistoryProvider>()
+                .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
+                .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
                 .AddMediatR(configuration =>
                 {
                     configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
@@ -42,7 +44,7 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
-                .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer>()
+                .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 

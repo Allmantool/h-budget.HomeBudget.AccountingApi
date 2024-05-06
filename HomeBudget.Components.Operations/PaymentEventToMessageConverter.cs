@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Confluent.Kafka;
 
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
 
@@ -23,9 +24,9 @@ namespace HomeBudget.Components.Operations
 
             var message = new Message<string, string>
             {
-                Key = $"{eventPayload.PaymentAccountId}-{eventPayload.Key}",
+                Key = eventPayload.GetIdentifier(),
                 Value = JsonSerializer.Serialize(paymentEvent),
-                Timestamp = new Timestamp(DateTime.Now),
+                Timestamp = new Timestamp(DateTime.UtcNow),
             };
 
             return new Result<Message<string, string>>(message);

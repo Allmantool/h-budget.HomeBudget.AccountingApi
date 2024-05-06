@@ -6,17 +6,17 @@ using Confluent.Kafka;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
 {
-    public interface IKafkaDependentProducer<K, V>
+    public interface IKafkaProducer<TKey, TValue>
     {
         void Produce(
             string topic,
-            Message<K, V> message,
-            Action<DeliveryReport<K, V>> deliveryHandler = null
+            Message<TKey, TValue> message,
+            Action<DeliveryReport<TKey, TValue>> deliveryHandler = null
         );
 
-        Task<DeliveryResult<K, V>> ProduceAsync(
+        Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             string topic,
-            Message<K, V> message,
+            Message<TKey, TValue> message,
             CancellationToken token);
 
         void Flush(TimeSpan timeout);

@@ -36,15 +36,15 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            var saveResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, token);
+            var addResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, token);
 
             var response = new CreateOperationResponse
             {
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = saveResponseResult.Payload.ToString()
+                PaymentOperationId = addResponseResult.Payload.ToString()
             };
 
-            return new Result<CreateOperationResponse>(response, isSucceeded: saveResponseResult.IsSucceeded);
+            return new Result<CreateOperationResponse>(response, isSucceeded: addResponseResult.IsSucceeded);
         }
 
         [HttpDelete("{operationId}")]

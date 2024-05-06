@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
-using HomeBudget.Components.Transfers.Models;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
 {

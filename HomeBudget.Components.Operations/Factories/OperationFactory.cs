@@ -36,20 +36,21 @@ namespace HomeBudget.Components.Operations.Factories
             return new Result<PaymentOperation>(payload);
         }
 
-        public Result<TransferOperation> CreateTransferOperation(
+        public Result<PaymentOperation> CreateTransferOperation(
             Guid paymentAccountId,
+            Guid transferOperationId,
             decimal amount,
             DateOnly operationDay)
         {
-            var payload = new TransferOperation
+            var payload = new PaymentOperation
             {
-                Key = Guid.NewGuid(),
-                OperationDay = operationDay,
-                Amount = amount,
+                Key = transferOperationId,
                 PaymentAccountId = paymentAccountId,
+                OperationDay = operationDay,
+                Amount = amount
             };
 
-            return new Result<TransferOperation>(payload);
+            return new Result<PaymentOperation>(payload);
         }
     }
 }

@@ -29,11 +29,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HomeBudget.Components.Opera
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HomeBudget.Accounting.Infrastructure", "HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj", "{3E693F31-1BEC-420A-906A-3313EF61CFF8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Components.Transfers", "HomeBudget.Components.Transfers\HomeBudget.Components.Transfers.csproj", "{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Components.Transfers.Tests", "HomeBudget.Components.Transfers.Tests\HomeBudget.Components.Transfers.Tests.csproj", "{D59AE83F-D8F7-406B-B67E-4B8E269B6435}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Accounting.Api.Tests", "HomeBudget.Accounting.Api.Tests\HomeBudget.Accounting.Api.Tests.csproj", "{02045618-C7AF-4F79-AC72-3FF3B5E6F206}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HomeBudget.Accounting.Api.Tests", "HomeBudget.Accounting.Api.Tests\HomeBudget.Accounting.Api.Tests.csproj", "{02045618-C7AF-4F79-AC72-3FF3B5E6F206}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -77,14 +73,6 @@ Global
 		{3E693F31-1BEC-420A-906A-3313EF61CFF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3E693F31-1BEC-420A-906A-3313EF61CFF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3E693F31-1BEC-420A-906A-3313EF61CFF8}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D59AE83F-D8F7-406B-B67E-4B8E269B6435}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D59AE83F-D8F7-406B-B67E-4B8E269B6435}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D59AE83F-D8F7-406B-B67E-4B8E269B6435}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D59AE83F-D8F7-406B-B67E-4B8E269B6435}.Release|Any CPU.Build.0 = Release|Any CPU
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -103,8 +91,6 @@ Global
 		{BC919372-37B2-46DA-9564-4509170B157E} = {FD1ACF02-14AC-4994-8EF9-FCE52243E971}
 		{F3E8C228-2D8F-48F1-80F7-FCA4BBD96671} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{3E693F31-1BEC-420A-906A-3313EF61CFF8} = {CE42AC29-2775-4FD3-93CC-9FF005700C8C}
-		{0F3FD776-9DF1-4E6B-9E02-ACDE7A22DB78} = {FD1ACF02-14AC-4994-8EF9-FCE52243E971}
-		{D59AE83F-D8F7-406B-B67E-4B8E269B6435} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution

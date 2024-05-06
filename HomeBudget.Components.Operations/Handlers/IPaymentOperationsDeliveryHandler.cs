@@ -1,11 +1,11 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-using Confluent.Kafka;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Handlers;
 
 internal interface IPaymentOperationsDeliveryHandler
 {
-    Task HandleAsync(DeliveryResult<string, string> deliveryResult, CancellationToken cancellationToken);
+    Task HandleAsync(PaymentOperationEvent paymentEvent, CancellationToken cancellationToken);
 }

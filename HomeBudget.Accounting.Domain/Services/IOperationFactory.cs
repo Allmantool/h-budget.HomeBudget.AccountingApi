@@ -14,8 +14,9 @@ namespace HomeBudget.Accounting.Domain.Services
             string contractorId,
             DateOnly operationDay);
 
-        Result<TransferOperation> CreateTransferOperation(
+        Result<PaymentOperation> CreateTransferOperation(
             Guid paymentAccountId,
+            Guid transferOperationId,
             decimal amount,
             DateOnly operationDay);
     }
