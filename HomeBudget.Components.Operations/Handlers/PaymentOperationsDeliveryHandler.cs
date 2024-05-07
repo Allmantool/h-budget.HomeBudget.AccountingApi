@@ -20,7 +20,7 @@ namespace HomeBudget.Components.Operations.Handlers
                 paymentEvent,
                 token: cancellationToken);
 
-            logger.LogInformation($"'{paymentEvent.Payload.GetIdentifier()}' has been streamed successfully");
+            logger.LogInformation("'{eventIdentifier}' has been streamed successfully", paymentEvent.Payload.GetIdentifier());
         }
     }
 }

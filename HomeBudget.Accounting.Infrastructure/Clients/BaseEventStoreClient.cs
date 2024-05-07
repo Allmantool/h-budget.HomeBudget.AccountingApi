@@ -32,7 +32,8 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 .AppendToStreamAsync(
                     streamName ?? nameof(T),
                     StreamState.Any,
-                    new[] { eventData },
+                    [eventData],
+                    deadline: TimeSpan.FromSeconds(30),
                     cancellationToken: token);
 
             return writeResult;

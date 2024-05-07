@@ -8,7 +8,7 @@ using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Clients.Interfaces
 {
-    public interface IPaymentsHistoryDocumentsClient : IDocumentClient<PaymentHistoryDocument>
+    public interface IPaymentsHistoryDocumentsClient : IDocumentClient
     {
         Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountingId);
 

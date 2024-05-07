@@ -8,7 +8,7 @@ using HomeBudget.Components.Contractors.Models;
 
 namespace HomeBudget.Components.Contractors.Clients.Interfaces
 {
-    public interface IContractorDocumentsClient : IDocumentClient<ContractorDocument>
+    public interface IContractorDocumentsClient : IDocumentClient
     {
         Task<Result<IReadOnlyCollection<ContractorDocument>>> GetAsync();
 
