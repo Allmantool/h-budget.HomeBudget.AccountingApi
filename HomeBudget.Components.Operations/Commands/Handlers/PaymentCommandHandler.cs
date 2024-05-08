@@ -6,19 +6,20 @@ using AutoMapper;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Accounts.CQRS.Commands.Models;
+using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
-namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
+namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
         IMapper mapper,
         ISender sender,
-        IKafkaDependentProducer<string, string> producer,
         IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
+        IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler,
         IPaymentOperationsHistoryService paymentOperationsHistoryService)
     {
         protected async Task<Result<Guid>> HandleAsync<T>(
@@ -29,15 +30,11 @@ namespace HomeBudget.Components.Operations.CQRS.Commands.Handlers
 
             var paymentAccountId = paymentEvent.Payload.PaymentAccountId;
 
-            var paymentMessageConversionResult = PaymentEventToMessageConverter.Convert(paymentEvent);
+            var paymentMessage = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-            var result = await producer.ProduceAsync(
-                paymentAccountId.ToString(),
-                paymentMessageConversionResult.Payload,
-                cancellationToken
-            );
+            fireAndForgetHandler.Execute(async producer => await producer.ProduceAsync(paymentAccountId.ToString(), paymentMessage.Payload, cancellationToken));
 
-            await operationsDeliveryHandler.HandleAsync(result, cancellationToken);
+            await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
 
             var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId);
 

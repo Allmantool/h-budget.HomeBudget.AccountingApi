@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Components.Operations.Models
 {
-    public class PaymentOperationPayload
+    public record PaymentOperationPayload
     {
         public decimal Amount { get; set; }
         public string Comment { get; set; }

@@ -8,7 +8,7 @@ using HomeBudget.Components.Categories.Models;
 
 namespace HomeBudget.Components.Categories.Clients.Interfaces
 {
-    public interface ICategoryDocumentsClient : IDocumentClient<CategoryDocument>
+    public interface ICategoryDocumentsClient : IDocumentClient
     {
         Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync();
 

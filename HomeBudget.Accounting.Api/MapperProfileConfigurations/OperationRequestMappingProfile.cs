@@ -5,9 +5,9 @@ using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
 {
-    internal class CreateOperationRequestMappingProfile : Profile
+    internal class OperationRequestMappingProfile : Profile
     {
-        public CreateOperationRequestMappingProfile()
+        public OperationRequestMappingProfile()
         {
             CreateMap<CreateOperationRequest, PaymentOperationPayload>()
                 .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))

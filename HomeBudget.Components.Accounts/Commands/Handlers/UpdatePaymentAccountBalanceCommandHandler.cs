@@ -6,9 +6,9 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
-using HomeBudget.Components.Accounts.CQRS.Commands.Models;
+using HomeBudget.Components.Accounts.Commands.Models;
 
-namespace HomeBudget.Components.Accounts.CQRS.Commands.Handlers
+namespace HomeBudget.Components.Accounts.Commands.Handlers
 {
     internal class UpdatePaymentAccountBalanceCommandHandler(IPaymentAccountDocumentClient paymentAccountDocumentClient)
         : IRequestHandler<UpdatePaymentAccountBalanceCommand, Result<Guid>>

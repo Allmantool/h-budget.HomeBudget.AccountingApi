@@ -1,6 +1,6 @@
 ﻿using AutoMapper;
 
-using HomeBudget.Components.Operations.CQRS.Commands.Models;
+using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.MapperProfileConfigurations
@@ -9,7 +9,7 @@ namespace HomeBudget.Components.Operations.MapperProfileConfigurations
     {
         public PaymentOperationEventMappingProfile()
         {
-            CreateMap<SavePaymentOperationCommand, PaymentOperationEvent>()
+            CreateMap<AddPaymentOperationCommand, PaymentOperationEvent>()
                 .ForMember(dest => dest.Payload, opt => opt.MapFrom(src => src.OperationForAdd))
                 .ForMember(dest => dest.EventType, opt => opt.MapFrom(src => PaymentEventTypes.Added));
 

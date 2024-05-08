@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Api.Models.Category
 {
-    public class CreateCategoryRequest
+    public record CreateCategoryRequest
     {
         public IEnumerable<string> NameNodes { get; set; }
 

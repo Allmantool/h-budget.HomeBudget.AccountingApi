@@ -16,17 +16,17 @@ using HomeBudget.Components.Operations.Models;
 namespace HomeBudget.Components.Operations.Tests
 {
     [TestFixture]
-    public class PaymentOperationsDependentProducerTests
+    public class PaymentOperationsProducerTests
     {
         private KafkaContainer _kafkaContainer;
-        private PaymentOperationsDependentProducer _sut;
+        private PaymentOperationsProducer _sut;
 
         [OneTimeSetUp]
         public void Setup()
         {
             _kafkaContainer = new KafkaBuilder()
                 .WithImage("confluentinc/cp-kafka:7.4.3")
-                .WithName($"{nameof(PaymentOperationsDependentProducerTests)}-container")
+                .WithName($"{nameof(PaymentOperationsProducerTests)}-container")
                 .WithHostname("test-kafka-host")
                 .WithAutoRemove(true)
                 .WithCleanUp(true)
@@ -55,7 +55,7 @@ namespace HomeBudget.Components.Operations.Tests
 
                 var handler = new PaymentOperationsClientHandlerHandler(kafkaOptions);
 
-                _sut = new PaymentOperationsDependentProducer(handler);
+                _sut = new PaymentOperationsProducer(handler);
 
                 var paymentEvent = new PaymentOperationEvent
                 {

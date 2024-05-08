@@ -20,12 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="CQRS\Queries\Models\" />
-    <Folder Include="CQRS\Queries\Handlers\" />
+    <Folder Include="Queries\Models\" />
+    <Folder Include="Queries\Handlers\" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.23.2.88755" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.24.0.89429" />
   </ItemGroup>
 
   <ItemGroup>

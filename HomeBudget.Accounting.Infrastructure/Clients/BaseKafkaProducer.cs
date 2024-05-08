@@ -8,20 +8,20 @@ using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
-    public class BaseKafkaDependentProducer<K, V>(IKafkaClientHandler handle)
-        : IKafkaDependentProducer<K, V>
+    public class BaseKafkaProducer<TKey, TValue>(IKafkaClientHandler handle)
+        : IKafkaProducer<TKey, TValue>
     {
-        private readonly IProducer<K, V> _kafkaHandle = new DependentProducerBuilder<K, V>(handle.Handle).Build();
+        private readonly IProducer<TKey, TValue> _kafkaHandle = new DependentProducerBuilder<TKey, TValue>(handle.Handle).Build();
 
         public void Produce(
             string topic,
-            Message<K, V> message,
-            Action<DeliveryReport<K, V>> deliveryHandler = null)
+            Message<TKey, TValue> message,
+            Action<DeliveryReport<TKey, TValue>> deliveryHandler = null)
             => _kafkaHandle.Produce(topic, message, deliveryHandler);
 
-        public Task<DeliveryResult<K, V>> ProduceAsync(
+        public Task<DeliveryResult<TKey, TValue>> ProduceAsync(
             string topic,
-            Message<K, V> message,
+            Message<TKey, TValue> message,
             CancellationToken token)
             => _kafkaHandle.ProduceAsync(topic, message, token);
 

@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Api.Models.Contractor
 {
-    public class CreateContractorRequest
+    public record CreateContractorRequest
     {
         public IEnumerable<string> NameNodes { get; set; }
     }

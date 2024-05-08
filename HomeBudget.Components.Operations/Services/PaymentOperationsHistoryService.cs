@@ -76,7 +76,7 @@ namespace HomeBudget.Components.Operations.Services
             foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
                 var previousRecordBalance = operationsHistory.Any()
-                    ? operationsHistory.Last().Balance
+                    ? operationsHistory[^1].Balance
                     : 0;
 
                 operationsHistory.Add(
@@ -92,7 +92,14 @@ namespace HomeBudget.Components.Operations.Services
 
         private async Task<decimal> CalculateIncrementAsync(PaymentOperation operation)
         {
-            var documentResult = await categoryDocumentsClient.GetByIdAsync(operation.CategoryId);
+            var categoryId = operation.CategoryId;
+
+            if (operation.CategoryId.Equals(Guid.Empty))
+            {
+                return operation.Amount;
+            }
+
+            var documentResult = await categoryDocumentsClient.GetByIdAsync(categoryId);
             var documentPayload = documentResult.Payload;
             var category = documentPayload.Payload;
 

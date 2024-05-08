@@ -20,10 +20,10 @@ namespace HomeBudget.Accounting.Api.Configuration
         {
             return services
                 .SetUpConfigurationOptions(configuration)
-                .RegisterPaymentAccountsIoCDependency()
-                .RegisterContractorsIoCDependency()
-                .RegisterOperationsIoCDependency(webHostEnvironment.EnvironmentName)
-                .RegisterCategoriesIoCDependency();
+                .RegisterPaymentAccountsDependencies()
+                .RegisterContractorsDependencies()
+                .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
+                .RegisterCategoriesDependencies();
         }
 
         public static IServiceCollection SetUpConfigurationOptions(

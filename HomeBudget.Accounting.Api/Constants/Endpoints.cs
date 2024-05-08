@@ -4,6 +4,7 @@
     {
         public const string PaymentOperations = "payment-operations";
         public const string PaymentsHistory = "payments-history";
+        public const string CrossAccountsTransfer = "cross-accounts-transfer";
 
         public const string PaymentOperationsByPaymentAccountId = "payment-operations/{paymentAccountId}";
         public const string PaymentsHistoryByPaymentAccountId = "payments-history/{paymentAccountId}";

@@ -1,4 +1,5 @@
 ﻿using System;
+
 using EventStore.Client;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -9,25 +10,27 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients;
+using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Components.Operations.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
     public static class DependencyRegistrations
     {
-        public static IServiceCollection RegisterOperationsIoCDependency(this IServiceCollection services, string webHostEnvironment)
+        public static IServiceCollection RegisterOperationsDependencies(this IServiceCollection services, string webHostEnvironment)
         {
             return services
                 .AddScoped<IOperationFactory, OperationFactory>()
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<IOperationsHistoryProvider, OperationsHistoryProvider>()
+                .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
+                .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
                 .AddMediatR(configuration =>
                 {
                     configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
@@ -41,7 +44,7 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
-                .AddSingleton<IKafkaDependentProducer<string, string>, PaymentOperationsDependentProducer>()
+                .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
