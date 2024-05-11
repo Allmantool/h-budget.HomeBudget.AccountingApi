@@ -22,7 +22,7 @@ namespace HomeBudget.Components.Contractors.Clients
 
             var payload = await targetCollection.FindAsync(_ => true);
 
-            return new Result<IReadOnlyCollection<ContractorDocument>>(await payload.ToListAsync());
+            return Result<IReadOnlyCollection<ContractorDocument>>.Succeeded(await payload.ToListAsync());
         }
 
         public async Task<Result<ContractorDocument>> GetByIdAsync(Guid contractorId)
@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Contractors.Clients
 
             var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
 
-            return new Result<ContractorDocument>(await payload.SingleOrDefaultAsync());
+            return Result<ContractorDocument>.Succeeded(await payload.SingleOrDefaultAsync());
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
@@ -56,7 +56,7 @@ namespace HomeBudget.Components.Contractors.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<Guid>(document.Payload.Key);
+            return Result<Guid>.Succeeded(document.Payload.Key);
         }
 
         private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()

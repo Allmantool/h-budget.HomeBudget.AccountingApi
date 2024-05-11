@@ -77,7 +77,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Assert.Multiple(() =>
             {
                 duplicatedCategoryResult.IsSucceeded.Should().BeFalse();
-                duplicatedCategoryResult.Message.Should().BeEquivalentTo("The category with '1-categoryType,duplicated,nodes' key already exists");
+                duplicatedCategoryResult.StatusMessage.Should().BeEquivalentTo("The category with '1-categoryType,duplicated,nodes' key already exists");
             });
         }
 

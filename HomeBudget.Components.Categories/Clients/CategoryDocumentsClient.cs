@@ -22,7 +22,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             var payload = await targetCollection.FindAsync(_ => true);
 
-            return new Result<IReadOnlyCollection<CategoryDocument>>(await payload.ToListAsync());
+            return Result<IReadOnlyCollection<CategoryDocument>>.Succeeded(await payload.ToListAsync());
         }
 
         public async Task<Result<CategoryDocument>> GetByIdAsync(Guid contractorId)
@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
 
-            return new Result<CategoryDocument>(await payload.SingleOrDefaultAsync());
+            return Result<CategoryDocument>.Succeeded(await payload.SingleOrDefaultAsync());
         }
 
         public async Task<Result<Guid>> InsertOneAsync(Category payload)
@@ -45,7 +45,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<Guid>(document.Payload.Key);
+            return Result<Guid>.Succeeded(document.Payload.Key);
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)

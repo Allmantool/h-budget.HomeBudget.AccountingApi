@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
 
+using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Handlers;
@@ -44,7 +44,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     upToDateBalanceResult.Payload),
                 cancellationToken);
 
-            return new Result<Guid>(paymentEvent.Payload.Key);
+            return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
         }
     }
 }

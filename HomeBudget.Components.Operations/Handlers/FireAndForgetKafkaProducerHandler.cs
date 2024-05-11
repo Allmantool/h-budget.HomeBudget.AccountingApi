@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-
+using HomeBudget.Accounting.Domain.Handlers;
 using Microsoft.Extensions.DependencyInjection;
-
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Handlers

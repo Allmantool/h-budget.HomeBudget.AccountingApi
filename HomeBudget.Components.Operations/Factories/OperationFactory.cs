@@ -1,7 +1,7 @@
 ﻿using System;
 
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 
 namespace HomeBudget.Components.Operations.Factories
 {
@@ -17,9 +17,7 @@ namespace HomeBudget.Components.Operations.Factories
         {
             if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
             {
-                return new Result<PaymentOperation>(
-                    isSucceeded: false,
-                    message: $"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
+                return Result<PaymentOperation>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
             }
 
             var payload = new PaymentOperation
@@ -33,24 +31,22 @@ namespace HomeBudget.Components.Operations.Factories
                 ContractorId = contractorGuid
             };
 
-            return new Result<PaymentOperation>(payload);
+            return Result<PaymentOperation>.Succeeded(payload);
         }
 
         public Result<PaymentOperation> CreateTransferOperation(
             Guid paymentAccountId,
-            Guid transferOperationId,
             decimal amount,
             DateOnly operationDay)
         {
             var payload = new PaymentOperation
             {
-                Key = transferOperationId,
                 PaymentAccountId = paymentAccountId,
                 OperationDay = operationDay,
                 Amount = amount
             };
 
-            return new Result<PaymentOperation>(payload);
+            return Result<PaymentOperation>.Succeeded(payload);
         }
     }
 }

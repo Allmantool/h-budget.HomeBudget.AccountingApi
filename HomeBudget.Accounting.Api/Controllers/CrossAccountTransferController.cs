@@ -31,10 +31,14 @@ namespace HomeBudget.Accounting.Api.Controllers
             var response = new CrossAccountsTransferResponse
             {
                 PaymentOperationId = responseResult.Payload.ToString(),
-                PaymentAccountIds = new[] { request.Sender, request.Recipient }
+                PaymentAccountIds =
+                [
+                    request.Sender,
+                    request.Recipient
+                ]
             };
 
-            return new Result<CrossAccountsTransferResponse>(response, isSucceeded: responseResult.IsSucceeded);
+            return Result<CrossAccountsTransferResponse>.Succeeded(response);
         }
     }
 }

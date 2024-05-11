@@ -1,14 +1,16 @@
 ﻿using System;
-
 using EventStore.Client;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Factories;
+using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Factories;
@@ -26,6 +28,7 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             return services
                 .AddScoped<IOperationFactory, OperationFactory>()
+                .AddScoped<ICrossAccountsTransferBuilder, CrossAccountsTransferBuilder>()
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<IOperationsHistoryProvider, OperationsHistoryProvider>()

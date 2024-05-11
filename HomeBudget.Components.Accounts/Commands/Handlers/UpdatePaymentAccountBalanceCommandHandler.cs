@@ -25,7 +25,7 @@ namespace HomeBudget.Components.Accounts.Commands.Handlers
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(request.PaymentAccountId.ToString(), paymentAccountForUpdate);
 
-            return new Result<Guid>(payload: updateResult.Payload);
+            return Result<Guid>.Succeeded(updateResult.Payload);
         }
     }
 }

@@ -187,12 +187,18 @@ namespace HomeBudget.Components.Operations.Tests.Services
 
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
 
+            var payload = new CategoryDocument
+            {
+                Payload = new Category(
+                    CategoryTypes.Income,
+                    [
+                        "test-category"
+                    ])
+            };
+
             categoriesClient
                 .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
-                .ReturnsAsync(() => new Result<CategoryDocument>(new CategoryDocument
-                {
-                    Payload = new Category(CategoryTypes.Income, new[] { "test-category" })
-                }));
+                .ReturnsAsync(() => Result<CategoryDocument>.Succeeded(payload));
 
             return new PaymentOperationsHistoryService(eventDbClient.Object, paymentsHistoryClient.Object, categoriesClient.Object);
         }

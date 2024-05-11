@@ -7,11 +7,11 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    internal class ApplyTransferCommand(TransferOperation transferOperations)
+    internal class ApplyTransferCommand(CrossAccountsTransferOperation crossAccountsTransferOperations)
         : IRequest<Result<Guid>>
     {
-        public Guid Key { get; } = transferOperations.Key;
+        public Guid Key { get; } = crossAccountsTransferOperations.Key;
 
-        public IReadOnlyCollection<PaymentOperation> PaymentOperations { get; } = transferOperations.PaymentOperations;
+        public IReadOnlyCollection<PaymentOperation> PaymentOperations { get; } = crossAccountsTransferOperations.PaymentOperations;
     }
 }

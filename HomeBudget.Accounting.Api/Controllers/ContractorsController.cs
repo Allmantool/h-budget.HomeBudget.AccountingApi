@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Contractor;
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Contractors.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
@@ -27,7 +27,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (!documentsResult.IsSucceeded)
             {
-                return new Result<IReadOnlyCollection<Contractor>>(isSucceeded: false);
+                return Result<IReadOnlyCollection<Contractor>>.Failure();
             }
 
             var contractors = documentsResult.Payload
@@ -36,7 +36,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.OperationUnixTime)
                 .ToList();
 
-            return new Result<IReadOnlyCollection<Contractor>>(contractors);
+            return Result<IReadOnlyCollection<Contractor>>.Succeeded(contractors);
         }
 
         [HttpGet("byId/{contractorId}")]
@@ -44,21 +44,19 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(contractorId, out var targetContractorId))
             {
-                return new Result<Contractor>(
-                    isSucceeded: false,
-                    message: $"Invalid '{nameof(targetContractorId)}' has been provided");
+                return Result<Contractor>.Failure($"Invalid '{nameof(targetContractorId)}' has been provided");
             }
 
             var documentResult = await contractorDocumentsClient.GetByIdAsync(targetContractorId);
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return new Result<Contractor>(isSucceeded: false, message: $"The contractor with '{contractorId}' hasn't been found");
+                return Result<Contractor>.Failure($"The contractor with '{contractorId}' hasn't been found");
             }
 
             var document = documentResult.Payload;
 
-            return new Result<Contractor>(document.Payload);
+            return Result<Contractor>.Succeeded(document.Payload);
         }
 
         [HttpPost]
@@ -68,12 +66,12 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (await contractorDocumentsClient.CheckIfExistsAsync(newContractor.ContractorKey))
             {
-                return new Result<Guid>(isSucceeded: false, message: $"The contractor with '{newContractor.ContractorKey}' key already exists");
+                return Result<Guid>.Failure($"The contractor with '{newContractor.ContractorKey}' key already exists");
             }
 
             var saveResult = await contractorDocumentsClient.InsertOneAsync(newContractor);
 
-            return new Result<Guid>(saveResult.Payload);
+            return Result<Guid>.Succeeded(saveResult.Payload);
         }
     }
 }

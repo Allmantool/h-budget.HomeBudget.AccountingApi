@@ -17,9 +17,7 @@ namespace HomeBudget.Components.Operations
 
             if (eventPayload == null)
             {
-                return new Result<Message<string, string>>(
-                    isSucceeded: false,
-                    message: $"'{nameof(PaymentOperationEvent)}' can not be null");
+                return Result<Message<string, string>>.Failure($"'{nameof(PaymentOperationEvent)}' can not be null");
             }
 
             var message = new Message<string, string>
@@ -29,7 +27,7 @@ namespace HomeBudget.Components.Operations
                 Timestamp = new Timestamp(DateTime.UtcNow),
             };
 
-            return new Result<Message<string, string>>(message);
+            return Result<Message<string, string>>.Succeeded(message);
         }
     }
 }

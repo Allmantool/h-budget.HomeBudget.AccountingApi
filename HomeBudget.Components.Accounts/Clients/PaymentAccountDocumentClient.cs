@@ -22,7 +22,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             var payload = await targetCollection.FindAsync(_ => true);
 
-            return new Result<IReadOnlyCollection<PaymentAccountDocument>>(await payload.ToListAsync());
+            return Result<IReadOnlyCollection<PaymentAccountDocument>>.Succeeded(await payload.ToListAsync());
         }
 
         public async Task<Result<PaymentAccountDocument>> GetByIdAsync(string paymentAccountId)
@@ -33,7 +33,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             var payload = await targetCollection.FindAsync(filter);
 
-            return new Result<PaymentAccountDocument>(await payload.SingleOrDefaultAsync());
+            return Result<PaymentAccountDocument>.Succeeded(await payload.SingleOrDefaultAsync());
         }
 
         public async Task<Result<Guid>> InsertOneAsync(PaymentAccount payload)
@@ -47,7 +47,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             await targetCollection.InsertOneAsync(document);
 
-            return new Result<Guid>(document.Payload.Key);
+            return Result<Guid>.Succeeded(document.Payload.Key);
         }
 
         public async Task<Result<Guid>> RemoveAsync(string paymentAccountId)
@@ -60,7 +60,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             await targetCollection.DeleteOneAsync(filter);
 
-            return new Result<Guid>(paymentAccountIdForDelete);
+            return Result<Guid>.Succeeded(paymentAccountIdForDelete);
         }
 
         public async Task<Result<Guid>> UpdateAsync(string requestPaymentAccountGuid, PaymentAccount paymentAccountForUpdate)
@@ -81,7 +81,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             await targetCollection.ReplaceOneAsync(filter, replacement);
 
-            return new Result<Guid>(paymentAccountIdForUpdate);
+            return Result<Guid>.Succeeded(paymentAccountIdForUpdate);
         }
 
         private async Task<IMongoCollection<PaymentAccountDocument>> GetPaymentAccountsCollectionAsync()
