@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 
 using FluentAssertions;
 using NUnit.Framework;
@@ -36,6 +37,34 @@ namespace HomeBudget.Components.Operations.Tests.Builders
                 .Build();
 
             result.IsSucceeded.Should().BeTrue();
+        }
+
+        [Test]
+        public void Build_WhenStandardBuild_ThenAlightWithRules()
+        {
+            var result = _sut
+                .WithRecipient(new PaymentOperation
+                {
+                    PaymentAccountId = Guid.Parse("bfdc41fb-5203-4d22-93bf-a7bc55b99f0f"),
+                })
+                .WithSender(new PaymentOperation
+                {
+                    PaymentAccountId = Guid.Parse("54095569-8e60-4500-b166-7b761dbe3103"),
+                })
+                .Build();
+
+            var transfer = result.Payload;
+            var operations = transfer.PaymentOperations;
+
+            Assert.Multiple(() =>
+            {
+                operations.First().Key = operations.Last().Key;
+
+                operations.First().Key.Should().Be(transfer.Key);
+                operations.Last().Key.Should().Be(transfer.Key);
+
+                operations.First().PaymentAccountId.Should().NotBe(operations.Last().PaymentAccountId);
+            });
         }
     }
 }

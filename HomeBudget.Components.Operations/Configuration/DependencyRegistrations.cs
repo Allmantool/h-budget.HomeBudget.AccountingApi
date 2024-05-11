@@ -16,7 +16,6 @@ using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Providers;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 
@@ -31,7 +30,6 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<ICrossAccountsTransferBuilder, CrossAccountsTransferBuilder>()
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
-                .AddScoped<IOperationsHistoryProvider, OperationsHistoryProvider>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
                 .AddMediatR(configuration =>
@@ -46,7 +44,7 @@ namespace HomeBudget.Components.Operations.Configuration
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
         {
             return services
-                .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandlerHandler>()
+                .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }

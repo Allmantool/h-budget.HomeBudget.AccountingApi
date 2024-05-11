@@ -40,5 +40,23 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             return Result<CrossAccountsTransferResponse>.Succeeded(response);
         }
+
+        [HttpDelete]
+        public async Task<Result<CrossAccountsTransferResponse>> RemoveAsync(
+            RemoveTransferRequest request,
+            CancellationToken token = default)
+        {
+            var removeTransferPayload = mapper.Map<RemoveTransferPayload>(request);
+
+            var responseResult = await crossAccountsTransferService.RemoveAsync(removeTransferPayload, token);
+
+            var response = new CrossAccountsTransferResponse
+            {
+                PaymentOperationId = removeTransferPayload.TransferOperationId.ToString(),
+                PaymentAccountIds = responseResult.Payload
+            };
+
+            return Result<CrossAccountsTransferResponse>.Succeeded(response);
+        }
     }
 }
