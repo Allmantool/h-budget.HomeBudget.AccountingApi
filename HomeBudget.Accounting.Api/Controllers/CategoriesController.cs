@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Category;
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
@@ -26,7 +26,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (!documentsResult.IsSucceeded)
             {
-                return new Result<IReadOnlyCollection<Category>>(isSucceeded: false);
+                return Result<IReadOnlyCollection<Category>>.Failure();
             }
 
             var categories = documentsResult.Payload
@@ -35,7 +35,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.OperationUnixTime)
                 .ToList();
 
-            return new Result<IReadOnlyCollection<Category>>(categories);
+            return Result<IReadOnlyCollection<Category>>.Succeeded(categories);
         }
 
         [HttpGet("byId/{categoryId}")]
@@ -43,21 +43,19 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(categoryId, out var targetCategoryId))
             {
-                return new Result<Category>(
-                    isSucceeded: false,
-                    message: $"Invalid '{nameof(targetCategoryId)}' has been provided");
+                return Result<Category>.Failure($"Invalid '{nameof(targetCategoryId)}' has been provided");
             }
 
             var documentResult = await categoryDocumentsClient.GetByIdAsync(targetCategoryId);
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return new Result<Category>(isSucceeded: false, message: $"The contractor with '{targetCategoryId}' hasn't been found");
+                return Result<Category>.Failure($"The contractor with '{targetCategoryId}' hasn't been found");
             }
 
             var document = documentResult.Payload;
 
-            return new Result<Category>(document.Payload);
+            return Result<Category>.Succeeded(document.Payload);
         }
 
         [HttpPost]
@@ -67,12 +65,12 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))
             {
-                return new Result<Guid>(isSucceeded: false, message: $"The category with '{newCategory.CategoryKey}' key already exists");
+                return Result<Guid>.Failure($"The category with '{newCategory.CategoryKey}' key already exists");
             }
 
             var saveResult = await categoryDocumentsClient.InsertOneAsync(newCategory);
 
-            return new Result<Guid>(saveResult.Payload);
+            return Result<Guid>.Succeeded(saveResult.Payload);
         }
     }
 }

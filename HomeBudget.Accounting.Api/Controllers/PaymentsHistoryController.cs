@@ -26,7 +26,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.Record.OperationUnixTime)
                 .ToList();
 
-            return new Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>(paymentAccountOperations);
+            return Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>.Succeeded(paymentAccountOperations);
         }
 
         [HttpGet("byId/{operationId}")]
@@ -34,16 +34,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
-                return new Result<PaymentOperationHistoryRecord>(
-                    isSucceeded: false,
-                    message: $"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
+                return Result<PaymentOperationHistoryRecord>.Failure($"Invalid payment account '{nameof(targetAccountGuid)}' has been provided");
             }
 
             if (!Guid.TryParse(operationId, out var targetOperationGuid))
             {
-                return new Result<PaymentOperationHistoryRecord>(
-                    isSucceeded: false,
-                    message: $"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
+                return Result<PaymentOperationHistoryRecord>.Failure($"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
             var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetOperationGuid);
@@ -51,8 +47,8 @@ namespace HomeBudget.Accounting.Api.Controllers
             var operationById = document.Payload;
 
             return operationById == null
-                ? new Result<PaymentOperationHistoryRecord>(isSucceeded: false, message: $"The operation with '{operationId}' hasn't been found")
-                : new Result<PaymentOperationHistoryRecord>(payload: operationById);
+                ? Result<PaymentOperationHistoryRecord>.Failure($"The operation with '{operationId}' hasn't been found")
+                : Result<PaymentOperationHistoryRecord>.Succeeded(operationById);
         }
     }
 }

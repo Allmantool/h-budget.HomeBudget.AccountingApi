@@ -10,6 +10,7 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
         public CrossAccountsTransferRequestMappingProfiler()
         {
             CreateMap<CrossAccountsTransferRequest, CrossAccountsTransferPayload>();
+            CreateMap<RemoveTransferRequest, RemoveTransferPayload>();
         }
     }
 }

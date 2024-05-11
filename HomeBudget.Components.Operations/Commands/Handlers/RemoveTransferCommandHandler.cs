@@ -14,7 +14,7 @@ using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
-    internal class ApplyTransferCommandHandler(
+    internal class RemoveTransferCommandHandler(
         IMapper mapper,
         ISender sender,
         IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
@@ -25,13 +25,13 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             sender,
             operationsDeliveryHandler,
             fireAndForgetHandler,
-            paymentOperationsHistoryService), IRequestHandler<ApplyTransferCommand, Result<Guid>>
+            paymentOperationsHistoryService), IRequestHandler<RemoveTransferCommand, Result<Guid>>
     {
-        public async Task<Result<Guid>> Handle(ApplyTransferCommand request, CancellationToken cancellationToken)
+        public async Task<Result<Guid>> Handle(RemoveTransferCommand request, CancellationToken cancellationToken)
         {
             foreach (var paymentOperation in request.PaymentOperations)
             {
-                await HandleAsync(new AddPaymentOperationCommand(paymentOperation), cancellationToken);
+                await HandleAsync(new RemovePaymentOperationCommand(paymentOperation), cancellationToken);
             }
 
             return Result<Guid>.Succeeded(request.Key);

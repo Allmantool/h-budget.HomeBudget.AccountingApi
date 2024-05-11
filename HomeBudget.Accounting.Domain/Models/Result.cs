@@ -1,9 +1,15 @@
 ﻿namespace HomeBudget.Accounting.Domain.Models
 {
-    public class Result<T>(T payload = default, string message = default, bool isSucceeded = true)
+    public class Result<T>(
+        T payload,
+        string statusMessage,
+        bool isSucceeded)
     {
-        public T Payload { get; } = payload;
-        public bool IsSucceeded { get; } = isSucceeded;
-        public string Message { get; } = message;
+        public T Payload { get; private set; } = payload;
+        public bool IsSucceeded { get; private set; } = isSucceeded;
+        public string StatusMessage { get; private set; } = statusMessage;
+
+        public static Result<T> Succeeded(T payload) => new(payload, null, true);
+        public static Result<T> Failure(string errorMessage = default) => new(default, errorMessage, false);
     }
 }

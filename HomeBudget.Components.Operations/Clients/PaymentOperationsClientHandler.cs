@@ -8,11 +8,11 @@ using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal sealed class PaymentOperationsClientHandlerHandler : IKafkaClientHandler
+    internal sealed class PaymentOperationsClientHandler : IKafkaClientHandler
     {
         private IProducer<byte[], byte[]> KafkaProducer { get; }
 
-        public PaymentOperationsClientHandlerHandler(IOptions<KafkaOptions> options)
+        public PaymentOperationsClientHandler(IOptions<KafkaOptions> options)
         {
             var kafkaOptions = options.Value;
             var producerSettings = kafkaOptions.ProducerSettings;

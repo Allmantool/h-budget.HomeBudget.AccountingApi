@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Api.Controllers
@@ -26,7 +26,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (!documentsResult.IsSucceeded)
             {
-                return new Result<IReadOnlyCollection<PaymentAccount>>(isSucceeded: false);
+                return Result<IReadOnlyCollection<PaymentAccount>>.Failure();
             }
 
             var paymentAccounts = documentsResult.Payload
@@ -36,7 +36,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.OperationUnixTime)
                 .ToList();
 
-            return new Result<IReadOnlyCollection<PaymentAccount>>(paymentAccounts);
+            return Result<IReadOnlyCollection<PaymentAccount>>.Succeeded(paymentAccounts);
         }
 
         [HttpGet("byId/{paymentAccountId}")]
@@ -44,19 +44,19 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return new Result<PaymentAccount>(isSucceeded: false, message: $"Invalid {nameof(paymentAccountId)} has been provided");
+                return Result<PaymentAccount>.Failure($"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
             var documentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return new Result<PaymentAccount>(isSucceeded: false, message: $"The payment account with '{paymentAccountId}' hasn't been found");
+                return Result<PaymentAccount>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
             }
 
             var document = documentResult.Payload;
 
-            return new Result<PaymentAccount>(document.Payload);
+            return Result<PaymentAccount>.Succeeded(document.Payload);
         }
 
         [HttpPost]
@@ -71,7 +71,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 
-            return new Result<Guid>(saveResult.Payload);
+            return Result<Guid>.Succeeded(saveResult.Payload);
         }
 
         [HttpDelete("{paymentAccountId}")]
@@ -79,12 +79,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return new Result<Guid>(isSucceeded: false, message: $"Invalid '{nameof(paymentAccountId)}' has been provided");
+                return Result<Guid>.Failure($"Invalid '{nameof(paymentAccountId)}' has been provided");
             }
 
             var deleteResult = await paymentAccountDocumentClient.RemoveAsync(paymentAccountId);
 
-            return new Result<Guid>(payload: deleteResult.Payload);
+            return Result<Guid>.Succeeded(deleteResult.Payload);
         }
 
         [HttpPatch("{paymentAccountId}")]
@@ -92,9 +92,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return new Result<Guid>(
-                    isSucceeded: false,
-                    message: $"Invalid '{nameof(paymentAccountId)}' has been provided");
+                return Result<Guid>.Failure($"Invalid '{nameof(paymentAccountId)}' has been provided");
             }
 
             var paymentAccountForUpdate = new PaymentAccount
@@ -108,7 +106,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(paymentAccountId, paymentAccountForUpdate);
 
-            return new Result<Guid>(updateResult.Payload);
+            return Result<Guid>.Succeeded(updateResult.Payload);
         }
     }
 }

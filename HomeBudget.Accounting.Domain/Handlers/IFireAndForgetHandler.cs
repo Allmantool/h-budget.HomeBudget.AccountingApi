@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace HomeBudget.Accounting.Domain.Services
+namespace HomeBudget.Accounting.Domain.Handlers
 {
     public interface IFireAndForgetHandler<out T>
     {

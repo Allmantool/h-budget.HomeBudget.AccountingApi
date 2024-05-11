@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using FluentAssertions;
 using NUnit.Framework;
 using RestSharp;
@@ -42,10 +43,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Multiplier = 0.12m
             };
 
-            var postCreateRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
+            var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(postCreateRequest);
+            await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createRequest);
 
             var getSenderOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{senderAccountId}");
 
@@ -68,6 +69,56 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var recipientOperationId = recipientHistoryResponsePayload.Single().Record.Key;
 
                 recipientOperationId.Should().Be(senderOperationId);
+            });
+        }
+
+        [Test]
+        public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeleted()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.BYN)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.USD)).Payload;
+
+            var createTransferRequestBody = new CrossAccountsTransferRequest
+            {
+                Amount = 100,
+                Recipient = recipientAccountId,
+                Sender = senderAccountId,
+                OperationAt = new DateOnly(2024, 05, 07),
+                Multiplier = 0.12m
+            };
+
+            var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
+                .AddJsonBody(createTransferRequestBody);
+
+            var transferOperationResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createRequest);
+
+            var removeTransferRequestBody = new RemoveTransferRequest
+            {
+                PaymentAccountId = senderAccountId,
+                TransferOperationId = transferOperationResponse.Data.Payload.PaymentOperationId
+            };
+
+            var removeRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Delete)
+                 .AddJsonBody(removeTransferRequestBody);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(removeRequest);
+
+            var getSenderOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{senderAccountId}");
+
+            var senderHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getSenderOperationsRequest);
+
+            var senderHistoryResponsePayload = senderHistoryResponse.Data.Payload;
+
+            var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{recipientAccountId}");
+
+            var recipientHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getRecipientOperationsRequest);
+
+            var recipientHistoryResponsePayload = recipientHistoryResponse.Data.Payload;
+
+            Assert.Multiple(() =>
+            {
+                senderHistoryResponsePayload.Should().BeEmpty();
+                recipientHistoryResponsePayload.Should().BeEmpty();
             });
         }
 

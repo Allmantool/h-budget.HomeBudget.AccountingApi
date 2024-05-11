@@ -3,14 +3,14 @@ using System.Collections.Generic;
 
 namespace HomeBudget.Accounting.Domain.Models
 {
-    public class TransferOperation : DomainEntity
+    public class CrossAccountsTransferOperation : DomainEntity
     {
-        public TransferOperation(Guid key)
+        public CrossAccountsTransferOperation(Guid key)
         {
             Key = key;
         }
 
-        public TransferOperation()
+        public CrossAccountsTransferOperation()
         {
             Key = Guid.NewGuid();
         }

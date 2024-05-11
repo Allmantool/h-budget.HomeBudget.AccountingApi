@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 
 using MediatR;
 
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Domain.Services;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
@@ -28,9 +28,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!isPaymentAccountExist)
             {
-                return new Result<Guid>(
-                    isSucceeded: false,
-                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
             var operationForAddResult = operationFactory.CreatePaymentOperation(
@@ -43,9 +41,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!operationForAddResult.IsSucceeded)
             {
-                return new Result<Guid>(
-                    isSucceeded: false,
-                    message: $"An 'operation' hasn't been created successfully. Details: '{operationForAddResult.Message}'");
+                return Result<Guid>.Failure($"An 'operation' hasn't been created successfully. Details: '{operationForAddResult.StatusMessage}'");
             }
 
             return await mediator.Send(new AddPaymentOperationCommand(operationForAddResult.Payload), token);
@@ -60,9 +56,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!isPaymentAccountExist)
             {
-                return new Result<Guid>(
-                    isSucceeded: false,
-                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
             var documents = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
@@ -72,7 +66,7 @@ namespace HomeBudget.Components.Operations.Services
                 .SingleOrDefault(p => p.Payload.Record.Key.CompareTo(operationId) == 0);
 
             return operationForDelete == null
-                ? new Result<Guid>(isSucceeded: false, message: $"The operation '{operationId}' doesn't exist")
+                ? Result<Guid>.Failure($"The operation '{operationId}' doesn't exist")
                 : await mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Payload.Record), token);
         }
 
@@ -86,9 +80,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!isPaymentAccountExist)
             {
-                return new Result<Guid>(
-                    isSucceeded: false,
-                    message: $"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
             var operationForUpdate = new PaymentOperation

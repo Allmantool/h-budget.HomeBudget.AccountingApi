@@ -2,7 +2,7 @@
 
 using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget.Accounting.Domain.Services
+namespace HomeBudget.Accounting.Domain.Factories
 {
     public interface IOperationFactory
     {
@@ -16,7 +16,6 @@ namespace HomeBudget.Accounting.Domain.Services
 
         Result<PaymentOperation> CreateTransferOperation(
             Guid paymentAccountId,
-            Guid transferOperationId,
             decimal amount,
             DateOnly operationDay);
     }

@@ -29,9 +29,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
-                return new Result<CreateOperationResponse>(
-                    isSucceeded: false,
-                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
+                return Result<CreateOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
@@ -44,7 +42,12 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PaymentOperationId = addResponseResult.Payload.ToString()
             };
 
-            return new Result<CreateOperationResponse>(response, isSucceeded: addResponseResult.IsSucceeded);
+            if (addResponseResult.IsSucceeded)
+            {
+                return Result<CreateOperationResponse>.Succeeded(response);
+            }
+
+            return Result<CreateOperationResponse>.Failure(addResponseResult.StatusMessage);
         }
 
         [HttpDelete("{operationId}")]
@@ -55,9 +58,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
-                return new Result<RemoveOperationResponse>(
-                    isSucceeded: false,
-                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
+                return Result<RemoveOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
@@ -68,7 +69,12 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PaymentOperationId = removeResponseResult.Payload.ToString()
             };
 
-            return new Result<RemoveOperationResponse>(payload: response, isSucceeded: removeResponseResult.IsSucceeded);
+            if (removeResponseResult.IsSucceeded)
+            {
+                return Result<RemoveOperationResponse>.Succeeded(response);
+            }
+
+            return Result<RemoveOperationResponse>.Failure(removeResponseResult.StatusMessage);
         }
 
         [HttpPatch("{operationId}")]
@@ -80,9 +86,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
-                return new Result<UpdateOperationResponse>(
-                    isSucceeded: false,
-                    message: $"Invalid payment account '{paymentAccountId}' has been provided");
+                return Result<UpdateOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
@@ -95,7 +99,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PaymentOperationId = updateResponseResult.Payload.ToString()
             };
 
-            return new Result<UpdateOperationResponse>(response, isSucceeded: true);
+            return Result<UpdateOperationResponse>.Succeeded(response);
         }
     }
 }

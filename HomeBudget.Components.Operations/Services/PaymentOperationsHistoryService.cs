@@ -24,7 +24,7 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!eventsForAccount.Any())
             {
-                return new Result<decimal>();
+                return Result<decimal>.Succeeded(default);
             }
 
             var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount)
@@ -35,7 +35,7 @@ namespace HomeBudget.Components.Operations.Services
             if (!validAndMostUpToDateOperations.Any())
             {
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
-                return new Result<decimal>();
+                return Result<decimal>.Succeeded(default);
             }
 
             if (validAndMostUpToDateOperations.Count == 1)
@@ -51,7 +51,7 @@ namespace HomeBudget.Components.Operations.Services
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 await paymentsHistoryDocumentsClient.InsertOneAsync(paymentAccountId, record);
 
-                return new Result<decimal>(record.Balance);
+                return Result<decimal>.Succeeded(record.Balance);
             }
 
             await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations);
@@ -62,7 +62,7 @@ namespace HomeBudget.Components.Operations.Services
                 ? historyRecords.Last()
                 : default;
 
-            return new Result<decimal>(historyOperationDocument?.Payload.Balance ?? 0);
+            return Result<decimal>.Succeeded(historyOperationDocument?.Payload.Balance ?? 0);
         }
 
         private async Task InsertManyAsync(
