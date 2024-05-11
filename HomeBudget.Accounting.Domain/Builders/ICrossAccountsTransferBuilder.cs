@@ -1,4 +1,6 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Domain.Builders
 {
@@ -6,6 +8,9 @@ namespace HomeBudget.Accounting.Domain.Builders
     {
         ICrossAccountsTransferBuilder WithSender(PaymentOperation senderOperation);
         ICrossAccountsTransferBuilder WithRecipient(PaymentOperation recipientOperation);
+
+        ICrossAccountsTransferBuilder WithTransferId(Guid transferId);
+
         Result<CrossAccountsTransferOperation> Build();
     }
 }

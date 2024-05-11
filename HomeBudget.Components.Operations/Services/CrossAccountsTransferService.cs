@@ -63,6 +63,7 @@ namespace HomeBudget.Components.Operations.Services
             var transferOperation = crossAccountsTransferBuilder
                 .WithSender(operationForRemove)
                 .WithRecipient(linkOperationForRemove)
+                .WithTransferId(removeTransferPayload.TransferOperationId)
                 .Build();
 
             await mediator.Send(new RemoveTransferCommand(transferOperation.Payload), token);

@@ -40,6 +40,26 @@ namespace HomeBudget.Components.Operations.Tests.Builders
         }
 
         [Test]
+        public void Build_WithExplicitTransferId_ThenExpectedTransferIdForAllOperations()
+        {
+            var testTransferId = Guid.Parse("1938c4bd-6105-4979-9751-e08e0380aab7");
+
+            var result = _sut
+                .WithRecipient(new PaymentOperation
+                {
+                    PaymentAccountId = Guid.Parse("bfdc41fb-5203-4d22-93bf-a7bc55b99f0f"),
+                })
+                .WithSender(new PaymentOperation
+                {
+                    PaymentAccountId = Guid.Parse("54095569-8e60-4500-b166-7b761dbe3103"),
+                })
+                .WithTransferId(testTransferId)
+                .Build();
+
+            result.Payload.PaymentOperations.All(op => op.Key.Equals(testTransferId)).Should().BeTrue();
+        }
+
+        [Test]
         public void Build_WhenStandardBuild_ThenAlightWithRules()
         {
             var result = _sut

@@ -1,10 +1,14 @@
-﻿using HomeBudget.Accounting.Domain.Builders;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Builders
 {
     internal class CrossAccountsTransferBuilder : ICrossAccountsTransferBuilder
     {
+        private Guid? _transferId;
+
         private PaymentOperation _sender;
         private PaymentOperation _recipient;
 
@@ -13,6 +17,13 @@ namespace HomeBudget.Components.Operations.Builders
         public ICrossAccountsTransferBuilder WithSender(PaymentOperation senderOperation)
         {
             _sender = senderOperation;
+
+            return this;
+        }
+
+        public ICrossAccountsTransferBuilder WithTransferId(Guid transferId)
+        {
+            _transferId = transferId;
 
             return this;
         }
@@ -30,6 +41,8 @@ namespace HomeBudget.Components.Operations.Builders
 
             _sender = null;
             _recipient = null;
+
+            _transferId = null;
         }
 
         public Result<CrossAccountsTransferOperation> Build()
@@ -39,10 +52,10 @@ namespace HomeBudget.Components.Operations.Builders
                 return Result<CrossAccountsTransferOperation>.Failure("Recipient and sender operations should be provided");
             }
 
-            _recipient.Key = _transfer.Key;
+            _recipient.Key = _transferId ?? _transfer.Key;
             _recipient.ContractorId = _sender.PaymentAccountId;
 
-            _sender.Key = _transfer.Key;
+            _sender.Key = _transferId ?? _transfer.Key;
             _sender.ContractorId = _recipient.PaymentAccountId;
 
             _transfer.PaymentOperations =

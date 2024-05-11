@@ -30,7 +30,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var response = new CrossAccountsTransferResponse
             {
-                PaymentOperationId = responseResult.Payload.ToString(),
+                PaymentOperationId = responseResult.Payload,
                 PaymentAccountIds =
                 [
                     request.Sender,
@@ -52,7 +52,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var response = new CrossAccountsTransferResponse
             {
-                PaymentOperationId = removeTransferPayload.TransferOperationId.ToString(),
+                PaymentOperationId = removeTransferPayload.TransferOperationId,
                 PaymentAccountIds = responseResult.Payload
             };
 
