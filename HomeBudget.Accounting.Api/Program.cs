@@ -21,10 +21,15 @@ var configuration = webAppBuilder.Configuration
     .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
     .Build();
 
-webAppBuilder.Services.AddControllers(o =>
-{
-    o.Conventions.Add(new SwaggerControllerDocConvention());
-});
+services
+    .AddControllers(o =>
+    {
+        o.Conventions.Add(new SwaggerControllerDocConvention());
+    })
+    .AddJsonOptions(configure =>
+    {
+        configure.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 
 services.SetUpDi(configuration, environment);
 
