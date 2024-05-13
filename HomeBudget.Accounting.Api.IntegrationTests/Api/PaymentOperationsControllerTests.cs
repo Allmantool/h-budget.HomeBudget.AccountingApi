@@ -107,7 +107,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var accountId = (await SavePaymentAccountAsync()).Payload;
 
-            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).InitialBalance;
 
             var requestBody = new CreateOperationRequest
             {
@@ -146,9 +146,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var createOperationResult = await _sut.RestHttpClient.ExecuteAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
-            var newOperationId = postResult.Data.Payload.PaymentOperationId;
+            var newOperationId = createOperationResult.Data.Payload.PaymentOperationId;
 
             var balanceBefore = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
@@ -352,7 +352,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreatePaymentAccountRequest
             {
-                Balance = 11.2m,
+                InitialBalance = 11.2m,
                 Description = "test-account",
                 AccountType = AccountTypes.Deposit,
                 Agent = "Personal",

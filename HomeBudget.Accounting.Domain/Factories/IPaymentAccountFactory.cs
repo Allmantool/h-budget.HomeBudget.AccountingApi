@@ -7,7 +7,7 @@ namespace HomeBudget.Accounting.Domain.Factories
     {
         PaymentAccount Create(
             string agent,
-            decimal balance,
+            decimal initialBalance,
             string currency,
             string description,
             AccountTypes accountType);

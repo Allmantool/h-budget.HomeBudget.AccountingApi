@@ -10,7 +10,7 @@ namespace HomeBudget.Components.Accounts.Factories
     {
         public PaymentAccount Create(
             string agent,
-            decimal balance,
+            decimal initialBalance,
             string currency,
             string description,
             AccountTypes accountType)
@@ -19,7 +19,7 @@ namespace HomeBudget.Components.Accounts.Factories
             {
                 Key = Guid.NewGuid(),
                 Agent = agent,
-                Balance = balance,
+                InitialBalance = initialBalance,
                 Currency = currency,
                 Description = description,
                 Type = accountType

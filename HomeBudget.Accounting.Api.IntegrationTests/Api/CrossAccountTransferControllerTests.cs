@@ -125,7 +125,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreatePaymentAccountRequest
             {
-                Balance = initialBalance,
+                InitialBalance = initialBalance,
                 Description = "test-description",
                 AccountType = accountType,
                 Agent = "test-agent",

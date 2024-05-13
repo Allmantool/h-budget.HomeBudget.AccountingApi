@@ -9,5 +9,6 @@ namespace HomeBudget.Accounting.Domain.Models
         public decimal Balance { get; set; }
         public string Agent { get; set; }
         public string Description { get; set; }
+        public decimal InitialBalance { get; set; }
     }
 }
