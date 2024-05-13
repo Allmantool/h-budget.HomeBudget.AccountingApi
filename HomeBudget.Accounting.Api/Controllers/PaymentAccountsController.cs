@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
@@ -67,7 +68,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 request.InitialBalance,
                 request.Currency,
                 request.Description,
-                request.AccountType);
+                BaseEnumeration.FromValue<AccountTypes>(request.AccountType));
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 
@@ -101,7 +102,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Balance = request.Balance,
                 Currency = request.Currency,
                 Description = request.Description,
-                Type = request.AccountType
+                Type = BaseEnumeration.FromValue<AccountTypes>(request.AccountType)
             };
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(paymentAccountId, paymentAccountForUpdate);

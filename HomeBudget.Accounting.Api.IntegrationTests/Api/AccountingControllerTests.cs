@@ -70,12 +70,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void MakePaymentAccount_WhenCreateANewOnePaymentAccount_ReturnsNewGeneratedGuid()
+        public async Task MakePaymentAccount_WhenCreateANewOnePaymentAccount_ReturnsNewGeneratedGuid()
         {
             var requestBody = new CreatePaymentAccountRequest
             {
                 InitialBalance = 100,
-                AccountType = AccountTypes.Cash,
+                AccountType = AccountTypes.Cash.Id,
                 Agent = "Vtb",
                 Currency = "",
                 Description = "Some description"
@@ -83,7 +83,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<string>>(postMakePaymentAccountRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
+
+            var result = response.Data;
+            var payload = result.Payload;
+
+            Guid.TryParse(payload, out _).Should().BeTrue();
+        }
+
+        [Test]
+        public async Task MakePaymentAccount_WhenCreateANewOnePaymentAccountWithJsonRequest_ReturnsNewGeneratedGuid()
+        {
+            const string requestBody = "{\"accountType\":1,\"currency\":\"BYN\",\"balance\":\"150\",\"agent\":\"Priorbank\",\"description\":\"Card for Salary\"}";
+
+            var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
+
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -127,7 +142,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new UpdatePaymentAccountRequest
             {
                 Balance = 100,
-                AccountType = AccountTypes.Cash,
+                AccountType = AccountTypes.Cash.Id,
                 Agent = "Vtb",
                 Currency = "BYN",
                 Description = "Some description"
@@ -151,7 +166,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new UpdatePaymentAccountRequest
             {
                 Balance = 150,
-                AccountType = AccountTypes.Loan,
+                AccountType = AccountTypes.Loan.Id,
                 Agent = "Vtb Updated",
                 Currency = "BYN Updated",
                 Description = "Updated description"
@@ -179,11 +194,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreatePaymentAccountRequest
             {
-               InitialBalance = 11.2m,
-               Description = "test-account",
-               AccountType = AccountTypes.Deposit,
-               Agent = "Personal",
-               Currency = "usd"
+                InitialBalance = 11.2m,
+                Description = "test-account",
+                AccountType = AccountTypes.Deposit.Id,
+                Agent = "Personal",
+                Currency = "usd"
             };
 
             var saveCategoryRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)

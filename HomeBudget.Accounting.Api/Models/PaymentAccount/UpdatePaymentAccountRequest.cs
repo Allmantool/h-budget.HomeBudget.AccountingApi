@@ -1,6 +1,4 @@
-﻿using HomeBudget.Accounting.Domain.Enumerations;
-
-namespace HomeBudget.Accounting.Api.Models.PaymentAccount
+﻿namespace HomeBudget.Accounting.Api.Models.PaymentAccount
 {
     public class UpdatePaymentAccountRequest
     {
@@ -8,6 +6,6 @@ namespace HomeBudget.Accounting.Api.Models.PaymentAccount
         public decimal Balance { get; set; }
         public string Currency { get; set; }
         public string Description { get; set; }
-        public AccountTypes AccountType { get; set; }
+        public int AccountType { get; set; }
     }
 }

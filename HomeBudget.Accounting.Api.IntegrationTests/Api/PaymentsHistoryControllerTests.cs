@@ -325,7 +325,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 InitialBalance = initialBalance,
                 Description = "test-account",
-                AccountType = AccountTypes.Deposit,
+                AccountType = AccountTypes.Deposit.Id,
                 Agent = "Personal",
                 Currency = "usd"
             };
