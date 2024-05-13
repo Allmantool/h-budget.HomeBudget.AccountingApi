@@ -6,9 +6,9 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    public class AddPaymentOperationCommand(PaymentOperation operationForAdd)
+    public class AddPaymentOperationCommand(FinancialTransaction operationForAdd)
         : IRequest<Result<Guid>>
     {
-        public PaymentOperation OperationForAdd { get; } = operationForAdd;
+        public FinancialTransaction OperationForAdd { get; } = operationForAdd;
     }
 }

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Category;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Categories.Clients.Interfaces;
@@ -61,7 +62,9 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpPost]
         public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateCategoryRequest request)
         {
-            var newCategory = categoryFactory.Create((CategoryTypes)request.CategoryType, request.NameNodes);
+            var newCategory = categoryFactory.Create(
+                BaseEnumeration.FromValue<CategoryTypes>(request.CategoryType),
+                request.NameNodes);
 
             if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))
             {

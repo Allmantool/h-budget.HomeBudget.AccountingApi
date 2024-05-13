@@ -13,6 +13,7 @@ using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -104,6 +105,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_WhenCreateAnOperation_BalanceShouldBeIncreased));
 
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+
             var requestBody = new CreateOperationRequest
             {
                 Amount = 100,
@@ -112,10 +117,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 ContractorId = Guid.NewGuid().ToString(),
             };
 
-            var accountId = (await SavePaymentAccountAsync()).Payload;
-
-            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
-
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
@@ -123,7 +124,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var operationAmountAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
-            balanceBefore.Should().BeLessThan(operationAmountAfter);
+            operationAmountAfter.Should().Be(balanceBefore + 100);
         }
 
         [Test]
@@ -330,12 +331,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = (int)categoryType,
-                NameNodes = new[]
-                {
+                CategoryType = categoryType.Id,
+                NameNodes =
+                [
                     nameof(categoryType),
                     category
-                }
+                ]
             };
 
             var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)

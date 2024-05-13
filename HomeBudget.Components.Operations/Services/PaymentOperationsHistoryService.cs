@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
@@ -90,7 +91,7 @@ namespace HomeBudget.Components.Operations.Services
             await paymentsHistoryDocumentsClient.RewriteAllAsync(paymentAccountId, operationsHistory);
         }
 
-        private async Task<decimal> CalculateIncrementAsync(PaymentOperation operation)
+        private async Task<decimal> CalculateIncrementAsync(FinancialTransaction operation)
         {
             var categoryId = operation.CategoryId;
 

@@ -15,6 +15,6 @@ namespace HomeBudget.Accounting.Domain.Models
             Key = Guid.NewGuid();
         }
 
-        public IReadOnlyCollection<PaymentOperation> PaymentOperations { get; set; }
+        public IReadOnlyCollection<FinancialTransaction> PaymentOperations { get; set; }
     }
 }

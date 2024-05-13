@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -298,12 +299,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = (int)categoryType,
-                NameNodes = new[]
-                {
+                CategoryType = categoryType.Id,
+                NameNodes =
+                [
                     nameof(categoryType),
                     categoryNode
-                }
+                ]
             };
 
             var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)

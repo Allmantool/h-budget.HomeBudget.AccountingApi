@@ -1,4 +1,4 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using HomeBudget.Accounting.Domain.Enumerations;
 
 namespace HomeBudget.Accounting.Api.Models.PaymentAccount
 {

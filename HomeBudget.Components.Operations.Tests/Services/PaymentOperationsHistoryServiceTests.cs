@@ -8,6 +8,7 @@ using FluentAssertions;
 using Moq;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
@@ -34,7 +35,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -45,7 +46,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -74,7 +75,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -86,7 +87,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Updated,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -98,7 +99,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Updated,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -126,7 +127,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Removed,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId
@@ -151,7 +152,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -161,7 +162,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Removed,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId

@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using HomeBudget.Accounting.Domain.Enumerations;
+
 namespace HomeBudget.Accounting.Domain.Models
 {
     public class Category : DomainEntity
@@ -15,7 +17,7 @@ namespace HomeBudget.Accounting.Domain.Models
             NameNodes = nameNodes;
             CategoryType = categoryType;
 
-            CategoryKey = $"{(int)CategoryType}-{string.Join(',', NameNodes)}";
+            CategoryKey = $"{categoryType.Id}-{string.Join(',', NameNodes)}";
         }
     }
 }

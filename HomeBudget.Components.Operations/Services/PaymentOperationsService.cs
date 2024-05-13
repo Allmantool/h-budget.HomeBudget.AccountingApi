@@ -19,7 +19,7 @@ namespace HomeBudget.Components.Operations.Services
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ISender mediator,
-        IOperationFactory operationFactory)
+        IFinancialTransactionFactory financialTransactionFactory)
         : IPaymentOperationsService
     {
         public async Task<Result<Guid>> CreateAsync(Guid paymentAccountId, PaymentOperationPayload payload, CancellationToken token)
@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
-            var operationForAddResult = operationFactory.CreatePaymentOperation(
+            var operationForAddResult = financialTransactionFactory.CreatePayment(
                 paymentAccountId,
                 payload.Amount,
                 payload.Comment,
@@ -83,7 +83,7 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
-            var operationForUpdate = new PaymentOperation
+            var operationForUpdate = new FinancialTransaction
             {
                 PaymentAccountId = paymentAccountId,
                 Key = operationId,

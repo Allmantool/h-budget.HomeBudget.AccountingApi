@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿using HomeBudget.Accounting.Domain.Enumerations;
+
+namespace HomeBudget.Accounting.Domain.Models
 {
     public class PaymentAccount : DomainEntity
     {

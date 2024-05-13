@@ -58,7 +58,7 @@ namespace HomeBudget.Components.Operations.Tests
                     new()
                     {
                         EventType = PaymentEventTypes.Added,
-                        Payload = new PaymentOperation
+                        Payload = new FinancialTransaction
                         {
                             Key = Guid.Parse("7683a5d4-ba29-4274-8e9a-50de5361d46c"),
                             PaymentAccountId = paymentAccountIdA,
@@ -72,7 +72,7 @@ namespace HomeBudget.Components.Operations.Tests
                     new()
                     {
                         EventType = PaymentEventTypes.Removed,
-                        Payload = new PaymentOperation
+                        Payload = new FinancialTransaction
                         {
                             Key = Guid.Parse("2c683dd6-3eea-40f3-918b-ab1b60ccebc4"),
                             PaymentAccountId = paymentAccountIdA,
@@ -86,7 +86,7 @@ namespace HomeBudget.Components.Operations.Tests
                     new()
                     {
                         EventType = PaymentEventTypes.Updated,
-                        Payload = new PaymentOperation
+                        Payload = new FinancialTransaction
                         {
                             Key = Guid.Parse("2c683dd6-3eea-40f3-918b-ab1b60ccebc4"),
                             PaymentAccountId = paymentAccountIdA,
@@ -100,7 +100,7 @@ namespace HomeBudget.Components.Operations.Tests
                     new()
                     {
                         EventType = PaymentEventTypes.Added,
-                        Payload = new PaymentOperation
+                        Payload = new FinancialTransaction
                         {
                             Key = Guid.Parse("a2603450-7c16-4ac7-955a-5e261ccc0b89"),
                             PaymentAccountId = paymentAccountIdB,

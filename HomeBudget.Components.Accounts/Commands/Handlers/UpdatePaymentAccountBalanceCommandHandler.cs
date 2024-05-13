@@ -21,7 +21,7 @@ namespace HomeBudget.Components.Accounts.Commands.Handlers
             var document = paymentAccountDocumentResult.Payload;
             var paymentAccountForUpdate = document.Payload;
 
-            paymentAccountForUpdate.Balance = request.Balance;
+            paymentAccountForUpdate.Balance += request.Balance;
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(request.PaymentAccountId.ToString(), paymentAccountForUpdate);
 

@@ -12,6 +12,7 @@ using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -31,8 +32,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
         {
-            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.BYN)).Payload;
-            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.USD)).Payload;
+            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
 
             var requestBody = new CrossAccountsTransferRequest
             {
@@ -48,17 +49,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createRequest);
 
-            var getSenderOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{senderAccountId}");
+            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
 
-            var senderHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getSenderOperationsRequest);
-
-            var senderHistoryResponsePayload = senderHistoryResponse.Data.Payload;
-
-            var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{recipientAccountId}");
-
-            var recipientHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getRecipientOperationsRequest);
-
-            var recipientHistoryResponsePayload = recipientHistoryResponse.Data.Payload;
+            var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
 
             Assert.Multiple(() =>
             {
@@ -75,8 +68,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeleted()
         {
-            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.BYN)).Payload;
-            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.USD)).Payload;
+            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
 
             var createTransferRequestBody = new CrossAccountsTransferRequest
             {
@@ -103,17 +96,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(removeRequest);
 
-            var getSenderOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{senderAccountId}");
+            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
 
-            var senderHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getSenderOperationsRequest);
-
-            var senderHistoryResponsePayload = senderHistoryResponse.Data.Payload;
-
-            var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{recipientAccountId}");
-
-            var recipientHistoryResponse = _sut.RestHttpClient.Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getRecipientOperationsRequest);
-
-            var recipientHistoryResponsePayload = recipientHistoryResponse.Data.Payload;
+            var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
 
             Assert.Multiple(() =>
             {
@@ -125,6 +110,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public ValueTask DisposeAsync()
         {
             return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryByPaymentAccountIdAsync(Guid accountId)
+        {
+            var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{accountId}");
+
+            var recipientHistoryResponse = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getRecipientOperationsRequest);
+
+            return recipientHistoryResponse.Data.Payload;
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync(decimal initialBalance, AccountTypes accountType, CurrencyTypes currencyType)

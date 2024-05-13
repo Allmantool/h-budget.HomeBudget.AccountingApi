@@ -9,12 +9,12 @@ namespace HomeBudget.Components.Operations.Builders
     {
         private Guid? _transferId;
 
-        private PaymentOperation _sender;
-        private PaymentOperation _recipient;
+        private FinancialTransaction _sender;
+        private FinancialTransaction _recipient;
 
         private CrossAccountsTransferOperation _transfer = new();
 
-        public ICrossAccountsTransferBuilder WithSender(PaymentOperation senderOperation)
+        public ICrossAccountsTransferBuilder WithSender(FinancialTransaction senderOperation)
         {
             _sender = senderOperation;
 
@@ -28,7 +28,7 @@ namespace HomeBudget.Components.Operations.Builders
             return this;
         }
 
-        public ICrossAccountsTransferBuilder WithRecipient(PaymentOperation recipientOperation)
+        public ICrossAccountsTransferBuilder WithRecipient(FinancialTransaction recipientOperation)
         {
             _recipient = recipientOperation;
 

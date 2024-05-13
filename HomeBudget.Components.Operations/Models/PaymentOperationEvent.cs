@@ -4,7 +4,7 @@ namespace HomeBudget.Components.Operations.Models
 {
     internal class PaymentOperationEvent
     {
-        public PaymentOperation Payload { get; set; }
+        public FinancialTransaction Payload { get; set; }
 
         public PaymentEventTypes EventType { get; set; }
     }
