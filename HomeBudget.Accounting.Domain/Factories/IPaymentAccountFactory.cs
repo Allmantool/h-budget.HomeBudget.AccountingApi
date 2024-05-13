@@ -1,4 +1,5 @@
-﻿using HomeBudget.Accounting.Domain.Models;
+﻿using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Domain.Factories
 {
@@ -6,7 +7,7 @@ namespace HomeBudget.Accounting.Domain.Factories
     {
         PaymentAccount Create(
             string agent,
-            decimal balance,
+            decimal initialBalance,
             string currency,
             string description,
             AccountTypes accountType);

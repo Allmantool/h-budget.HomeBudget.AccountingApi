@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 

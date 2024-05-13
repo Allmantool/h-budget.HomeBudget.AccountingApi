@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
@@ -13,6 +15,7 @@ using HomeBudget.Components.Operations.Services.Interfaces;
 namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
+        IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ICategoryDocumentsClient categoryDocumentsClient)
@@ -20,6 +23,8 @@ namespace HomeBudget.Components.Operations.Services
     {
         public async Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId)
         {
+            var initialBalance = await GetPaymentAccountInitialBalanceAsync(paymentAccountId.ToString());
+
             var eventsForAccount = await eventStoreDbClient.ReadAsync(paymentAccountId.ToString()).ToListAsync();
 
             if (!eventsForAccount.Any())
@@ -35,7 +40,7 @@ namespace HomeBudget.Components.Operations.Services
             if (!validAndMostUpToDateOperations.Any())
             {
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
-                return Result<decimal>.Succeeded(default);
+                return Result<decimal>.Succeeded(initialBalance);
             }
 
             if (validAndMostUpToDateOperations.Count == 1)
@@ -51,7 +56,7 @@ namespace HomeBudget.Components.Operations.Services
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 await paymentsHistoryDocumentsClient.InsertOneAsync(paymentAccountId, record);
 
-                return Result<decimal>.Succeeded(record.Balance);
+                return Result<decimal>.Succeeded(initialBalance + record.Balance);
             }
 
             await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations);
@@ -62,7 +67,15 @@ namespace HomeBudget.Components.Operations.Services
                 ? historyRecords.Last()
                 : default;
 
-            return Result<decimal>.Succeeded(historyOperationDocument?.Payload.Balance ?? 0);
+            return Result<decimal>.Succeeded((historyOperationDocument?.Payload.Balance ?? 0) + initialBalance);
+        }
+
+        private async Task<decimal> GetPaymentAccountInitialBalanceAsync(string paymentAccountId)
+        {
+            var paymentAccountDocumentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
+            var document = paymentAccountDocumentResult.Payload;
+
+            return document.Payload.InitialBalance;
         }
 
         private async Task InsertManyAsync(
@@ -90,7 +103,7 @@ namespace HomeBudget.Components.Operations.Services
             await paymentsHistoryDocumentsClient.RewriteAllAsync(paymentAccountId, operationsHistory);
         }
 
-        private async Task<decimal> CalculateIncrementAsync(PaymentOperation operation)
+        private async Task<decimal> CalculateIncrementAsync(FinancialTransaction operation)
         {
             var categoryId = operation.CategoryId;
 

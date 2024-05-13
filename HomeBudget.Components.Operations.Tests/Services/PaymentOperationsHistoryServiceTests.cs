@@ -8,8 +8,11 @@ using FluentAssertions;
 using Moq;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
+using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -34,7 +37,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -45,7 +48,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -74,7 +77,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -86,7 +89,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Updated,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -98,7 +101,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Updated,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -126,7 +129,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Removed,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId
@@ -151,7 +154,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId,
@@ -161,7 +164,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 new()
                 {
                     EventType = PaymentEventTypes.Removed,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccountId,
                         Key = operationId
@@ -183,7 +186,18 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(cl => cl.ReadAsync(It.IsAny<string>(), CancellationToken.None))
                 .Returns(events.ToAsyncEnumerable());
 
-            var paymentsHistoryClient = new Mock<IPaymentsHistoryDocumentsClient>();
+            var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
+            var paymentAccountDocumentClientMock = new Mock<IPaymentAccountDocumentClient>();
+
+            paymentAccountDocumentClientMock
+                .Setup(cl => cl.GetByIdAsync(It.IsAny<string>()))
+                .ReturnsAsync(Result<PaymentAccountDocument>.Succeeded(new PaymentAccountDocument
+                {
+                    Payload = new PaymentAccount
+                    {
+                        InitialBalance = 0
+                    }
+                }));
 
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
 
@@ -200,7 +214,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
                 .ReturnsAsync(() => Result<CategoryDocument>.Succeeded(payload));
 
-            return new PaymentOperationsHistoryService(eventDbClient.Object, paymentsHistoryClient.Object, categoriesClient.Object);
+            return new PaymentOperationsHistoryService(paymentAccountDocumentClientMock.Object, eventDbClient.Object, paymentsHistoryClientMock.Object, categoriesClient.Object);
         }
     }
 }

@@ -12,6 +12,6 @@ namespace HomeBudget.Components.Operations.Commands.Models
     {
         public Guid Key { get; } = crossAccountsTransferOperations.Key;
 
-        public IReadOnlyCollection<PaymentOperation> PaymentOperations { get; } = crossAccountsTransferOperations.PaymentOperations;
+        public IReadOnlyCollection<FinancialTransaction> PaymentOperations { get; } = crossAccountsTransferOperations.PaymentOperations;
     }
 }

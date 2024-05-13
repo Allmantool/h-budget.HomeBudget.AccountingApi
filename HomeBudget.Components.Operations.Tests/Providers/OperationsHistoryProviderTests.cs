@@ -58,7 +58,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
                 Payload = new PaymentOperationHistoryRecord
                 {
                     Balance = 11.24m,
-                    Record = new PaymentOperation
+                    Record = new FinancialTransaction
                     {
                         PaymentAccountId = paymentAccount,
                         Key = Guid.Empty,
@@ -104,7 +104,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
                         Payload = new PaymentOperationHistoryRecord
                         {
                             Balance = 11.24m,
-                            Record = new PaymentOperation
+                            Record = new FinancialTransaction
                             {
                                 PaymentAccountId = paymentAccount,
                                 Key = Guid.Empty,
@@ -121,7 +121,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
                         Payload = new PaymentOperationHistoryRecord
                         {
                             Balance = 111.24m,
-                            Record = new PaymentOperation
+                            Record = new FinancialTransaction
                             {
                                 PaymentAccountId = paymentAccount,
                                 Key = Guid.Empty,

@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -43,8 +44,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const int createRequestAmount = 11;
             const decimal expectedBalance = 176M;
+            const decimal initialBalance = 11.2m;
 
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var paymentAccountId = (await SavePaymentAccountAsync(initialBalance)).Payload;
 
             var categoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-6");
 
@@ -71,7 +73,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                balanceAfter.Should().Be(expectedBalance);
+                balanceAfter.Should().Be(expectedBalance + initialBalance);
 
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
                 Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(expectedBalance).After(10));
@@ -82,7 +84,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WithExpenseOperations_ReturnsNegativeBalance()
         {
             const decimal expectedBalanceAmount = 12.13M;
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            const decimal initialBalance = 11.2m;
+
+            var paymentAccountId = (await SavePaymentAccountAsync(initialBalance)).Payload;
 
             var expenseCategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-5");
 
@@ -107,7 +111,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Assert.Multiple(() =>
             {
                 historyRecords.Single().Balance.Should().Be(-expectedBalanceAmount);
-                balanceAfter.Should().Be(-expectedBalanceAmount);
+                balanceAfter.Should().Be(-expectedBalanceAmount + initialBalance);
             });
         }
 
@@ -115,7 +119,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WithSeveralOperations_ShouldReturnExpectedBalanceOperationsOrdering()
         {
             const int createRequestAmount = 5;
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
             {
@@ -143,7 +147,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task GetPaymentOperations_WhenUpdateExistedOperation_ReturnsUpToDateOperationState()
         {
             const int createRequestAmount = 3;
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
 
             var operationsGuids = new Collection<Guid>();
 
@@ -200,7 +204,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetPaymentOperations_WhenAddAndThenUpdate_ReturnsUpToDateOperationState()
         {
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
 
             var requestBody = new CreateOperationRequest
             {
@@ -241,7 +245,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetOperationById_WhenValidFilterById_ReturnsOperationWithExpectedAmount()
         {
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
 
             var requestBody = new CreateOperationRequest
             {
@@ -298,12 +302,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = (int)categoryType,
-                NameNodes = new[]
-                {
+                CategoryType = categoryType.Id,
+                NameNodes =
+                [
                     nameof(categoryType),
                     categoryNode
-                }
+                ]
             };
 
             var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
@@ -315,11 +319,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return paymentsHistoryResponse.Data.Payload;
         }
 
-        private async Task<Result<Guid>> SavePaymentAccountAsync()
+        private async Task<Result<Guid>> SavePaymentAccountAsync(decimal initialBalance)
         {
             var requestSaveBody = new CreatePaymentAccountRequest
             {
-                Balance = 11.2m,
+                InitialBalance = initialBalance,
                 Description = "test-account",
                 AccountType = AccountTypes.Deposit,
                 Agent = "Personal",

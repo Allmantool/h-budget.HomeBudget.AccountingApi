@@ -2,7 +2,7 @@
 {
     public class PaymentOperationHistoryRecord
     {
-        public PaymentOperation Record { get; set; }
+        public FinancialTransaction Record { get; set; }
         public decimal Balance { get; set; }
     }
 }

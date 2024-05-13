@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿using HomeBudget.Accounting.Domain.Enumerations;
+
+namespace HomeBudget.Accounting.Domain.Models
 {
     public class PaymentAccount : DomainEntity
     {
@@ -7,5 +9,6 @@
         public decimal Balance { get; set; }
         public string Agent { get; set; }
         public string Description { get; set; }
+        public decimal InitialBalance { get; set; }
     }
 }

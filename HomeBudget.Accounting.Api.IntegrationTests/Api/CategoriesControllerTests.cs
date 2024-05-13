@@ -9,7 +9,9 @@ using RestSharp;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -81,8 +83,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             });
         }
 
-        [TestCase(CategoryTypes.Expense)]
-        [TestCase(CategoryTypes.Income)]
+        [TestCaseSource(typeof(CategoryTypesTestCases))]
         public async Task CreateNewCategory_WhenCreateCategory_ReturnsExpectedOutcome(CategoryTypes outcomeOperationType)
         {
             var result = await SaveCategoryAsync(outcomeOperationType, "Node1,Node2");
@@ -100,12 +101,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = (int)categoryType,
-                NameNodes = new[]
-                {
+                CategoryType = categoryType.Id,
+                NameNodes =
+                [
                     nameof(categoryType),
                     categoryNode
-                }
+                ]
             };
 
             var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)

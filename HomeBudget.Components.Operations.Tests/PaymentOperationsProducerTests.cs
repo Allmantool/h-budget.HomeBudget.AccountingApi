@@ -60,7 +60,7 @@ namespace HomeBudget.Components.Operations.Tests
                 var paymentEvent = new PaymentOperationEvent
                 {
                     EventType = PaymentEventTypes.Added,
-                    Payload = new PaymentOperation
+                    Payload = new FinancialTransaction
                     {
                         PaymentAccountId = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43"),
                         Key = Guid.Parse("7683a5d4-ba29-4274-8e9a-50de5361d46c"),

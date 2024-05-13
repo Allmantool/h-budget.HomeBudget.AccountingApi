@@ -1,13 +1,14 @@
 ﻿using System;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Factories
 {
-    internal class OperationFactory : IOperationFactory
+    internal class FinancialTransactionFactory : IFinancialTransactionFactory
     {
-        public Result<PaymentOperation> CreatePaymentOperation(
+        public Result<FinancialTransaction> CreatePayment(
             Guid paymentAccountId,
             decimal amount,
             string comment,
@@ -17,10 +18,10 @@ namespace HomeBudget.Components.Operations.Factories
         {
             if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
             {
-                return Result<PaymentOperation>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
+                return Result<FinancialTransaction>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
             }
 
-            var payload = new PaymentOperation
+            var payload = new FinancialTransaction
             {
                 Key = Guid.NewGuid(),
                 OperationDay = operationDay,
@@ -28,25 +29,27 @@ namespace HomeBudget.Components.Operations.Factories
                 Comment = comment,
                 PaymentAccountId = paymentAccountId,
                 CategoryId = categoryGuid,
-                ContractorId = contractorGuid
+                ContractorId = contractorGuid,
+                TransactionType = TransactionTypes.Payment
             };
 
-            return Result<PaymentOperation>.Succeeded(payload);
+            return Result<FinancialTransaction>.Succeeded(payload);
         }
 
-        public Result<PaymentOperation> CreateTransferOperation(
+        public Result<FinancialTransaction> CreateTransfer(
             Guid paymentAccountId,
             decimal amount,
             DateOnly operationDay)
         {
-            var payload = new PaymentOperation
+            var payload = new FinancialTransaction
             {
                 PaymentAccountId = paymentAccountId,
                 OperationDay = operationDay,
-                Amount = amount
+                Amount = amount,
+                TransactionType = TransactionTypes.Transfer
             };
 
-            return Result<PaymentOperation>.Succeeded(payload);
+            return Result<FinancialTransaction>.Succeeded(payload);
         }
     }
 }

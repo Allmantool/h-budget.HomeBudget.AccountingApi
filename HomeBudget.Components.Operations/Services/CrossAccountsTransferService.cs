@@ -18,20 +18,20 @@ namespace HomeBudget.Components.Operations.Services
     internal class CrossAccountsTransferService(
         ISender mediator,
         IPaymentsHistoryDocumentsClient documentsClient,
-        IOperationFactory operationFactory,
+        IFinancialTransactionFactory financialTransactionFactory,
         ICrossAccountsTransferBuilder crossAccountsTransferBuilder)
         : ICrossAccountsTransferService
     {
         public async Task<Result<Guid>> ApplyAsync(CrossAccountsTransferPayload payload, CancellationToken token)
         {
-            var senderOperation = operationFactory
-                .CreateTransferOperation(
+            var senderOperation = financialTransactionFactory
+                .CreateTransfer(
                     payload.Sender,
                     -Math.Abs(payload.Amount),
                     payload.OperationAt);
 
-            var recipientOperation = operationFactory
-                .CreateTransferOperation(
+            var recipientOperation = financialTransactionFactory
+                .CreateTransfer(
                     payload.Recipient,
                     Math.Abs(payload.Amount * payload.Multiplier),
                     payload.OperationAt);

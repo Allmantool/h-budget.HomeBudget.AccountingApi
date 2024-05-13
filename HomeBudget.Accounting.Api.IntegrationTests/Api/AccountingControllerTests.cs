@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -51,7 +52,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
             var payload = result.Payload;
 
-            payload.Balance.Should().Be(11.2m);
+            payload.InitialBalance.Should().Be(11.2m);
         }
 
         [Test]
@@ -73,7 +74,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestBody = new CreatePaymentAccountRequest
             {
-                Balance = 100,
+                InitialBalance = 100,
                 AccountType = AccountTypes.Cash,
                 Agent = "Vtb",
                 Currency = "",
@@ -178,7 +179,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreatePaymentAccountRequest
             {
-               Balance = 11.2m,
+               InitialBalance = 11.2m,
                Description = "test-account",
                AccountType = AccountTypes.Deposit,
                Agent = "Personal",

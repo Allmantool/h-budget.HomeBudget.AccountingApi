@@ -64,7 +64,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var newPaymentAccount = paymentAccountFactory.Create(
                 request.Agent,
-                request.Balance,
+                request.InitialBalance,
                 request.Currency,
                 request.Description,
                 request.AccountType);

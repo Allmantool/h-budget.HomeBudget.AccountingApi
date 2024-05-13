@@ -4,9 +4,9 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Domain.Factories
 {
-    public interface IOperationFactory
+    public interface IFinancialTransactionFactory
     {
-        Result<PaymentOperation> CreatePaymentOperation(
+        Result<FinancialTransaction> CreatePayment(
             Guid paymentAccountId,
             decimal amount,
             string comment,
@@ -14,7 +14,7 @@ namespace HomeBudget.Accounting.Domain.Factories
             string contractorId,
             DateOnly operationDay);
 
-        Result<PaymentOperation> CreateTransferOperation(
+        Result<FinancialTransaction> CreateTransfer(
             Guid paymentAccountId,
             decimal amount,
             DateOnly operationDay);
