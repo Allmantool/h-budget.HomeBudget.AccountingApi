@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
@@ -17,17 +18,18 @@ namespace HomeBudget.Accounting.Api.Controllers
     [ApiController]
     [Route(Endpoints.Categories, Name = Endpoints.Categories)]
     public class CategoriesController(
+        IMapper mapper,
         ICategoryDocumentsClient categoryDocumentsClient,
         ICategoryFactory categoryFactory) : ControllerBase
     {
         [HttpGet]
-        public async Task<Result<IReadOnlyCollection<Category>>> GetCategoriesAsync()
+        public async Task<Result<IReadOnlyCollection<CategoryResponse>>> GetCategoriesAsync()
         {
             var documentsResult = await categoryDocumentsClient.GetAsync();
 
             if (!documentsResult.IsSucceeded)
             {
-                return Result<IReadOnlyCollection<Category>>.Failure();
+                return Result<IReadOnlyCollection<CategoryResponse>>.Failure();
             }
 
             var categories = documentsResult.Payload
@@ -36,27 +38,27 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.OperationUnixTime)
                 .ToList();
 
-            return Result<IReadOnlyCollection<Category>>.Succeeded(categories);
+            return Result<IReadOnlyCollection<CategoryResponse>>.Succeeded(mapper.Map<IReadOnlyCollection<CategoryResponse>>(categories));
         }
 
         [HttpGet("byId/{categoryId}")]
-        public async Task<Result<Category>> GetCategoryByIdAsync(string categoryId)
+        public async Task<Result<CategoryResponse>> GetCategoryByIdAsync(string categoryId)
         {
             if (!Guid.TryParse(categoryId, out var targetCategoryId))
             {
-                return Result<Category>.Failure($"Invalid '{nameof(targetCategoryId)}' has been provided");
+                return Result<CategoryResponse>.Failure($"Invalid '{nameof(targetCategoryId)}' has been provided");
             }
 
             var documentResult = await categoryDocumentsClient.GetByIdAsync(targetCategoryId);
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return Result<Category>.Failure($"The contractor with '{targetCategoryId}' hasn't been found");
+                return Result<CategoryResponse>.Failure($"The contractor with '{targetCategoryId}' hasn't been found");
             }
 
             var document = documentResult.Payload;
 
-            return Result<Category>.Succeeded(document.Payload);
+            return Result<CategoryResponse>.Succeeded(mapper.Map<CategoryResponse>(document.Payload));
         }
 
         [HttpPost]
