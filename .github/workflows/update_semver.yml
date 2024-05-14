@@ -4,7 +4,7 @@ on:
   workflow_call:
 
 jobs:
-  update-semver_if_merged:
+  update-semver:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
