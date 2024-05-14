@@ -17,7 +17,7 @@ on:
       - hotfix/*
       - fix/*
       - tech/
-    types: [opened, reopened, closed]
+    types: [opened, synchronize, closed]
 
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
