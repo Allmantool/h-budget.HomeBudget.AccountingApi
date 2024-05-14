@@ -30,6 +30,7 @@ jobs:
     uses: ./.github/workflows/update_semver.yml
 
   build-currency-accounting-api:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged) }}
     name: Accounting api quality gate
     runs-on: ubuntu-latest
     defaults:
