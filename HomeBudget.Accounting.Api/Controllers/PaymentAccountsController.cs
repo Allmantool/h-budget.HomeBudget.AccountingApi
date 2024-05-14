@@ -44,23 +44,23 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpGet("byId/{paymentAccountId}")]
-        public async Task<Result<PaymentAccount>> GetByIdAsync(string paymentAccountId)
+        public async Task<Result<PaymentAccountResponse>> GetByIdAsync(string paymentAccountId)
         {
             if (!Guid.TryParse(paymentAccountId, out _))
             {
-                return Result<PaymentAccount>.Failure($"Invalid {nameof(paymentAccountId)} has been provided");
+                return Result<PaymentAccountResponse>.Failure($"Invalid {nameof(paymentAccountId)} has been provided");
             }
 
             var documentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return Result<PaymentAccount>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
+                return Result<PaymentAccountResponse>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
             }
 
             var document = documentResult.Payload;
 
-            return Result<PaymentAccount>.Succeeded(document.Payload);
+            return Result<PaymentAccountResponse>.Succeeded(mapper.Map<PaymentAccountResponse>(document.Payload));
         }
 
         [HttpPost]

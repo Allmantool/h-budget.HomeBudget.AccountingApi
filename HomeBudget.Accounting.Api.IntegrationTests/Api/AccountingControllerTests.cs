@@ -109,14 +109,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{createResponse.Data.Payload}");
 
-            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccountResponse>>(getPaymentAccountByIdRequest);
 
             var getAccountById = getByIdResponse.Data.Payload;
 
             Assert.Multiple(() =>
             {
                 getAccountById.InitialBalance.Should().Be(100);
-                getAccountById.Type.Should().Be(AccountTypes.Virtual);
+                getAccountById.AccountType.Should().Be(AccountTypes.Virtual.Id);
                 getAccountById.Balance.Should().Be(100);
             });
         }
