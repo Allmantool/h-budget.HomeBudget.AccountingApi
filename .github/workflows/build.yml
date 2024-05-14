@@ -8,10 +8,6 @@ on:
 
     tags: ["v*.*.*"]
 
-  pull_request_target:
-    types:
-      - closed
-
   pull_request:
     branches:
       - master
@@ -21,16 +17,16 @@ on:
       - hotfix/*
       - fix/*
       - tech/
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, closed]
 
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
-  IS_MERGED: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+  IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
 
 jobs:
   update-tag-version-if_merged:
-    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
     uses: ./.github/workflows/update_semver.yml
 
   build-currency-accounting-api:
