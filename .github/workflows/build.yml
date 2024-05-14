@@ -24,7 +24,7 @@ env:
   SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
 
 jobs:
-  update-tag-version:
+  update-tag-version-if_merged:
     if: github.event.pull_request.merged == true
     uses: ./.github/workflows/update_semver.yml
 
