@@ -10,7 +10,7 @@ on:
 
 jobs:
   update-semver_if_merged:
-    if: ${{ inputs.is-merged }} == true
+    if: ${{ inputs.is-merged == true }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
