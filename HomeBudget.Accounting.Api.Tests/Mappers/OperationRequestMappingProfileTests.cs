@@ -4,15 +4,14 @@ using HomeBudget.Accounting.Api.MapperProfileConfigurations;
 
 namespace HomeBudget.Accounting.Api.Tests.Mappers
 {
-    [TestFixture]
-    public class CrossAccountsTransferRequestMappingProfilerTests
+    public class OperationRequestMappingProfileTests
     {
         private MapperConfiguration _configuration;
 
         [SetUp]
         public void Setup()
         {
-            _configuration = new MapperConfiguration(pr => pr.AddProfile<CrossAccountsTransferRequestMappingProfiler>());
+            _configuration = new MapperConfiguration(pr => pr.AddProfile<OperationRequestMappingProfile>());
         }
 
         [Test]
