@@ -7,11 +7,11 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest(ApiHost);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Category>>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<CategoryResponse>>>(getCategoriesRequest);
 
             response.IsSuccessful.Should().BeTrue();
         }
@@ -42,7 +42,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/{existedCategoryId}");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -54,7 +54,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -90,11 +90,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{result.Payload}");
 
-            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<Category>>(getCategoriesRequestById);
+            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequestById);
 
             var getByIdPayload = getByIdResponse.Data;
 
-            getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType);
+            getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType.Id);
         }
 
         private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
