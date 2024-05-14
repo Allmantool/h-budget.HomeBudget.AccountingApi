@@ -92,6 +92,36 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task MakePaymentAccount_ThenAppropriateBalanceAmounts_ShouldBeSet()
+        {
+            var requestBody = new CreatePaymentAccountRequest
+            {
+                InitialBalance = 100,
+                AccountType = 1,
+                Agent = "PriorBank",
+                Currency = "BYN",
+                Description = "Description-test"
+            };
+
+            var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
+
+            var createResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
+
+            var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{createResponse.Data.Payload}");
+
+            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+
+            var getAccountById = getByIdResponse.Data.Payload;
+
+            Assert.Multiple(() =>
+            {
+                getAccountById.InitialBalance.Should().Be(100);
+                getAccountById.Type.Should().Be(AccountTypes.Virtual);
+                getAccountById.Balance.Should().Be(100);
+            });
+        }
+
+        [Test]
         public async Task MakePaymentAccount_WhenCreateANewOnePaymentAccountWithJsonRequest_ReturnsNewGeneratedGuid()
         {
             const string requestBody = "{\"accountType\":1,\"currency\":\"BYN\",\"balance\":\"150\",\"agent\":\"Priorbank\",\"description\":\"Card for Salary\"}";
