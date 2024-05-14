@@ -84,6 +84,7 @@ jobs:
           tag=$(echo $tag_v | sed 's/v//')
 
           echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
+          echo "Last git tag: $tag"
 
       - name: Install external tools for quality gate verification
         shell: bash
