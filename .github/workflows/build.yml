@@ -29,6 +29,8 @@ env:
 jobs:
   update-tag-version:
     uses: ./.github/workflows/update_semver.yml
+    with:
+      is-merged: ${{ github.event.pull_request.merged == true }}
   build-currency-accounting-api:
     name: Accounting api quality gate
     runs-on: ubuntu-latest
