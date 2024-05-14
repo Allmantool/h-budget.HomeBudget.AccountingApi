@@ -1,20 +1,7 @@
 name: Update Semver
 
 on:
-  push:
-    branches:
-      - master
-      - develop
-      - feature/*
-      - test/*
-      - hotfix/*
-      - fix/*
-      - tech/*
-    tags:
-      - "v*"
-
-  pull_request:
-    types: [closed]
+  workflow_call:
 
 jobs:
   update-semver_if_merged:
@@ -22,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -46,4 +33,4 @@ jobs:
           tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
           tag=$(echo $tag_v | sed 's/v//')
 
-          echo ${tag}
+          echo "Last git tag: $tag"
