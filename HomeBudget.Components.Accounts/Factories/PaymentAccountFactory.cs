@@ -20,6 +20,7 @@ namespace HomeBudget.Components.Accounts.Factories
                 Key = Guid.NewGuid(),
                 Agent = agent,
                 InitialBalance = initialBalance,
+                Balance = initialBalance,
                 Currency = currency,
                 Description = description,
                 Type = accountType
