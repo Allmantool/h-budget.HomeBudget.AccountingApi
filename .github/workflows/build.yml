@@ -10,7 +10,6 @@ on:
 
   pull_request:
     branches:
-      - master
       - developed
       - feature/*
       - test/*
@@ -22,10 +21,11 @@ on:
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+  IS_MERGED: ${{ github.event.pull_request.merged == true }}
 
 jobs:
-  update-tag-version:
-    if: github.event.pull_request.merged == true
+  update-tag-version-if_merged:
+    if: ${{ github.event.pull_request.merged == true }}
     uses: ./.github/workflows/update_semver.yml
 
   build-currency-accounting-api:
