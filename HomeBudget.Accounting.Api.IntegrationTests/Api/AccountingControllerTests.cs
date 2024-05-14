@@ -31,7 +31,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountsRequest = new RestRequest(ApiHost);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentAccount>>>(getPaymentAccountsRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentAccountResponse>>>(getPaymentAccountsRequest);
 
             Assert.Multiple(() =>
             {

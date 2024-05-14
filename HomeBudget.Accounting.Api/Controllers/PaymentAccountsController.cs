@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
@@ -17,17 +18,18 @@ namespace HomeBudget.Accounting.Api.Controllers
     [ApiController]
     [Route(Endpoints.PaymentAccounts, Name = Endpoints.PaymentAccounts)]
     public class PaymentAccountsController(
+        IMapper mapper,
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentAccountFactory paymentAccountFactory) : ControllerBase
     {
         [HttpGet]
-        public async Task<Result<IReadOnlyCollection<PaymentAccount>>> GetAsync()
+        public async Task<Result<IReadOnlyCollection<PaymentAccountResponse>>> GetAsync()
         {
             var documentsResult = await paymentAccountDocumentClient.GetAsync();
 
             if (!documentsResult.IsSucceeded)
             {
-                return Result<IReadOnlyCollection<PaymentAccount>>.Failure();
+                return Result<IReadOnlyCollection<PaymentAccountResponse>>.Failure();
             }
 
             var paymentAccounts = documentsResult.Payload
@@ -37,7 +39,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ThenBy(op => op.OperationUnixTime)
                 .ToList();
 
-            return Result<IReadOnlyCollection<PaymentAccount>>.Succeeded(paymentAccounts);
+            return Result<IReadOnlyCollection<PaymentAccountResponse>>
+                .Succeeded(mapper.Map<IReadOnlyCollection<PaymentAccountResponse>>(paymentAccounts));
         }
 
         [HttpGet("byId/{paymentAccountId}")]
