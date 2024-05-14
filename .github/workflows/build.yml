@@ -2,9 +2,6 @@ name: Build Application
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: [Update Semver]
-    types: [completed]
   push:
     branches:
       - master
@@ -29,6 +26,8 @@ env:
 jobs:
   update-tag-version:
     uses: ./.github/workflows/update_semver.yml
+    with:
+      is-merged: ${{ github.event.pull_request.merged == true }}
   build-currency-accounting-api:
     name: Accounting api quality gate
     runs-on: ubuntu-latest

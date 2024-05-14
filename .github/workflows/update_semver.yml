@@ -2,10 +2,15 @@ name: Update Semver
 
 on:
   workflow_call:
+    inputs:
+      is-merged:
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   update-semver_if_merged:
-    if: github.event.pull_request.merged == true
+    if: ${{ inputs.is-merged == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
