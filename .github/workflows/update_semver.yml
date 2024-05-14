@@ -3,14 +3,14 @@ name: Update Semver
 on:
   workflow_call:
     inputs:
-      is-merged:
-        required: true
+      should-skipped:
+        required: false
         type: boolean
         default: false
 
 jobs:
   update-semver_if_merged:
-    if: ${{ inputs.is-merged == 'true' }}
+    if: ${{ inputs.should-skipped == false }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
