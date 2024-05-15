@@ -10,5 +10,7 @@
         public static readonly CurrencyTypes Eur = new(40, nameof(Eur));
         public static readonly CurrencyTypes Uan = new(50, nameof(Uan));
         public static readonly CurrencyTypes Try = new(60, nameof(Try));
+
+        public static implicit operator CurrencyTypes(int currencyId) => FromValue<CurrencyTypes>(currencyId);
     }
 }
