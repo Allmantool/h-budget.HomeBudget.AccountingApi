@@ -5,5 +5,7 @@
     {
         public static readonly CategoryTypes Income = new(0, nameof(Income));
         public static readonly CategoryTypes Expense = new(1, nameof(Expense));
+
+        public static implicit operator CategoryTypes(int categoryId) => FromValue<CategoryTypes>(categoryId);
     }
 }
