@@ -50,16 +50,16 @@ namespace HomeBudget.Components.Operations.Services
                 var record = new PaymentOperationHistoryRecord
                 {
                     Record = paymentOperation,
-                    Balance = await CalculateIncrementAsync(paymentOperation)
+                    Balance = initialBalance + await CalculateIncrementAsync(paymentOperation)
                 };
 
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 await paymentsHistoryDocumentsClient.InsertOneAsync(paymentAccountId, record);
 
-                return Result<decimal>.Succeeded(initialBalance + record.Balance);
+                return Result<decimal>.Succeeded(record.Balance);
             }
 
-            await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations);
+            await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations, initialBalance);
 
             var historyRecords = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
 
@@ -67,7 +67,7 @@ namespace HomeBudget.Components.Operations.Services
                 ? historyRecords.Last()
                 : default;
 
-            return Result<decimal>.Succeeded((historyOperationDocument?.Payload.Balance ?? 0) + initialBalance);
+            return Result<decimal>.Succeeded(historyOperationDocument?.Payload.Balance ?? initialBalance);
         }
 
         private async Task<decimal> GetPaymentAccountInitialBalanceAsync(string paymentAccountId)
@@ -75,12 +75,18 @@ namespace HomeBudget.Components.Operations.Services
             var paymentAccountDocumentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
             var document = paymentAccountDocumentResult.Payload;
 
+            if (document == null)
+            {
+                return 0;
+            }
+
             return document.Payload.InitialBalance;
         }
 
         private async Task InsertManyAsync(
             Guid paymentAccountId,
-            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
+            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations,
+            decimal initialBalance)
         {
             var operationsHistory = new List<PaymentOperationHistoryRecord>();
 
@@ -90,7 +96,7 @@ namespace HomeBudget.Components.Operations.Services
             {
                 var previousRecordBalance = operationsHistory.Any()
                     ? operationsHistory[^1].Balance
-                    : 0;
+                    : initialBalance;
 
                 operationsHistory.Add(
                     new PaymentOperationHistoryRecord
