@@ -42,9 +42,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task GetPaymentOperations_WithSeveralPaymentOperations_ThenBalanceHistoryHasBeenCalculatedCorrectly()
         {
-            const int createRequestAmount = 11;
-            const decimal expectedBalance = 176M;
+            const int createRequestAmount = 3;
             const decimal initialBalance = 11.2m;
+            const decimal expectedBalance = 47.2M;
 
             var paymentAccountId = (await SavePaymentAccountAsync(initialBalance)).Payload;
 
@@ -71,20 +71,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
+            var historyRecordBalance = historyRecords.OrderBy(r => r.Record.OperationDay).Select(r => r.Balance);
+
             Assert.Multiple(() =>
             {
-                balanceAfter.Should().Be(expectedBalance + initialBalance);
-
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
-                Assert.That(() => historyRecords.Last().Balance, Is.EqualTo(expectedBalance).After(10));
+
+                balanceAfter.Should().Be(expectedBalance);
+                historyRecordBalance.Should().BeEquivalentTo(new[] { 22.2m, 34.2m, 47.2m });
             });
         }
 
         [Test]
         public async Task GetPaymentOperations_WithExpenseOperations_ReturnsNegativeBalance()
         {
-            const decimal expectedBalanceAmount = 12.13M;
-            const decimal initialBalance = 11.2m;
+            const decimal expectedBalanceAmount = 2M;
+            const decimal initialBalance = 10m;
 
             var paymentAccountId = (await SavePaymentAccountAsync(initialBalance)).Payload;
 
@@ -92,7 +94,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var requestBody = new CreateOperationRequest
             {
-                Amount = expectedBalanceAmount,
+                Amount = 8,
                 Comment = "New operation - expense",
                 CategoryId = expenseCategoryId,
                 ContractorId = Guid.NewGuid().ToString(),
@@ -110,15 +112,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                historyRecords.Single().Balance.Should().Be(-expectedBalanceAmount);
-                balanceAfter.Should().Be(-expectedBalanceAmount + initialBalance);
+                historyRecords.Single().Balance.Should().Be(expectedBalanceAmount);
+                balanceAfter.Should().Be(expectedBalanceAmount);
             });
         }
 
         [Test]
         public async Task GetPaymentOperations_WithSeveralOperations_ShouldReturnExpectedBalanceOperationsOrdering()
         {
-            const int createRequestAmount = 5;
+            const int createRequestAmount = 3;
             var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
@@ -129,7 +131,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Comment = $"New operation - {i}",
                     CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-loop-{i}"),
                     ContractorId = Guid.NewGuid().ToString(),
-                    OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
+                    OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
 
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
@@ -140,7 +142,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
-            string.Join(',', historyRecords.Select(r => r.Balance)).Should().Be("11,20,28,38,50");
+            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 19.2m, 28.2m, 38.2m });
         }
 
         [Test]
@@ -156,7 +158,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var requestBody = new CreateOperationRequest
                 {
                     Amount = 7,
-                    Comment = $"New operation - {i}",
+                    Comment = $"{i} - New operation",
                     CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-3s-{i}"),
                     ContractorId = Guid.NewGuid().ToString(),
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
@@ -179,7 +181,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 OperationDate = new DateOnly(2027, 1, 17),
                 CategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-3s-0"),
                 ContractorId = "238d0940-9d30-4dd2-b52c-c623d732daf4",
-                Comment = "updated state"
+                Comment = "0 - Update operation"
             };
 
             var operationForUpdateKey = operationsGuids.First();
@@ -189,15 +191,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(updateCreateRequest);
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
-
-            var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(operationForUpdateKey) == 0);
+            var historyRecords = (await GetHistoryRecordsAsync(paymentAccountId))
+                .OrderBy(r => r.Record.OperationDay)
+                .Select(r => r)
+                .ToList();
 
             Assert.Multiple(() =>
             {
-                operationsGuids.Count.Should().Be(3);
-                targetPaymentHistory.Record.Amount.Should().Be(9120);
-                targetPaymentHistory.Balance.Should().Be(-9106);
+                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo(new[] { 7, 7, 9120 });
+
+                historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 18.2m, 25.2m, -9094.8m });
             });
         }
 
@@ -239,7 +242,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(newOperationId) == 0);
 
-            targetPaymentHistory.Balance.Should().Be(-11);
+            targetPaymentHistory.Balance.Should().Be(0.2m);
         }
 
         [Test]
