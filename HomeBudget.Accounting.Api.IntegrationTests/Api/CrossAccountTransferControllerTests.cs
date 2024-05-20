@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Api.Models.History;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -112,11 +113,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
 
-        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryByPaymentAccountIdAsync(Guid accountId)
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryByPaymentAccountIdAsync(Guid accountId)
         {
             var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{accountId}");
 
-            var recipientHistoryResponse = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getRecipientOperationsRequest);
+            var recipientHistoryResponse = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest);
 
             return recipientHistoryResponse.Data.Payload;
         }
