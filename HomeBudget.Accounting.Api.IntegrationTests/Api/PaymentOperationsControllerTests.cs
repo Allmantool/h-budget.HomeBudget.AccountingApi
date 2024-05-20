@@ -94,7 +94,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = _sut.RestHttpClient
-                .Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+                .Execute<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
 
             var operationAmountAfter = paymentsHistoryResponse.Data.Payload.Count;
 
