@@ -12,6 +12,7 @@ using RestSharp;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
+using HomeBudget.Accounting.Api.Models.History;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
@@ -268,7 +269,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
 
-            var getResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
+            var getResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest);
 
             var result = getResponse.Data;
             var payload = result.Payload;
@@ -291,12 +292,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             result.IsSucceeded.Should().BeFalse();
         }
 
-        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryRecordsAsync(Guid paymentAccountId)
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsAsync(Guid paymentAccountId)
         {
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecord>>>(getPaymentHistoryRecordsRequest);
+                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
 
             return paymentsHistoryResponse.Data.Payload;
         }
