@@ -1,11 +1,13 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Builders
 {
-    internal class CrossAccountsTransferBuilder : ICrossAccountsTransferBuilder
+    internal class CrossAccountsTransferBuilder(IPaymentAccountDocumentClient client) : ICrossAccountsTransferBuilder
     {
         private Guid? _transferId;
 
@@ -45,7 +47,23 @@ namespace HomeBudget.Components.Operations.Builders
             _transferId = null;
         }
 
-        public Result<CrossAccountsTransferOperation> Build()
+        private async Task<string> GetAccountTransferDescriptionAsync(Guid accountId)
+        {
+            var accountDocumentResponse = await client.GetByIdAsync(accountId.ToString());
+
+            if (!accountDocumentResponse.IsSucceeded)
+            {
+                return string.Empty;
+            }
+
+            var accountDocument = accountDocumentResponse.Payload;
+
+            var account = accountDocument.Payload;
+
+            return $"{account.Agent} | {account.Description} (${account.Currency})";
+        }
+
+        public async Task<Result<CrossAccountsTransferOperation>> BuildAsync()
         {
             if (_recipient == null || _sender == null)
             {
@@ -55,8 +73,12 @@ namespace HomeBudget.Components.Operations.Builders
             _recipient.Key = _transferId ?? _transfer.Key;
             _recipient.ContractorId = _sender.PaymentAccountId;
 
+            _recipient.Comment = $"Transfer from {await GetAccountTransferDescriptionAsync(_sender.PaymentAccountId)}";
+
             _sender.Key = _transferId ?? _transfer.Key;
             _sender.ContractorId = _recipient.PaymentAccountId;
+
+            _sender.Comment = $"Transfer to {await GetAccountTransferDescriptionAsync(_recipient.PaymentAccountId)}";
 
             _transfer.PaymentOperations =
             [

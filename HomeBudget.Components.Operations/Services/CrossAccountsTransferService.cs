@@ -36,10 +36,10 @@ namespace HomeBudget.Components.Operations.Services
                     Math.Abs(payload.Amount * payload.Multiplier),
                     payload.OperationAt);
 
-            var transferOperation = crossAccountsTransferBuilder
+            var transferOperation = await crossAccountsTransferBuilder
                 .WithSender(senderOperation.Payload)
                 .WithRecipient(recipientOperation.Payload)
-                .Build();
+                .BuildAsync();
 
             return await mediator.Send(new ApplyTransferCommand(transferOperation.Payload), token);
         }
@@ -60,11 +60,11 @@ namespace HomeBudget.Components.Operations.Services
 
             var linkOperationForRemove = linkTransferOperationDocumentForRemove.Payload.Record;
 
-            var transferOperation = crossAccountsTransferBuilder
+            var transferOperation = await crossAccountsTransferBuilder
                 .WithSender(operationForRemove)
                 .WithRecipient(linkOperationForRemove)
                 .WithTransferId(removeTransferPayload.TransferOperationId)
-                .Build();
+                .BuildAsync();
 
             await mediator.Send(new RemoveTransferCommand(transferOperation.Payload), token);
 
@@ -72,6 +72,30 @@ namespace HomeBudget.Components.Operations.Services
                 operationForRemove.PaymentAccountId,
                 linkOperationForRemove.PaymentAccountId
             ]);
+        }
+
+        public async Task<Result<Guid>> UpdateAsync(UpdateTransferPayload updateTransferPayload, CancellationToken token)
+        {
+            var senderOperationDocument = await documentsClient
+                .GetByIdAsync(
+                    updateTransferPayload.Sender,
+                    updateTransferPayload.TransferOperationId);
+
+            var senderOperation = senderOperationDocument.Payload.Record;
+
+            var recipientOperationDocument = await documentsClient
+                .GetByIdAsync(
+                    updateTransferPayload.Recipient,
+                    updateTransferPayload.TransferOperationId);
+
+            var recipientOperation = recipientOperationDocument.Payload.Record;
+
+            var transferOperation = await crossAccountsTransferBuilder
+                .WithSender(senderOperation)
+                .WithRecipient(recipientOperation)
+                .BuildAsync();
+
+            return await mediator.Send(new UpdateTransferCommand(transferOperation.Payload), token);
         }
     }
 }

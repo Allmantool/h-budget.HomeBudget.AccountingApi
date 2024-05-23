@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
 
@@ -11,6 +12,6 @@ namespace HomeBudget.Accounting.Domain.Builders
 
         ICrossAccountsTransferBuilder WithTransferId(Guid transferId);
 
-        Result<CrossAccountsTransferOperation> Build();
+        Task<Result<CrossAccountsTransferOperation>> BuildAsync();
     }
 }
