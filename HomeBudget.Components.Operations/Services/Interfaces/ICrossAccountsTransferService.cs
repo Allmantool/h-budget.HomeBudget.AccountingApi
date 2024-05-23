@@ -12,5 +12,6 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
     {
         Task<Result<Guid>> ApplyAsync(CrossAccountsTransferPayload payload, CancellationToken token);
         Task<Result<IEnumerable<Guid>>> RemoveAsync(RemoveTransferPayload removeTransferPayload, CancellationToken token);
+        Task<Result<Guid>> UpdateAsync(UpdateTransferPayload updateTransferPayload, CancellationToken token);
     }
 }
