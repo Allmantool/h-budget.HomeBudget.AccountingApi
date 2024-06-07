@@ -16,7 +16,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="RestSharp" Version="111.1.0" />
+    <PackageReference Include="RestSharp" Version="111.2.0" />
     <PackageReference Include="Testcontainers" Version="3.8.0" />
     <PackageReference Include="Testcontainers.EventStoreDb" Version="3.8.0" />
     <PackageReference Include="Testcontainers.Kafka" Version="3.8.0" />
