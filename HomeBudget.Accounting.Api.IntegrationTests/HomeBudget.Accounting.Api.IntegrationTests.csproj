@@ -19,7 +19,7 @@
     <PackageReference Include="RestSharp" Version="111.2.0" />
     <PackageReference Include="Testcontainers" Version="3.8.0" />
     <PackageReference Include="Testcontainers.EventStoreDb" Version="3.8.0" />
-    <PackageReference Include="Testcontainers.Kafka" Version="3.8.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="3.9.0" />
     <PackageReference Include="Testcontainers.MongoDb" Version="3.8.0" />
   </ItemGroup>
 
