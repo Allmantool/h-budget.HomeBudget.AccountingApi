@@ -12,6 +12,7 @@ using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {

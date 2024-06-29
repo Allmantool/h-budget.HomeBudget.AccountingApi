@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {

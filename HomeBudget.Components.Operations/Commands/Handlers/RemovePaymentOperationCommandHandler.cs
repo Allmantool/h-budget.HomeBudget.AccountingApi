@@ -6,11 +6,11 @@ using AutoMapper;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Handlers;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {

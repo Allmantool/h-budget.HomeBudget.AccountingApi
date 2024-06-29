@@ -16,11 +16,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="RestSharp" Version="111.2.0" />
-    <PackageReference Include="Testcontainers" Version="3.8.0" />
-    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.8.0" />
-    <PackageReference Include="Testcontainers.Kafka" Version="3.8.0" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="3.8.0" />
+    <PackageReference Include="RestSharp" Version="111.3.0" />
+    <PackageReference Include="Testcontainers" Version="3.9.0" />
+    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.9.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="3.9.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="3.9.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.25.1.91650" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.28.0.94264" />
   </ItemGroup>
 
 </Project>

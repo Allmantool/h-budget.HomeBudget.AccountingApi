@@ -11,10 +11,11 @@
   <ItemGroup>
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
     <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
+    <ProjectReference Include="..\HomeBudget.Core\HomeBudget.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.25.1.91650" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.28.0.94264" />
   </ItemGroup>
 
 </Project>

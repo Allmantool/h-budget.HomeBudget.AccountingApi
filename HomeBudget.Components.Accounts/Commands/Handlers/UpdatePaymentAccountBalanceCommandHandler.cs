@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 
 using MediatR;
 
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Commands.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Accounts.Commands.Handlers
 {

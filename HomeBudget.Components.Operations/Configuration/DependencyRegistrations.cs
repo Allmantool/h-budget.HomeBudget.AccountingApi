@@ -8,7 +8,6 @@ using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
@@ -18,6 +17,7 @@ using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Configuration
 {

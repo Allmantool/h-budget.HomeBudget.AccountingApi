@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Domain.Builders
 {

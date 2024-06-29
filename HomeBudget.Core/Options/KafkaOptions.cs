@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿using HomeBudget.Core.Models;
+
+namespace HomeBudget.Core.Options
 {
     public class KafkaOptions
     {

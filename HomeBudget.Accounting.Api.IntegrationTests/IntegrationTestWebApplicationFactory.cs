@@ -10,7 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core.Models;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {

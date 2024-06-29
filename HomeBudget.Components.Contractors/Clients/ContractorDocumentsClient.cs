@@ -9,6 +9,8 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Contractors.Clients.Interfaces;
 using HomeBudget.Components.Contractors.Models;
+using HomeBudget.Core.Models;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Contractors.Clients
 {

@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Components.Operations.Builders;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Builders
 {

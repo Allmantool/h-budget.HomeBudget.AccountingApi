@@ -18,6 +18,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {

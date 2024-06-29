@@ -1,6 +1,6 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿namespace HomeBudget.Core.Options
 {
-    public class MongoDbOptions
+    public record MongoDbOptions
     {
         public string ConnectionString { get; set; }
         public string PaymentsHistoryDatabaseName { get; set; }

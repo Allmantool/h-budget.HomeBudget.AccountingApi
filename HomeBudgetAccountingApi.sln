@@ -31,6 +31,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HomeBudget.Accounting.Infra
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HomeBudget.Accounting.Api.Tests", "HomeBudget.Accounting.Api.Tests\HomeBudget.Accounting.Api.Tests.csproj", "{02045618-C7AF-4F79-AC72-3FF3B5E6F206}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{DA942901-C03B-444A-8C98-30E1BFE42A27}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Core", "HomeBudget.Core\HomeBudget.Core.csproj", "{3F1E85E7-792D-40A7-BB2B-5EB3925939CD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -77,6 +81,10 @@ Global
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -92,6 +100,7 @@ Global
 		{F3E8C228-2D8F-48F1-80F7-FCA4BBD96671} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{3E693F31-1BEC-420A-906A-3313EF61CFF8} = {CE42AC29-2775-4FD3-93CC-9FF005700C8C}
 		{02045618-C7AF-4F79-AC72-3FF3B5E6F206} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
+		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD} = {DA942901-C03B-444A-8C98-30E1BFE42A27}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CDA43629-25A6-4514-AA5B-1AD407073983}

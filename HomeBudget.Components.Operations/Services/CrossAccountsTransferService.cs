@@ -7,11 +7,11 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Factories;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Services
 {
