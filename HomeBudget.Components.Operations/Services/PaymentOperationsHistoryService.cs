@@ -11,6 +11,7 @@ using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Services
 {

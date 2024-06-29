@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Builders
 {

@@ -11,7 +11,7 @@ using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Enumerations;
-using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {

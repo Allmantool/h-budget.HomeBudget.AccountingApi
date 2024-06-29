@@ -3,11 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {

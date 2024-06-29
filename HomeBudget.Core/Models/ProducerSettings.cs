@@ -1,4 +1,4 @@
-﻿namespace HomeBudget.Accounting.Domain.Models
+﻿namespace HomeBudget.Core.Models
 {
     public class ProducerSettings
     {

@@ -12,9 +12,9 @@ using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
-using HomeBudget.Accounting.Domain.Enumerations;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Api.Models.History;
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {

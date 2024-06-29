@@ -10,6 +10,7 @@ using HomeBudget.Accounting.Api.Models.Contractor;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Contractors.Clients.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {

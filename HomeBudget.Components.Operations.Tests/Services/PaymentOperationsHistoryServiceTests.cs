@@ -18,6 +18,7 @@ using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Services
 {

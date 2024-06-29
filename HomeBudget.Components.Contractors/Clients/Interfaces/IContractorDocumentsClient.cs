@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Contractors.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Contractors.Clients.Interfaces
 {

@@ -8,8 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.History;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
 {

@@ -3,6 +3,7 @@
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Factories
 {

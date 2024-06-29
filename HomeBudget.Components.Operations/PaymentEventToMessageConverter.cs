@@ -4,8 +4,8 @@ using System.Text.Json;
 using Confluent.Kafka;
 
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations
 {
