@@ -1,13 +1,20 @@
 ﻿using System;
+using System.Threading.Channels;
 
+using Elastic.Apm.SerilogEnricher;
+using Elastic.Channels;
+using Elastic.Ingest.Elasticsearch;
+using Elastic.Ingest.Elasticsearch.DataStreams;
+using Elastic.Serilog.Sinks;
+using Elastic.Transport;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Enrichers.Span;
+using Serilog.Events;
 using Serilog.Exceptions;
-using Serilog.Sinks.Elasticsearch;
 
 using HomeBudget.Accounting.Api.Constants;
 
@@ -29,6 +36,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithSpan()
                 .WriteTo.Debug()
                 .WriteTo.Console()
+                .Enrich.WithElasticApmCorrelationInfo()
                 .AddElasticSearchSupport(configuration, environment)
                 .ReadFrom.Configuration(configuration)
                 .CreateLogger();
@@ -55,15 +63,18 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
             var formattedExecuteAssemblyName = typeof(Program).Assembly.GetName().Name;
             var dateIndexPostfix = DateTime.UtcNow.ToString("MM-yyyy-dd");
 
-            return new ElasticsearchSinkOptions(elasticNodeUri)
+            return new ElasticsearchSinkOptions(new DistributedTransport(new TransportConfiguration(elasticNodeUri)))
             {
-                AutoRegisterTemplate = true,
-                TypeName = null,
-                AutoRegisterTemplateVersion = AutoRegisterTemplateVersion.ESv7,
-                BatchAction = ElasticOpType.Create,
-                NumberOfReplicas = 1,
-                NumberOfShards = 2,
-                IndexFormat = $"{formattedExecuteAssemblyName}-{environment.EnvironmentName}-{dateIndexPostfix}".Replace(".", "-").ToLower()
+                DataStream = new DataStreamName($"{formattedExecuteAssemblyName}-{environment.EnvironmentName}-{dateIndexPostfix}".Replace(".", "-").ToLower()),
+                BootstrapMethod = BootstrapMethod.Failure,
+                MinimumLevel = LogEventLevel.Debug,
+                ConfigureChannel = channelOpts =>
+                {
+                    channelOpts.BufferOptions = new BufferOptions
+                    {
+                        BoundedChannelFullMode = BoundedChannelFullMode.DropNewest,
+                    };
+                }
             };
         }
     }

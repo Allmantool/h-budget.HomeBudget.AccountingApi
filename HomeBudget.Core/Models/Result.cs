@@ -1,6 +1,6 @@
 ﻿namespace HomeBudget.Core.Models
 {
-    public record Result<T>(
+    public class Result<T>(
         T payload,
         string statusMessage,
         bool isSucceeded)
