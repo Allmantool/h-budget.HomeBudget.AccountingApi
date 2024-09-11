@@ -17,10 +17,10 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="RestSharp" Version="111.4.1" />
-    <PackageReference Include="Testcontainers" Version="3.9.0" />
-    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.9.0" />
-    <PackageReference Include="Testcontainers.Kafka" Version="3.9.0" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="3.9.0" />
+    <PackageReference Include="Testcontainers" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.EventStoreDb" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="3.10.0" />
   </ItemGroup>
 
   <ItemGroup>
