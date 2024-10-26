@@ -13,8 +13,8 @@
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
     <PackageReference Include="AspNetCore.HealthChecks.UI.InMemory.Storage" Version="8.0.1" />
     <PackageReference Include="AutoMapper" Version="13.0.1" />
-    <PackageReference Include="Elastic.Apm.SerilogEnricher" Version="8.12.1" />
-    <PackageReference Include="Elastic.Serilog.Sinks" Version="8.12.1" />
+    <PackageReference Include="Elastic.Apm.SerilogEnricher" Version="8.12.2" />
+    <PackageReference Include="Elastic.Serilog.Sinks" Version="8.12.2" />
     <PackageReference Include="Microsoft.AspNetCore.HeaderPropagation" Version="8.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.10" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.1.2" />
@@ -58,7 +58,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.28.0.94264" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.32.0.97167" />
   </ItemGroup>
 
 </Project>

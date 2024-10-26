@@ -6,9 +6,9 @@
 
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.6.0" />
-    <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.3.5" />
+    <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.3.6" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="MongoDB.Driver" Version="2.29.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.28.0.94264" />
+    <PackageReference Update="SonarAnalyzer.CSharp" Version="9.32.0.97167" />
   </ItemGroup>
 
 </Project>
