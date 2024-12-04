@@ -69,7 +69,6 @@ services
             .AddMeter("Microsoft.AspNetCore.Http.Connections")
             .AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks")
             .SetMaxMetricStreams(OpenTelemetryOptions.MaxMetricStreams)
-            .SetMaxMetricPointsPerMetricStream(OpenTelemetryOptions.MaxMetricPointsPerMetricStream)
             .AddPrometheusExporter()
     );
 
