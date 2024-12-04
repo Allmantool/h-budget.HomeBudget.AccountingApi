@@ -58,7 +58,7 @@ COPY ["HomeBudget.Accounting.Api.IntegrationTests/*.csproj", "HomeBudget.Account
 
 COPY . .
 
-RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --framework:net8.0 -maxcpucount:1 -o /app/build
+RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --framework:net9.0 -maxcpucount:1 -o /app/build
 
 # Not compatible with .net 9.0 (will be updated later)
 # RUN /tools/snitch
@@ -67,7 +67,7 @@ FROM build AS publish
 RUN dotnet publish "HomeBudgetAccountingApi.sln" \
     --no-dependencies \
     --no-restore \
-    --framework net8.0 \
+    --framework net9.0 \
     -c Release \
     -v Diagnostic \
     -o /app/publish
