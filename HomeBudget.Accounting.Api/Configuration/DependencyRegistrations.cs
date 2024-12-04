@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Bson.Serialization;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Components.Accounts.Configuration;
@@ -18,6 +21,8 @@ namespace HomeBudget.Accounting.Api.Configuration
             IConfiguration configuration,
             IWebHostEnvironment webHostEnvironment)
         {
+            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+
             return services
                 .SetUpConfigurationOptions(configuration)
                 .RegisterPaymentAccountsDependencies()

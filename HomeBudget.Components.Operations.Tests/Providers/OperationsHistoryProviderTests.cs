@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 
 using DotNet.Testcontainers.Containers;
 using FluentAssertions;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using NUnit.Framework;
 using Testcontainers.MongoDb;
@@ -20,6 +23,8 @@ namespace HomeBudget.Components.Operations.Tests.Providers
         [OneTimeSetUp]
         public void Setup()
         {
+            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+
             _mongoDbContainer = new MongoDbBuilder()
                 .WithImage("mongo:7.0.5-rc0-jammy")
                 .WithName($"{nameof(OperationsHistoryProviderTests)}-container")
