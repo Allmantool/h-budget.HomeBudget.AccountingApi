@@ -7,7 +7,6 @@ namespace HomeBudget.Components.Operations
     {
         public static string GetEventSteamName(string paymentAccountId)
             => string.Join(
-                NameConventions.EventPrefixSeparator,
-                [paymentAccountId, nameof(PaymentOperationEvent)]);
+                NameConventions.EventPrefixSeparator, paymentAccountId, nameof(PaymentOperationEvent));
     }
 }
