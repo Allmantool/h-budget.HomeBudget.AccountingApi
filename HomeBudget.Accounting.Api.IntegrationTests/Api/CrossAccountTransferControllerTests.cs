@@ -108,6 +108,53 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             });
         }
 
+        [Test]
+        [Ignore("Not implemented so far")]
+        public async Task UpdateTransfer_WithoutSenderOrRecipientAccountChange_ThenValuesWillBeUpdated()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
+
+            var requestBody = new CrossAccountsTransferRequest
+            {
+                Amount = 100,
+                Recipient = recipientAccountId,
+                Sender = senderAccountId,
+                OperationAt = new DateOnly(2024, 05, 07),
+                Multiplier = 0.12m
+            };
+
+            var createTransferRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
+                .AddJsonBody(requestBody);
+
+            var transferResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createTransferRequest);
+
+            var updateTransferRequestBody = new UpdateTransferRequest
+            {
+                TransferOperationId = transferResponse.Data.Payload.PaymentOperationId,
+                Amount = 1350,
+                Multiplier = 10m,
+                OperationAt = new DateOnly(2024, 05, 11),
+                Recipient = recipientAccountId,
+                Sender = senderAccountId
+            };
+
+            var updateRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Patch)
+                .AddJsonBody(updateTransferRequestBody);
+
+            await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(updateRequest);
+
+            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
+
+            var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
+
+            Assert.Multiple(() =>
+            {
+                senderHistoryResponsePayload.First().Balance.Should().Be(-100m);
+                recipientHistoryResponsePayload.First().Balance.Should().Be(1350m);
+            });
+        }
+
         public ValueTask DisposeAsync()
         {
             return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
