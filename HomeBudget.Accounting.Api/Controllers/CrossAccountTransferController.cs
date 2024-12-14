@@ -58,5 +58,27 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             return Result<CrossAccountsTransferResponse>.Succeeded(response);
         }
+
+        [HttpPatch]
+        public async Task<Result<CrossAccountsTransferResponse>> UpdateAsync(
+            UpdateTransferRequest request,
+            CancellationToken token = default)
+        {
+            var updateTransferPayload = mapper.Map<UpdateTransferPayload>(request);
+
+            var responseResult = await crossAccountsTransferService.UpdateAsync(updateTransferPayload, token);
+
+            var response = new CrossAccountsTransferResponse
+            {
+                PaymentOperationId = responseResult.Payload,
+                PaymentAccountIds =
+                [
+                    request.Sender,
+                    request.Recipient
+                ]
+            };
+
+            return Result<CrossAccountsTransferResponse>.Succeeded(response);
+        }
     }
 }

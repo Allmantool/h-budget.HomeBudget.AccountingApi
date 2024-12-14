@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageReference Include="MongoDB.Driver" Version="3.0.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.1.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="NUnit" Version="4.2.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
@@ -21,10 +21,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Testcontainers" Version="4.0.0" />
-    <PackageReference Include="Testcontainers.EventStoreDb" Version="4.0.0" />
-    <PackageReference Include="Testcontainers.Kafka" Version="4.0.0" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="4.0.0" />
+    <PackageReference Include="Testcontainers" Version="4.1.0" />
+    <PackageReference Include="Testcontainers.EventStoreDb" Version="4.1.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="4.1.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="4.1.0" />
   </ItemGroup>
 
   <ItemGroup>

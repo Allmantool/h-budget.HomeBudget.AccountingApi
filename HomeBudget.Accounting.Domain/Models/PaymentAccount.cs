@@ -4,11 +4,11 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class PaymentAccount : DomainEntity
     {
-        public AccountTypes Type { get; set; }
-        public string Currency { get; set; }
+        public AccountTypes Type { get; init; }
+        public string Currency { get; init; }
         public decimal Balance { get; set; }
-        public string Agent { get; set; }
-        public string Description { get; set; }
-        public decimal InitialBalance { get; set; }
+        public string Agent { get; init; }
+        public string Description { get; init; }
+        public decimal InitialBalance { get; init; }
     }
 }
