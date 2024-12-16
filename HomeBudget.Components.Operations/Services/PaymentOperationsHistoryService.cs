@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -17,16 +16,15 @@ namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
-        IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ICategoryDocumentsClient categoryDocumentsClient)
         : IPaymentOperationsHistoryService
     {
-        public async Task<Result<decimal>> SyncHistoryAsync(Guid paymentAccountId)
+        public async Task<Result<decimal>> SyncHistoryAsync(
+            Guid paymentAccountId,
+            IEnumerable<PaymentOperationEvent> eventsForAccount)
         {
             var initialBalance = await GetPaymentAccountInitialBalanceAsync(paymentAccountId.ToString());
-
-            var eventsForAccount = await eventStoreDbClient.ReadAsync(paymentAccountId.ToString()).ToListAsync();
 
             if (!eventsForAccount.Any())
             {
@@ -76,12 +74,7 @@ namespace HomeBudget.Components.Operations.Services
             var paymentAccountDocumentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
             var document = paymentAccountDocumentResult.Payload;
 
-            if (document == null)
-            {
-                return 0;
-            }
-
-            return document.Payload.InitialBalance;
+            return document == null ? 0 : document.Payload.InitialBalance;
         }
 
         private async Task InsertManyAsync(

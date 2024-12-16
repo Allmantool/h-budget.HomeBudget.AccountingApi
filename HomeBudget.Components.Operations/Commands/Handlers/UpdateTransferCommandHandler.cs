@@ -9,23 +9,19 @@ using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Handlers;
-using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class UpdateTransferCommandHandler(
         IMapper mapper,
-        ISender sender,
         IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
-        IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler,
-        IPaymentOperationsHistoryService paymentOperationsHistoryService) :
-        BasePaymentCommandHandler(
+        IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
+        : BasePaymentCommandHandler(
             mapper,
-            sender,
             operationsDeliveryHandler,
-            fireAndForgetHandler,
-            paymentOperationsHistoryService), IRequestHandler<UpdateTransferCommand, Result<Guid>>
+            fireAndForgetHandler),
+            IRequestHandler<UpdateTransferCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(UpdateTransferCommand request, CancellationToken cancellationToken)
         {

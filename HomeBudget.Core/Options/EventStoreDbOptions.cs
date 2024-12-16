@@ -4,6 +4,6 @@ namespace HomeBudget.Core.Options
 {
     public record EventStoreDbOptions
     {
-        public Uri Url { get; set; }
+        public Uri Url { get; init; }
     }
 }

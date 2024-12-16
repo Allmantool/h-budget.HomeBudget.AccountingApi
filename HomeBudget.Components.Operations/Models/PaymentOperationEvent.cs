@@ -2,10 +2,10 @@
 
 namespace HomeBudget.Components.Operations.Models
 {
-    internal class PaymentOperationEvent
+    public record PaymentOperationEvent
     {
-        public FinancialTransaction Payload { get; set; }
+        public FinancialTransaction Payload { get; init; }
 
-        public PaymentEventTypes EventType { get; set; }
+        public PaymentEventTypes EventType { get; init; }
     }
 }

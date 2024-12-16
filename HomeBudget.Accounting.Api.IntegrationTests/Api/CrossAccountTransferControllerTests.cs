@@ -50,8 +50,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createRequest);
 
-            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
+            await Task.Delay(1000);
 
+            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
             var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
 
             Assert.Multiple(() =>
@@ -96,6 +97,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                  .AddJsonBody(removeTransferRequestBody);
 
             await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(removeRequest);
+
+            await Task.Delay(1000);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
 
