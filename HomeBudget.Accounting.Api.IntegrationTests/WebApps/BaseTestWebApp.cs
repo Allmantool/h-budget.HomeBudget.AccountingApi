@@ -4,6 +4,10 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using RestSharp;
 
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Bson.Serialization;
+
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
@@ -20,6 +24,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         protected BaseTestWebApp()
         {
+            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
 
             var testProperties = TestContext.CurrentContext.Test.Properties;

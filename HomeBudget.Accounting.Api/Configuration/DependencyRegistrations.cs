@@ -31,7 +31,7 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterCategoriesDependencies();
         }
 
-        public static IServiceCollection SetUpConfigurationOptions(
+        private static IServiceCollection SetUpConfigurationOptions(
             this IServiceCollection services,
             IConfiguration configuration)
         {
