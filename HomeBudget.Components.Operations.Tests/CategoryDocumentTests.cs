@@ -1,8 +1,9 @@
 ﻿using System;
 
 using FluentAssertions;
-using MongoDB.Bson.Serialization;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Enumerations;
@@ -13,6 +14,12 @@ namespace HomeBudget.Components.Operations.Tests
     [TestFixture]
     public class CategoryDocumentTests
     {
+        [OneTimeSetUp]
+        public void Setup()
+        {
+            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        }
+
         [Test]
         public void Should_Deserialize_Category_With_OperationUnixTime()
         {
@@ -29,15 +36,6 @@ namespace HomeBudget.Components.Operations.Tests
                 { "CategoryKey", expectedKey },
                 { "OperationUnixTime", expectedOperationUnixTime }
             };
-
-            if (!BsonClassMap.IsClassMapRegistered(typeof(Category)))
-            {
-                BsonClassMap.RegisterClassMap<Category>(cm =>
-                {
-                    cm.AutoMap();
-                    cm.SetIgnoreExtraElements(true);
-                });
-            }
 
             // Act
             var deserializedCategory = BsonSerializer.Deserialize<Category>(bsonDocument);
