@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -10,7 +8,6 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Components.Categories.Clients.Interfaces;
@@ -59,8 +56,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            var sut = BuildServiceUnderTest(events);
-            var result = await sut.SyncHistoryAsync(paymentAccountId);
+            var sut = BuildServiceUnderTest();
+            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
 
             result.Payload.Should().Be(12.10m);
         }
@@ -113,8 +110,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            var sut = BuildServiceUnderTest(events);
-            var result = await sut.SyncHistoryAsync(paymentAccountId);
+            var sut = BuildServiceUnderTest();
+            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
 
             result.Payload.Should().Be(17.12m);
         }
@@ -138,8 +135,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            var sut = BuildServiceUnderTest(events);
-            var result = await sut.SyncHistoryAsync(paymentAccountId);
+            var sut = BuildServiceUnderTest();
+            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
 
             result.Payload.Should().Be(0);
         }
@@ -173,20 +170,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 }
             };
 
-            var sut = BuildServiceUnderTest(events);
-            var result = await sut.SyncHistoryAsync(paymentAccountId);
+            var sut = BuildServiceUnderTest();
+            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
 
             result.Payload.Should().Be(0);
         }
 
-        private PaymentOperationsHistoryService BuildServiceUnderTest(IEnumerable<PaymentOperationEvent> events)
+        private PaymentOperationsHistoryService BuildServiceUnderTest()
         {
-            var eventDbClient = new Mock<IEventStoreDbClient<PaymentOperationEvent>>();
-
-            eventDbClient
-                .Setup(cl => cl.ReadAsync(It.IsAny<string>(), CancellationToken.None))
-                .Returns(events.ToAsyncEnumerable());
-
             var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
             var paymentAccountDocumentClientMock = new Mock<IPaymentAccountDocumentClient>();
 
@@ -215,7 +206,10 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
                 .ReturnsAsync(() => Result<CategoryDocument>.Succeeded(payload));
 
-            return new PaymentOperationsHistoryService(paymentAccountDocumentClientMock.Object, eventDbClient.Object, paymentsHistoryClientMock.Object, categoriesClient.Object);
+            return new PaymentOperationsHistoryService(
+                paymentAccountDocumentClientMock.Object,
+                paymentsHistoryClientMock.Object,
+                categoriesClient.Object);
         }
     }
 }

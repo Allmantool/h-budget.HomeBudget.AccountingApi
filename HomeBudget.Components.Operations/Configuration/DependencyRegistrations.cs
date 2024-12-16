@@ -49,7 +49,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
-        public static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
+        private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
         {
             return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
         }

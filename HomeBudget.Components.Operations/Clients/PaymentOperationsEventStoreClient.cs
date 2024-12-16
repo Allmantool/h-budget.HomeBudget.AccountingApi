@@ -1,15 +1,22 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+using MediatR;
 using EventStore.Client;
 
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentOperationsEventStoreClient(EventStoreClient client)
+    internal class PaymentOperationsEventStoreClient(
+        EventStoreClient client,
+        ISender sender,
+        IPaymentOperationsHistoryService paymentOperationsHistoryService)
         : BaseEventStoreClient<PaymentOperationEvent>(client)
     {
         public override async Task<IWriteResult> SendAsync(
@@ -28,9 +35,26 @@ namespace HomeBudget.Components.Operations.Clients
                 token);
         }
 
-        public override IAsyncEnumerable<PaymentOperationEvent> ReadAsync(string streamName, CancellationToken token = default)
+        public override IAsyncEnumerable<PaymentOperationEvent> ReadAsync(
+            string streamName,
+            int maxEvents = int.MaxValue,
+            CancellationToken token = default)
         {
-            return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), token);
+            return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), maxEvents, token);
+        }
+
+        protected override async Task OnEventAppeared(PaymentOperationEvent eventData)
+        {
+            var paymentAccountId = eventData.Payload.PaymentAccountId;
+
+            var eventsForAccount = await ReadAsync(paymentAccountId.ToString()).ToListAsync();
+
+            var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId, eventsForAccount);
+
+            await sender.Send(
+                new UpdatePaymentAccountBalanceCommand(
+                    paymentAccountId,
+                    upToDateBalanceResult.Payload));
         }
     }
 }
