@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.DependencyInjection;
 using MediatR;
 using EventStore.Client;
 
@@ -14,9 +16,9 @@ using HomeBudget.Components.Operations.Services.Interfaces;
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentOperationsEventStoreClient(
+        IServiceProvider serviceProvider,
         EventStoreClient client,
-        ISender sender,
-        IPaymentOperationsHistoryService paymentOperationsHistoryService)
+        ISender sender)
         : BaseEventStoreClient<PaymentOperationEvent>(client)
     {
         public override async Task<IWriteResult> SendAsync(
@@ -48,6 +50,9 @@ namespace HomeBudget.Components.Operations.Clients
             var paymentAccountId = eventData.Payload.PaymentAccountId;
 
             var eventsForAccount = await ReadAsync(paymentAccountId.ToString()).ToListAsync();
+
+            using var scope = serviceProvider.CreateScope();
+            var paymentOperationsHistoryService = scope.ServiceProvider.GetRequiredService<IPaymentOperationsHistoryService>();
 
             var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId, eventsForAccount);
 

@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-
     tags: ["v*.*.*"]
 
   pull_request:
@@ -16,81 +15,37 @@ on:
       - test/*
       - hotfix/*
       - fix/*
-      - tech/
+      - tech/*
     types: [opened, synchronize, closed]
 
-env:
-  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-  SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
-  IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
-
 jobs:
+  # Job to update tag version if the PR is merged
   update-tag-version-if_merged:
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
     uses: ./.github/workflows/update_semver.yml
 
-  build-currency-accounting-api:
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged) }}
-    name: Accounting api quality gate
+  # Set up environment and install tools in parallel
+  setup-and-install-tools:
+    name: Set Up Environment & Install Tools
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-
+    outputs:
+      tag_version: ${{ steps.last_tag.outputs.TARGET_TAG }}
     steps:
-      - name: Set up JDK 21
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensure full git history for relevant analysis
+
+      - name: Set up JDK 21 for SonarScanner
         uses: actions/setup-java@v3
         with:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Check out code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-
-      - name: Setup .NET
+      - name: Setup .NET 9.0 SDK
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: "9.0.x"
-
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v3
-        with:
-          path: ~\sonar\cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Cache SonarCloud scanner
-        id: cache-sonar-scanner
-        uses: actions/cache@v3
-        with:
-          path: .\.sonar\scanner
-          key: ${{ runner.os }}-sonar-scanner
-          restore-keys: ${{ runner.os }}-sonar-scanner
-
-      - name: Set up 'Find Current Pull Request'
-        uses: jwalton/gh-find-current-pr@v1
-        id: findPr
-        with:
-          # Can be "open", "closed", or "all".  Defaults to "open".
-          state: open
-
-      - name: Get pull request ID
-        run: echo "Your PR is ${PR}"
-        if: success() && steps.findPr.outputs.number
-        env:
-          PR: ${{ steps.findPr.outputs.pr }}
-
-      - name: Enquire last git tag
-        id: last_tag
-        shell: bash
-        run: |
-          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
-          tag=$(echo $tag_v | sed 's/v//')
-
-          echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
-          echo "Last git tag: $tag"
 
       - name: Install external tools for quality gate verification
         shell: bash
@@ -98,32 +53,55 @@ jobs:
           dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
           dotnet tool install --global dotnet-sonarscanner --version 5.14.0
 
-      - name: Make the scanner script file executable
+      - name: Enquire last git tag
+        id: last_tag
+        shell: bash
         run: |
-          chmod +x ./startsonar.sh
+          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
+          tag=$(echo $tag_v | sed 's/v//')
+          echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
+          echo "Last git tag: $tag"
 
-      - name: Start sonnar scanning
+  # Job for SonarCloud scanning (runs after setup)
+  sonar-scan:
+    needs: setup-and-install-tools
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensure full git history for analysis
+
+      - name: Set up 'Find Current Pull Request'
+        uses: jwalton/gh-find-current-pr@v1
+        id: findPr
+        with:
+          state: open
+
+      - name: Install dotnet-sonarscanner
+        run: |
+          dotnet tool install --global dotnet-sonarscanner --version 5.14.0
+
+      - name: Start Sonar scanning
         env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           PULL_REQUEST_ID: ${{ steps.findPr.outputs.pr }}
           PULL_REQUEST_SOURCE_BRANCH: ${{ github.ref }}
           PULL_REQUEST_TARGET_BRANCH: refs/heads/master
-          ACTION: ${{ github.action }}
-          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: sh ./startsonar.sh
 
-      - name: Build the solution to quality metrics gathering
+      - name: Build the solution for quality metrics
         shell: bash
-        run: |
-          dotnet build HomeBudgetAccountingApi.sln \
-            --no-incremental
+        run: dotnet build HomeBudgetAccountingApi.sln --no-incremental
 
-      - name: Run test for coverage collecting
+      - name: Run tests for coverage collection
         shell: bash
         run: |
           dotnet-dotcover test HomeBudgetAccountingApi.sln \
@@ -131,29 +109,46 @@ jobs:
             --dcOutput="test-results/accounting-coverage.html" \
             --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests"
 
-      - name: End sonnar scanning
+      - name: End SonarCloud scanning
         env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
-        run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+        run: dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
-      - name: Build docker image
-        env:
-          BUILD_VERSION: ${{ steps.last_tag.outputs.TARGET_TAG }}
+  # Job for Docker Build
+  docker-build:
+    needs: setup-and-install-tools
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    env:
+      BUILD_VERSION: ${{ needs.setup-and-install-tools.outputs.tag_version }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensure full git history for Docker build context
+
+      - name: Build Docker image
         shell: bash
         run: |
-          docker build \
-            --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}" \
-            .
+          docker build --target 'final' \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.setup-and-install-tools.outputs.tag_version }}" .
 
+  # Job for Docker Push
+  docker-push:
+    needs: docker-build
+    name: Push Docker Image to Docker Hub
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push docker image
+      - name: Push Docker image
         shell: bash
         run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}"
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.docker-build.outputs.BUILD_VERSION }}"

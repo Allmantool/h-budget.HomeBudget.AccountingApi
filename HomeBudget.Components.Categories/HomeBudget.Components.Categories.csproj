@@ -18,4 +18,10 @@
     <PackageReference Update="SonarAnalyzer.CSharp" Version="10.3.0.106239" />
   </ItemGroup>
 
+  <ItemGroup>
+  <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+    <_Parameter1>HomeBudget.Components.Operations.Tests</_Parameter1>
+  </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>
