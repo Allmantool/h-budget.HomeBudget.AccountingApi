@@ -14,7 +14,6 @@ using Testcontainers.EventStoreDb;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Services.Interfaces;
 
 namespace HomeBudget.Components.Operations.Tests
 {
@@ -54,7 +53,7 @@ namespace HomeBudget.Components.Operations.Tests
 
                 var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-                _sut = new PaymentOperationsEventStoreClient(client, It.IsAny<ISender>(), It.IsAny<IPaymentOperationsHistoryService>());
+                _sut = new PaymentOperationsEventStoreClient(It.IsAny<IServiceProvider>(), client, It.IsAny<ISender>());
 
                 var paymentsEvents = new List<PaymentOperationEvent>
                 {
