@@ -8,6 +8,7 @@ using EventStore.Client;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MediatR;
 using Polly;
 using Polly.Retry;
@@ -24,14 +25,14 @@ namespace HomeBudget.Components.Operations.Clients
         ILogger<PaymentOperationsEventStoreClient> logger,
         IServiceProvider serviceProvider,
         EventStoreClient client,
-        EventStoreDbOptions options,
+        IOptions<EventStoreDbOptions> options,
         ISender sender)
-        : BaseEventStoreClient<PaymentOperationEvent>(client, options)
+        : BaseEventStoreClient<PaymentOperationEvent>(client, options.Value)
     {
         private readonly AsyncRetryPolicy _retryPolicy = Policy
             .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
             .WaitAndRetryAsync(
-                options.RetryAttempts,
+                options.Value.RetryAttempts,
                 retryAttempt =>
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
