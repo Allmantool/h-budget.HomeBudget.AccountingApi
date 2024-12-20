@@ -10,10 +10,11 @@ using System.Threading.Tasks;
 using EventStore.Client;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
-    public abstract class BaseEventStoreClient<T>(EventStoreClient client)
+    public abstract class BaseEventStoreClient<T>(EventStoreClient client, EventStoreDbOptions options)
         : IEventStoreDbClient<T>, IDisposable
         where T : new()
     {
@@ -41,7 +42,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     writeStreamName,
                     StreamState.Any,
                     [eventData],
-                    deadline: TimeSpan.FromSeconds(30),
+                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds),
                     cancellationToken: token);
 
             await EnsureSubscriptionAsync(writeStreamName, token);

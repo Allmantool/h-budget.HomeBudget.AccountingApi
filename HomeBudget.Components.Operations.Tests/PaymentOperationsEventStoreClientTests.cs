@@ -8,12 +8,14 @@ using EventStore.Client;
 using FluentAssertions;
 using Moq;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Testcontainers.EventStoreDb;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Tests
 {
@@ -53,7 +55,12 @@ namespace HomeBudget.Components.Operations.Tests
 
                 var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-                _sut = new PaymentOperationsEventStoreClient(It.IsAny<IServiceProvider>(), client, It.IsAny<ISender>());
+                _sut = new PaymentOperationsEventStoreClient(
+                    It.IsAny<ILogger<PaymentOperationsEventStoreClient>>(),
+                    It.IsAny<IServiceProvider>(),
+                    client,
+                    It.IsAny<EventStoreDbOptions>(),
+                    It.IsAny<ISender>());
 
                 var paymentsEvents = new List<PaymentOperationEvent>
                 {
