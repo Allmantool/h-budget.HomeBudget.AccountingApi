@@ -4,23 +4,46 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Microsoft.Extensions.DependencyInjection;
-using MediatR;
 using EventStore.Client;
+using Grpc.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MediatR;
+using Polly;
+using Polly.Retry;
 
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentOperationsEventStoreClient(
+        ILogger<PaymentOperationsEventStoreClient> logger,
         IServiceProvider serviceProvider,
         EventStoreClient client,
+        IOptions<EventStoreDbOptions> options,
         ISender sender)
-        : BaseEventStoreClient<PaymentOperationEvent>(client)
+        : BaseEventStoreClient<PaymentOperationEvent>(client, options.Value)
     {
+        private readonly AsyncRetryPolicy _retryPolicy = Policy
+            .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
+            .WaitAndRetryAsync(
+                options.Value.RetryAttempts,
+                retryAttempt =>
+                {
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
+                    logger.LogWarning(
+                        "Retry attempt '{RetryAttempt}' for event writing failed. Retrying in '{RetryDelay}'.",
+                        retryAttempt,
+                        delay);
+
+                    return delay;
+                });
+
         public override async Task<IWriteResult> SendAsync(
             PaymentOperationEvent eventForSending,
             string streamName = default,
@@ -30,11 +53,12 @@ namespace HomeBudget.Components.Operations.Clients
             var paymentAccountId = eventForSending.Payload.PaymentAccountId;
             var paymentOperationId = eventForSending.Payload.Key;
 
-            return await base.SendAsync(
-                eventForSending,
-                PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString()),
-                $"{eventForSending.EventType}_{paymentOperationId}",
-                token);
+            return await _retryPolicy.ExecuteAsync(
+                async () => await base.SendAsync(
+                    eventForSending,
+                    PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString()),
+                    $"{eventForSending.EventType}_{paymentOperationId}",
+                    token));
         }
 
         public override IAsyncEnumerable<PaymentOperationEvent> ReadAsync(

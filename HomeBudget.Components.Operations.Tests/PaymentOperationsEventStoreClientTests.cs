@@ -8,18 +8,30 @@ using EventStore.Client;
 using FluentAssertions;
 using Moq;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Testcontainers.EventStoreDb;
 
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Models;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Tests
 {
     [TestFixture]
     public class PaymentOperationsEventStoreClientTests
     {
+        private readonly Mock<IServiceScope> _serviceScopeMock = new();
+        private readonly Mock<IServiceScopeFactory> _serviceScopeFactoryMock = new();
+        private readonly Mock<IServiceProvider> _serviceProviderMock = new();
+        private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
+        private readonly Mock<ISender> _senderMock = new();
+
         private EventStoreDbContainer _eventSourceDbContainer;
         private PaymentOperationsEventStoreClient _sut;
 
@@ -34,6 +46,26 @@ namespace HomeBudget.Components.Operations.Tests
                 .WithCleanUp(true)
                 .WithPortBinding(3113, 2113)
                 .Build();
+
+            _paymentOperationsHistoryServiceMock
+                .Setup(s => s.SyncHistoryAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))
+                .ReturnsAsync(() => Result<decimal>.Succeeded(15));
+
+            _serviceScopeMock
+                .Setup(s => s.ServiceProvider)
+                .Returns(_serviceProviderMock.Object);
+
+            _serviceScopeFactoryMock
+                .Setup(f => f.CreateScope())
+                .Returns(_serviceScopeMock.Object);
+
+            _serviceProviderMock
+                .Setup(sp => sp.GetService(typeof(IServiceScopeFactory)))
+                .Returns(_serviceScopeFactoryMock.Object);
+
+            _serviceProviderMock
+                .Setup(sp => sp.GetService(typeof(IPaymentOperationsHistoryService)))
+                .Returns(_paymentOperationsHistoryServiceMock.Object);
         }
 
         [Test]
@@ -53,7 +85,17 @@ namespace HomeBudget.Components.Operations.Tests
 
                 var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-                _sut = new PaymentOperationsEventStoreClient(It.IsAny<IServiceProvider>(), client, It.IsAny<ISender>());
+                _sut = new PaymentOperationsEventStoreClient(
+                    It.IsAny<ILogger<PaymentOperationsEventStoreClient>>(),
+                    _serviceProviderMock.Object,
+                    client,
+                    Options.Create(
+                    new EventStoreDbOptions
+                    {
+                        RetryAttempts = 3,
+                        TimeoutInSeconds = 10
+                    }),
+                    _senderMock.Object);
 
                 var paymentsEvents = new List<PaymentOperationEvent>
                 {
