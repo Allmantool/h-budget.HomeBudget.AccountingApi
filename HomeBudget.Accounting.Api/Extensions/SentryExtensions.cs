@@ -42,7 +42,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                             sentryLoggingOptions.Release = version.ToString();
                         }
 
-                        if (environment.IsDevelopment())
+                        if (environment.IsUnderDevelopment())
                         {
                             sentryLoggingOptions.Debug = true;
                             sentryLoggingOptions.DiagnosticLogger = new TraceDiagnosticLogger(SentryLevel.Debug);
@@ -50,11 +50,11 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                         sentryLoggingOptions.Environment = environment.EnvironmentName;
                         sentryLoggingOptions.Dsn = verifiedOptions.Dns;
-                        sentryLoggingOptions.TracesSampleRate = environment.IsDevelopment() ? 1.0 : 0.3;
+                        sentryLoggingOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
                         sentryLoggingOptions.IsGlobalModeEnabled = true;
                         sentryLoggingOptions.AttachStacktrace = true;
-                        sentryLoggingOptions.SendDefaultPii = environment.IsDevelopment();
-                        sentryLoggingOptions.MinimumBreadcrumbLevel = environment.IsDevelopment() ? LogLevel.Debug : LogLevel.Information;
+                        sentryLoggingOptions.SendDefaultPii = environment.IsUnderDevelopment();
+                        sentryLoggingOptions.MinimumBreadcrumbLevel = environment.IsUnderDevelopment() ? LogLevel.Debug : LogLevel.Information;
                         sentryLoggingOptions.MinimumEventLevel = LogLevel.Warning;
                         sentryLoggingOptions.DiagnosticLevel = SentryLevel.Error;
                     });
@@ -77,6 +77,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                 }
 
                 var environment = webHostBuilderContext.HostingEnvironment;
+
                 var version = Assembly.GetExecutingAssembly().GetName().Version;
 
                 if (version != null)
@@ -84,7 +85,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                     sentryAspNetCoreOptions.Release = version.ToString();
                 }
 
-                if (environment.IsDevelopment())
+                if (environment.IsUnderDevelopment())
                 {
                     sentryAspNetCoreOptions.Debug = true;
                     sentryAspNetCoreOptions.DiagnosticLogger = new TraceDiagnosticLogger(SentryLevel.Debug);
@@ -92,12 +93,12 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                 sentryAspNetCoreOptions.Environment = environment.EnvironmentName;
                 sentryAspNetCoreOptions.Dsn = verifiedOptions.Dns;
-                sentryAspNetCoreOptions.TracesSampleRate = environment.IsDevelopment() ? 1.0 : 0.3;
+                sentryAspNetCoreOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
                 sentryAspNetCoreOptions.IsGlobalModeEnabled = true;
                 sentryAspNetCoreOptions.AttachStacktrace = true;
-                sentryAspNetCoreOptions.SendDefaultPii = environment.IsDevelopment(); // Disable sending PII for security (e.g., user emails)
-                sentryAspNetCoreOptions.MaxRequestBodySize = environment.IsDevelopment() ? RequestSize.Always : RequestSize.Small;
-                sentryAspNetCoreOptions.MinimumBreadcrumbLevel = environment.IsDevelopment() ? LogLevel.Debug : LogLevel.Information;
+                sentryAspNetCoreOptions.SendDefaultPii = environment.IsUnderDevelopment(); // Disable sending PII for security (e.g., user emails)
+                sentryAspNetCoreOptions.MaxRequestBodySize = environment.IsUnderDevelopment() ? RequestSize.Always : RequestSize.Small;
+                sentryAspNetCoreOptions.MinimumBreadcrumbLevel = environment.IsUnderDevelopment() ? LogLevel.Debug : LogLevel.Information;
                 sentryAspNetCoreOptions.MinimumEventLevel = LogLevel.Warning;
                 sentryAspNetCoreOptions.DiagnosticLevel = SentryLevel.Error;
             });
