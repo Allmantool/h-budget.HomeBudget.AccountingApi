@@ -16,6 +16,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
+var webHost = webAppBuilder.WebHost;
 var services = webAppBuilder.Services;
 var environment = webAppBuilder.Environment;
 var configuration = webAppBuilder.Configuration
@@ -73,6 +74,8 @@ services
     );
 
 configuration.InitializeLogger(environment, webAppBuilder.Host);
+
+webHost.AddAndConfigureSentry();
 
 var webApp = webAppBuilder.Build();
 
