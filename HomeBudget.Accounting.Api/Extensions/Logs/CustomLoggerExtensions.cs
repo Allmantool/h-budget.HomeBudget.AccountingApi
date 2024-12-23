@@ -36,6 +36,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithSpan()
                 .WriteTo.Debug()
                 .WriteTo.Console()
+                .WriteTo.AddAndConfigureSentry(configuration, environment)
                 .Enrich.WithElasticApmCorrelationInfo()
                 .AddElasticSearchSupport(configuration, environment)
                 .ReadFrom.Configuration(configuration)
