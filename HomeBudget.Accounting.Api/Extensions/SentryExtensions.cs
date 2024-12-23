@@ -32,15 +32,16 @@ namespace HomeBudget.Accounting.Api.Extensions
         }
 
         public static LoggerConfiguration AddAndConfigureSentry(
-            this LoggerSinkConfiguration webHostBuilder,
+            this LoggerSinkConfiguration loggerConfiguration,
             IConfiguration configuration,
             IWebHostEnvironment environment,
             SentryConfigurationOptions sentryOptions)
         {
-            return webHostBuilder.Sentry(sentrySerilogOptions =>
+            return loggerConfiguration.Sentry(sentrySerilogOptions =>
             {
                 if (!TryIfSentryConfigurationValid(sentryOptions, configuration, out var verifiedOptions))
                 {
+                    sentrySerilogOptions.Dsn = string.Empty;
                     return;
                 }
 
@@ -126,6 +127,7 @@ namespace HomeBudget.Accounting.Api.Extensions
             {
                 if (!TryIfSentryConfigurationValid(sentryOptions, webHostBuilderContext.Configuration, out var verifiedOptions))
                 {
+                    sentryAspNetCoreOptions.Dsn = string.Empty;
                     return;
                 }
 
