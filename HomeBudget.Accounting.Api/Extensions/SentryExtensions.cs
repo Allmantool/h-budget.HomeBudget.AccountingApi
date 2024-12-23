@@ -6,7 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Serilog;
 using Sentry;
+using Serilog.Configuration;
+using Serilog.Events;
 using Sentry.Extensibility;
 using Sentry.Infrastructure;
 
@@ -16,6 +19,56 @@ namespace HomeBudget.Accounting.Api.Extensions
 {
     public static class SentryExtensions
     {
+        public static LoggerConfiguration AddAndConfigureSentry(
+            this LoggerSinkConfiguration loggerConfiguration,
+            IConfiguration configuration,
+            IWebHostEnvironment environment)
+        {
+            return AddAndConfigureSentry(
+                loggerConfiguration,
+                configuration,
+                environment,
+                new SentryConfigurationOptions());
+        }
+
+        public static LoggerConfiguration AddAndConfigureSentry(
+            this LoggerSinkConfiguration webHostBuilder,
+            IConfiguration configuration,
+            IWebHostEnvironment environment,
+            SentryConfigurationOptions sentryOptions)
+        {
+            return webHostBuilder.Sentry(sentrySerilogOptions =>
+            {
+                if (!TryIfSentryConfigurationValid(sentryOptions, configuration, out var verifiedOptions))
+                {
+                    return;
+                }
+
+                var version = Assembly.GetExecutingAssembly().GetName().Version;
+
+                if (version != null)
+                {
+                    sentrySerilogOptions.Release = version.ToString();
+                }
+
+                if (environment.IsUnderDevelopment())
+                {
+                    sentrySerilogOptions.Debug = true;
+                    sentrySerilogOptions.DiagnosticLogger = new TraceDiagnosticLogger(SentryLevel.Debug);
+                }
+
+                sentrySerilogOptions.Environment = environment.EnvironmentName;
+                sentrySerilogOptions.Dsn = verifiedOptions.Dns;
+                sentrySerilogOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
+                sentrySerilogOptions.IsGlobalModeEnabled = true;
+                sentrySerilogOptions.AttachStacktrace = true;
+                sentrySerilogOptions.SendDefaultPii = environment.IsUnderDevelopment(); // Disable sending PII for security (e.g., user emails)
+                sentrySerilogOptions.MinimumBreadcrumbLevel = environment.IsUnderDevelopment() ? LogEventLevel.Debug : LogEventLevel.Information;
+                sentrySerilogOptions.MinimumEventLevel = LogEventLevel.Warning;
+                sentrySerilogOptions.DiagnosticLevel = SentryLevel.Error;
+            });
+        }
+
         public static IHostBuilder AddAndConfigureSentry(this IHostBuilder hostBuilder)
         {
             return AddAndConfigureSentry(hostBuilder, new SentryConfigurationOptions());
