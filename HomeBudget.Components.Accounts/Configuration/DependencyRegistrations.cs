@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Factories;
@@ -20,7 +21,7 @@ namespace HomeBudget.Components.Accounts.Configuration
                 });
         }
 
-        public static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)
+        private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)
         {
             return services.AddSingleton<IPaymentAccountDocumentClient, PaymentAccountDocumentClient>();
         }

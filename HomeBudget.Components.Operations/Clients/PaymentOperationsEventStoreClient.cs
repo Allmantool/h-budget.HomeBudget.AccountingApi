@@ -18,6 +18,7 @@ using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Options;
+using HomeBudget.Core;
 
 namespace HomeBudget.Components.Operations.Clients
 {
@@ -32,16 +33,18 @@ namespace HomeBudget.Components.Operations.Clients
         private readonly AsyncRetryPolicy _retryPolicy = Policy
             .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
             .WaitAndRetryAsync(
-                options.Value.RetryAttempts,
-                retryAttempt =>
+                retryCount: options.Value.RetryAttempts,
+                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                onRetry: (exception, timeSpan, retryAttempt, context) =>
                 {
-                    var delay = TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
-                    logger.LogWarning(
-                        "Retry attempt '{RetryAttempt}' for event writing failed. Retrying in '{RetryDelay}'.",
-                        retryAttempt,
-                        delay);
+                    var eventName = context[nameof(PaymentOperationEvent.EventType)] as string;
 
-                    return delay;
+                    logger.LogWarning(
+                        "Retry attempt '{RetryAttempt}' for event '{EventName}' failed. Waiting '{RetryDelay}' before next attempt. Exception: {Exception}",
+                        retryAttempt,
+                        eventName,
+                        timeSpan,
+                        exception.Message);
                 });
 
         public override async Task<IWriteResult> SendAsync(
@@ -50,15 +53,15 @@ namespace HomeBudget.Components.Operations.Clients
             string eventType = default,
             CancellationToken token = default)
         {
-            var paymentAccountId = eventForSending.Payload.PaymentAccountId;
-            var paymentOperationId = eventForSending.Payload.Key;
+            var context = new Context { [nameof(PaymentOperationEvent.EventType)] = eventType };
 
             return await _retryPolicy.ExecuteAsync(
-                async () => await base.SendAsync(
+                async (_) => await base.SendAsync(
                     eventForSending,
-                    PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString()),
-                    $"{eventForSending.EventType}_{paymentOperationId}",
-                    token));
+                    streamName ?? "",
+                    eventType ?? "",
+                    token),
+                context);
         }
 
         public override IAsyncEnumerable<PaymentOperationEvent> ReadAsync(
@@ -69,21 +72,39 @@ namespace HomeBudget.Components.Operations.Clients
             return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), maxEvents, token);
         }
 
+        // TODO: to expensive calculation, should be optimized
         protected override async Task OnEventAppeared(PaymentOperationEvent eventData)
         {
             var paymentAccountId = eventData.Payload.PaymentAccountId;
 
-            var eventsForAccount = await ReadAsync(paymentAccountId.ToString()).ToListAsync();
+            logger.LogInformation("Processing event for PaymentAccountId: {PaymentAccountId}", paymentAccountId);
+
+            var eventsForAccount = await BenchmarkService.WithBenchmarkAsync(
+                async () => await ReadAsync(paymentAccountId.ToString()).ToListAsync(),
+                $"Fetching events for account '{paymentAccountId}'",
+                logger,
+                new { PaymentAccountId = paymentAccountId });
 
             using var scope = serviceProvider.CreateScope();
             var paymentOperationsHistoryService = scope.ServiceProvider.GetRequiredService<IPaymentOperationsHistoryService>();
 
-            var upToDateBalanceResult = await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId, eventsForAccount);
+            var upToDateBalanceResult = await BenchmarkService.WithBenchmarkAsync(
+                async () => await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId, eventsForAccount),
+                $"Synchronizing history for account '{paymentAccountId}'",
+                logger,
+                new { PaymentAccountId = paymentAccountId });
 
-            await sender.Send(
-                new UpdatePaymentAccountBalanceCommand(
+            logger.LogInformation("Sync history for '{EventsAmount}' events for account '{PaymentAccountId}'", eventsForAccount.Count, paymentAccountId);
+
+            await BenchmarkService.WithBenchmarkAsync(
+                async () => await sender.Send(new UpdatePaymentAccountBalanceCommand(
                     paymentAccountId,
-                    upToDateBalanceResult.Payload));
+                    upToDateBalanceResult.Payload)),
+                "Sending UpdatePaymentAccountBalanceCommand",
+                logger,
+                new { PaymentAccountId = paymentAccountId });
+
+            logger.LogInformation("Completed processing for PaymentAccountId: '{PaymentAccountId}'", paymentAccountId);
         }
     }
 }

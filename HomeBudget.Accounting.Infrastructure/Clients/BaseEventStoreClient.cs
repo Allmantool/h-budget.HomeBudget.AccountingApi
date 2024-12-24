@@ -62,7 +62,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 cancellationToken: cancellationToken
             );
 
-            if ((await eventsAsyncStream.ReadState) == ReadState.StreamNotFound)
+            if (await eventsAsyncStream.ReadState == ReadState.StreamNotFound)
             {
                 yield return default;
             }
@@ -99,7 +99,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         {
             await client.SubscribeToStreamAsync(
                 streamName,
-                FromStream.Start,
+                FromStream.Start, // TODO: should be re-thinking what approach to use there
                 async (_, resolvedEvent, ct) =>
                 {
                     var eventPayloadAsBytes = resolvedEvent.Event.Data.ToArray();
@@ -135,10 +135,11 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     Direction.Forwards,
                     streamName,
                     StreamPosition.Start,
+                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds),
                     cancellationToken: token
                 );
 
-                if ((await eventsAsyncStream.ReadState) != ReadState.StreamNotFound)
+                if (await eventsAsyncStream.ReadState != ReadState.StreamNotFound)
                 {
                     await SubscribeToStreamAsync(streamName, OnEventAppeared, token);
                     AlreadySubscribedStreams[streamName] = true;

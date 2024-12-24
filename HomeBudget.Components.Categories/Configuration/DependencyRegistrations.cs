@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Factories;
@@ -16,7 +17,7 @@ namespace HomeBudget.Components.Categories.Configuration
                 .RegisterMongoDbClient();
         }
 
-        public static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)
+        private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)
         {
             return services.AddSingleton<ICategoryDocumentsClient, CategoryDocumentsClient>();
         }
