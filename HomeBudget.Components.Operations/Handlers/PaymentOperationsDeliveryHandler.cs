@@ -16,11 +16,20 @@ namespace HomeBudget.Components.Operations.Handlers
     {
         public async Task HandleAsync(PaymentOperationEvent paymentEvent, CancellationToken cancellationToken)
         {
+            var eventPayload = paymentEvent.Payload;
+            var paymentOperationId = eventPayload.Key;
+            var paymentAccountId = eventPayload.PaymentAccountId;
+
+            var eventTypeTitle = $"{paymentEvent.EventType}_{paymentOperationId}";
+            var streamName = PaymentOperationNamesGenerator.GetEventSteamName(paymentAccountId.ToString());
+
             await eventStoreDbClient.SendAsync(
                 paymentEvent,
-                token: cancellationToken);
+                streamName,
+                eventTypeTitle,
+                cancellationToken);
 
-            logger.LogInformation("'{eventIdentifier}' has been streamed successfully", paymentEvent.Payload.GetIdentifier());
+            logger.LogInformation("'{eventIdentifier}' has been streamed successfully", eventPayload.GetIdentifier());
         }
     }
 }

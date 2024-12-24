@@ -8,7 +8,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         protected BaseDocumentClient(string connectionString, string databaseName)
         {
-            var client = new MongoClient(connectionString);
+            using var client = new MongoClient(connectionString);
 
             MongoDatabase = client.GetDatabase(databaseName);
         }
