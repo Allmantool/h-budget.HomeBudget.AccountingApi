@@ -64,9 +64,11 @@ RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --fram
 # RUN /tools/snitch
 
 FROM build AS publish
+RUN dotnet clean "HomeBudgetAccountingApi.sln" -c Release
 RUN dotnet publish "HomeBudgetAccountingApi.sln" \
     --no-dependencies \
     --no-restore \
+    /maxcpucount:1 \
     --framework net9.0 \
     -c Release \
     -v Diagnostic \
