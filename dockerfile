@@ -67,6 +67,7 @@ FROM build AS publish
 RUN dotnet publish "HomeBudgetAccountingApi.sln" \
     --no-dependencies \
     --no-restore \
+    --no-parallel \
     --framework net9.0 \
     -c Release \
     -v Diagnostic \
