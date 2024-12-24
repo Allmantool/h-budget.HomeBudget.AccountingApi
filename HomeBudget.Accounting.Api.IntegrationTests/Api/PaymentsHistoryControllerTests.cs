@@ -272,7 +272,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
 
-            var getResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest);
+            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest);
 
             var result = getResponse.Data;
             var payload = result.Payload;

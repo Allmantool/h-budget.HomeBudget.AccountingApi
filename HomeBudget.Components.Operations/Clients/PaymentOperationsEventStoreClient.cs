@@ -58,8 +58,8 @@ namespace HomeBudget.Components.Operations.Clients
             return await _retryPolicy.ExecuteAsync(
                 async (_) => await base.SendAsync(
                     eventForSending,
-                    streamName,
-                    eventType,
+                    streamName ?? "",
+                    eventType ?? "",
                     token),
                 context);
         }

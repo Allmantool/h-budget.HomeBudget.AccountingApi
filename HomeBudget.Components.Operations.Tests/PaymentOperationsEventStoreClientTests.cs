@@ -86,7 +86,7 @@ namespace HomeBudget.Components.Operations.Tests
                 var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
                 _sut = new PaymentOperationsEventStoreClient(
-                    It.IsAny<ILogger<PaymentOperationsEventStoreClient>>(),
+                    Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
                     _serviceProviderMock.Object,
                     client,
                     Options.Create(
@@ -159,7 +159,10 @@ namespace HomeBudget.Components.Operations.Tests
 
                 foreach (var paymentEvent in paymentsEvents)
                 {
-                    await _sut.SendAsync(paymentEvent);
+                    var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
+                    var streamName = PaymentOperationNamesGenerator.GetEventSteamName(paymentEvent.Payload.PaymentAccountId.ToString());
+
+                    await _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
                 }
 
                 var readResult = await _sut.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
