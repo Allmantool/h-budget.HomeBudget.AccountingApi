@@ -25,14 +25,18 @@ env:
   IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
 
 jobs:
-  update-tag-version-if_merged:
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
+  update-tag-version:
+    name: Generate semantic version Tag
+    if: ${{ github.event.action != 'closed' }}
     uses: ./.github/workflows/update_semver.yml
 
-  build-currency-accounting-api:
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged) }}
-    name: Accounting api quality gate
+  build-api:
+    needs: [update-tag-version]
+    name: Build Api
     runs-on: ubuntu-latest
+    outputs:
+      last_tag: ${{ steps.last_tag.outputs.TARGET_TAG }}
+      pr_number: ${{ steps.findPr.outputs.pr }}
     defaults:
       run:
         working-directory: .
@@ -137,14 +141,28 @@ jobs:
         shell: bash
         run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
 
+  build-docker:
+    name: Build and Push Docker Image
+    needs: [build-api]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Build docker image
         env:
-          BUILD_VERSION: ${{ steps.last_tag.outputs.TARGET_TAG }}
+          BUILD_VERSION: ${{ needs.build-api.outputs.last_tag }}
         shell: bash
         run: |
           docker build \
             --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}" \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}" \
             .
 
       - name: Login to Docker Hub
@@ -156,4 +174,4 @@ jobs:
       - name: Push docker image
         shell: bash
         run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ steps.last_tag.outputs.TARGET_TAG }}"
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}"
