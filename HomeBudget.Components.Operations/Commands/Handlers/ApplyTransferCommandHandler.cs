@@ -15,7 +15,6 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class ApplyTransferCommandHandler(
         IMapper mapper,
-        ISender sender,
         IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
         : BasePaymentCommandHandler(
