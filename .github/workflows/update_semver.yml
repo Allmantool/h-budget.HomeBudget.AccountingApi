@@ -22,14 +22,37 @@ jobs:
           version_from_branch: true
           debug: true
 
-      - name: Tag Release (vX.Y.Z)
+      - name: Increment Tag and Push
         run: |
-          git tag ${{ steps.tag_version.outputs.version_tag }}
-          git push origin ${{ steps.tag_version.outputs.version_tag }}
+          base_tag=${{ steps.tag_version.outputs.version_tag }}
+          max_attempts=10
+          attempt=1
+          tag_to_push=$base_tag
 
-      - name: Show generated tag
+          while [ $attempt -le $max_attempts ]; do
+            if git rev-parse "$tag_to_push" >/dev/null 2>&1; then
+              echo "Tag $tag_to_push already exists. Incrementing version..."
+              # Extract base version and increment the last part
+              version_base=$(echo $tag_to_push | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+)(-build[0-9]*)?$/\1/')
+              build_number=$(echo $tag_to_push | sed -E 's/^.*-build([0-9]+)$/\1/')
+              build_number=${build_number:-0}
+              build_number=$((build_number + 1))
+              tag_to_push="${version_base}-build${build_number}"
+              attempt=$((attempt + 1))
+            else
+              echo "Tag $tag_to_push does not exist. Creating and pushing..."
+              git tag "$tag_to_push"
+              git push origin "$tag_to_push"
+              break
+            fi
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "Failed to create a unique tag after $max_attempts attempts."
+            exit 1
+          fi
+
+      - name: Show Generated Tag
         run: |
           tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
-          tag=$(echo $tag_v | sed 's/v//')
-
-          echo "Last git tag: $tag"
+          echo "Last git tag: $tag_v"
