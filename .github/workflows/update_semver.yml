@@ -32,11 +32,15 @@ jobs:
           while [ $attempt -le $max_attempts ]; do
             if git rev-parse "$tag_to_push" >/dev/null 2>&1; then
               echo "Tag $tag_to_push already exists. Incrementing version..."
-              # Extract base version and increment the build number
+              # Extract base version and safely initialize build_number
+              if [[ "$tag_to_push" =~ -build([0-9]+)$ ]]; then
+                build_number="${BASH_REMATCH[1]}"
+              else
+                build_number=0
+              fi
+
               version_base=$(echo "$tag_to_push" | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+)(-build[0-9]*)?$/\1/')
-              build_number=$(echo "$tag_to_push" | sed -E 's/^.*-build([0-9]+)$/\1/')
-              build_number=${build_number:-0} # Default to 0 if no build number exists
-              build_number=$((build_number + 1)) # Increment the build number
+              build_number=$((build_number + 1))
               tag_to_push="${version_base}-build${build_number}"
               attempt=$((attempt + 1))
             else
