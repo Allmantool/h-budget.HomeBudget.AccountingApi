@@ -87,7 +87,6 @@ namespace HomeBudget.Components.Operations.Tests
 
                 _sut = new PaymentOperationsEventStoreClient(
                     Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                    _serviceProviderMock.Object,
                     client,
                     Options.Create(
                     new EventStoreDbOptions

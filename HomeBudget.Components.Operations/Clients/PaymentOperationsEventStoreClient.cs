@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 using EventStore.Client;
 using Grpc.Core;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatR;
@@ -14,17 +13,15 @@ using Polly;
 using Polly.Retry;
 
 using HomeBudget.Accounting.Infrastructure.Clients;
-using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Options;
 using HomeBudget.Core;
+using HomeBudget.Components.Operations.Commands.Models;
 
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentOperationsEventStoreClient(
         ILogger<PaymentOperationsEventStoreClient> logger,
-        IServiceProvider serviceProvider,
         EventStoreClient client,
         IOptions<EventStoreDbOptions> options,
         ISender sender)
@@ -72,12 +69,9 @@ namespace HomeBudget.Components.Operations.Clients
             return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), maxEvents, token);
         }
 
-        // TODO: to expensive calculation, should be optimized
         protected override async Task OnEventAppeared(PaymentOperationEvent eventData)
         {
             var paymentAccountId = eventData.Payload.PaymentAccountId;
-
-            logger.LogInformation("Processing event for PaymentAccountId: {PaymentAccountId}", paymentAccountId);
 
             var eventsForAccount = await BenchmarkService.WithBenchmarkAsync(
                 async () => await ReadAsync(paymentAccountId.ToString()).ToListAsync(),
@@ -85,26 +79,13 @@ namespace HomeBudget.Components.Operations.Clients
                 logger,
                 new { PaymentAccountId = paymentAccountId });
 
-            using var scope = serviceProvider.CreateScope();
-            var paymentOperationsHistoryService = scope.ServiceProvider.GetRequiredService<IPaymentOperationsHistoryService>();
-
-            var upToDateBalanceResult = await BenchmarkService.WithBenchmarkAsync(
-                async () => await paymentOperationsHistoryService.SyncHistoryAsync(paymentAccountId, eventsForAccount),
-                $"Synchronizing history for account '{paymentAccountId}'",
-                logger,
-                new { PaymentAccountId = paymentAccountId });
-
             logger.LogInformation("Sync history for '{EventsAmount}' events for account '{PaymentAccountId}'", eventsForAccount.Count, paymentAccountId);
 
             await BenchmarkService.WithBenchmarkAsync(
-                async () => await sender.Send(new UpdatePaymentAccountBalanceCommand(
-                    paymentAccountId,
-                    upToDateBalanceResult.Payload)),
-                "Sending UpdatePaymentAccountBalanceCommand",
+                async () => await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, eventsForAccount)),
+                "Sending SyncOperationsHistoryCommand",
                 logger,
                 new { PaymentAccountId = paymentAccountId });
-
-            logger.LogInformation("Completed processing for PaymentAccountId: '{PaymentAccountId}'", paymentAccountId);
         }
     }
 }

@@ -10,6 +10,7 @@ using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Services
@@ -26,7 +27,7 @@ namespace HomeBudget.Components.Operations.Services
         {
             var initialBalance = await GetPaymentAccountInitialBalanceAsync(paymentAccountId.ToString());
 
-            if (!eventsForAccount.Any())
+            if (eventsForAccount.IsNullOrEmpty())
             {
                 return Result<decimal>.Succeeded(default);
             }
@@ -36,7 +37,7 @@ namespace HomeBudget.Components.Operations.Services
                 .ThenBy(ev => ev.Payload.OperationUnixTime)
                 .ToList();
 
-            if (!validAndMostUpToDateOperations.Any())
+            if (validAndMostUpToDateOperations.IsNullOrEmpty())
             {
                 await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
                 return Result<decimal>.Succeeded(initialBalance);
@@ -60,13 +61,10 @@ namespace HomeBudget.Components.Operations.Services
 
             await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations, initialBalance);
 
-            var historyRecords = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
+            var mostUpToDateHistoryDocument = await paymentsHistoryDocumentsClient.GetLastAsync(paymentAccountId);
+            var mostUpToDateHistoryRecord = mostUpToDateHistoryDocument?.Payload;
 
-            var historyOperationDocument = historyRecords.Any()
-                ? historyRecords.Last()
-                : default;
-
-            return Result<decimal>.Succeeded(historyOperationDocument?.Payload.Balance ?? initialBalance);
+            return Result<decimal>.Succeeded(mostUpToDateHistoryRecord?.Balance ?? initialBalance);
         }
 
         private async Task<decimal> GetPaymentAccountInitialBalanceAsync(string paymentAccountId)

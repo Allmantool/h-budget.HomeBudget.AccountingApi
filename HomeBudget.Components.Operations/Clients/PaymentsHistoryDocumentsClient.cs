@@ -26,6 +26,17 @@ namespace HomeBudget.Components.Operations.Clients
             return await payload.ToListAsync();
         }
 
+        public async Task<PaymentHistoryDocument> GetLastAsync(Guid accountingId)
+        {
+            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+
+            return await targetCollection
+                    .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                    .SortByDescending(f => f.Payload.Record.OperationDay)
+                    .Limit(1)
+                    .FirstOrDefaultAsync();
+        }
+
         public async Task<PaymentHistoryDocument> GetByIdAsync(Guid accountingId, Guid operationId)
         {
             var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
