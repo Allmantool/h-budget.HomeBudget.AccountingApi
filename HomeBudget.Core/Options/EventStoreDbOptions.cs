@@ -7,6 +7,6 @@ namespace HomeBudget.Core.Options
         public Uri Url { get; init; }
         public int TimeoutInSeconds { get; init; } = 30;
         public int RetryAttempts { get; init; } = 3;
-        public int EventBatchingDelayInMs { get; init; } = 200;
+        public int EventBatchingDelayInMs { get; init; } = 150;
     }
 }
