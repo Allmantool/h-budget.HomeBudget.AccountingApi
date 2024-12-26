@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using MediatR;
@@ -23,10 +24,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             var accountId = request.PaymentAccountId;
             var events = request.EventsForAccount;
 
-            // TODO: to expensive calculation, should be optimized. Not sure, that should be re-calculated so frequently
             var upToDateBalanceResult = await BenchmarkService.WithBenchmarkAsync(
                 async () => await operationsHistoryService.SyncHistoryAsync(accountId, events),
-                $"Synchronizing history for account '{accountId}'",
+                $"Execute SyncHistoryAsync for '{events.Count()}' events",
                 logger,
                 new { PaymentAccountId = accountId });
 

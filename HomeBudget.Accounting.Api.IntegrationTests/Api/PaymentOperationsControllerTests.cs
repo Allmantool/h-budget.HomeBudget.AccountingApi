@@ -317,7 +317,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
 
             return getResponse.Data.Payload;
         }
@@ -327,7 +327,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+                .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
 
             return getResponse.Data.Payload;
         }
