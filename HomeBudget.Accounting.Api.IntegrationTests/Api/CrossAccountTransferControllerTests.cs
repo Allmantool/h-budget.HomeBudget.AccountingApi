@@ -84,7 +84,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(createTransferRequestBody);
 
-            var transferOperationResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(createRequest);
+            var transferOperationResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest);
 
             var removeTransferRequestBody = new RemoveTransferRequest
             {
