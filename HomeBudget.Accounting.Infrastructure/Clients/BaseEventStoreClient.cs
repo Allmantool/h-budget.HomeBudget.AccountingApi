@@ -141,7 +141,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                 if (await eventsAsyncStream.ReadState != ReadState.StreamNotFound)
                 {
-                    await SubscribeToStreamAsync(streamName, OnEventAppeared, token);
+                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, cancellationToken: token);
                     AlreadySubscribedStreams[streamName] = true;
                 }
             }
@@ -151,7 +151,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             }
         }
 
-        protected virtual Task OnEventAppeared(T eventData)
+        protected virtual Task OnEventAppearedAsync(T eventData)
         {
             return Task.CompletedTask;
         }
