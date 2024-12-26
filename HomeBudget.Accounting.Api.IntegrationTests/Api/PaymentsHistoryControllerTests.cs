@@ -300,7 +300,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
 
             return paymentsHistoryResponse.Data.Payload;
         }

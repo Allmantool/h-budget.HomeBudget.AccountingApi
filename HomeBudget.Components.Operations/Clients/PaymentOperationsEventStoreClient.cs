@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 using EventStore.Client;
 using Grpc.Core;
@@ -12,6 +14,7 @@ using MediatR;
 using Polly;
 using Polly.Retry;
 
+using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
@@ -20,29 +23,46 @@ using HomeBudget.Components.Operations.Commands.Models;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentOperationsEventStoreClient(
-        ILogger<PaymentOperationsEventStoreClient> logger,
-        EventStoreClient client,
-        IOptions<EventStoreDbOptions> options,
-        ISender sender)
-        : BaseEventStoreClient<PaymentOperationEvent>(client, options.Value)
+    internal class PaymentOperationsEventStoreClient : BaseEventStoreClient<PaymentOperationEvent>
     {
-        private readonly AsyncRetryPolicy _retryPolicy = Policy
-            .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
-            .WaitAndRetryAsync(
-                retryCount: options.Value.RetryAttempts,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetry: (exception, timeSpan, retryAttempt, context) =>
-                {
-                    var eventName = context[nameof(PaymentOperationEvent.EventType)] as string;
+        private readonly Channel<PaymentOperationEvent> _paymentEventChannel = Channel.CreateUnbounded<PaymentOperationEvent>();
+        private readonly ConcurrentDictionary<Guid, PaymentOperationEvent> _latestEventsPerAccount = new();
 
-                    logger.LogWarning(
-                        "Retry attempt '{RetryAttempt}' for event '{EventName}' failed. Waiting '{RetryDelay}' before next attempt. Exception: {Exception}",
-                        retryAttempt,
-                        eventName,
-                        timeSpan,
-                        exception.Message);
-                });
+        private readonly AsyncRetryPolicy _retryPolicy;
+
+        private readonly ILogger<PaymentOperationsEventStoreClient> _logger;
+        private readonly ISender _sender;
+        private readonly EventStoreDbOptions _eventStoreDbOptions;
+
+        public PaymentOperationsEventStoreClient(
+            ILogger<PaymentOperationsEventStoreClient> logger,
+            EventStoreClient client,
+            IOptions<EventStoreDbOptions> options,
+            ISender sender) : base(client, options.Value)
+        {
+            _eventStoreDbOptions = options.Value;
+            _logger = logger;
+            _sender = sender;
+            _retryPolicy = Policy
+                .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
+                .WaitAndRetryAsync(
+                    retryCount: _eventStoreDbOptions.RetryAttempts,
+                    sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    onRetry: (exception, timeSpan, retryAttempt, context) =>
+                    {
+                        var eventName = context[nameof(PaymentOperationEvent.EventType)] as string;
+
+                        logger.LogWarning(
+                            "Retry attempt '{RetryAttempt}' for event '{EventName}' failed. Waiting '{RetryDelay}' before next attempt. " +
+                            "Exception: {Exception}",
+                            retryAttempt,
+                            eventName,
+                            timeSpan,
+                            exception.Message);
+                    });
+
+            _ = Task.Run(ProcessEventBatchAsync);
+        }
 
         public override async Task<IWriteResult> SendAsync(
             PaymentOperationEvent eventForSending,
@@ -69,22 +89,46 @@ namespace HomeBudget.Components.Operations.Clients
             return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), maxEvents, token);
         }
 
-        protected override async Task OnEventAppeared(PaymentOperationEvent eventData)
+        protected override Task OnEventAppearedAsync(PaymentOperationEvent eventData)
         {
-            var paymentAccountId = eventData.Payload.PaymentAccountId;
+            _paymentEventChannel.Writer.TryWrite(eventData);
+            return Task.CompletedTask;
+        }
+
+        private async Task ProcessEventBatchAsync()
+        {
+            while (await _paymentEventChannel.Reader.WaitToReadAsync())
+            {
+                while (_paymentEventChannel.Reader.TryRead(out var evt))
+                {
+                    _latestEventsPerAccount[evt.Payload.PaymentAccountId] = evt;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(_eventStoreDbOptions.EventBatchingDelayInMs));
+
+                // Process the latest events for all accounts
+                foreach (var (paymentAccountId, latestEvent) in _latestEventsPerAccount.ToArray())
+                {
+                    await HandlePaymentOperationEventAsync(latestEvent.Payload);
+                    _latestEventsPerAccount.Remove(paymentAccountId, out _);
+                }
+            }
+        }
+
+        private async Task HandlePaymentOperationEventAsync(FinancialTransaction transaction)
+        {
+            var paymentAccountId = transaction.PaymentAccountId;
 
             var eventsForAccount = await BenchmarkService.WithBenchmarkAsync(
                 async () => await ReadAsync(paymentAccountId.ToString()).ToListAsync(),
                 $"Fetching events for account '{paymentAccountId}'",
-                logger,
+                _logger,
                 new { PaymentAccountId = paymentAccountId });
 
-            logger.LogInformation("Sync history for '{EventsAmount}' events for account '{PaymentAccountId}'", eventsForAccount.Count, paymentAccountId);
-
             await BenchmarkService.WithBenchmarkAsync(
-                async () => await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, eventsForAccount)),
-                "Sending SyncOperationsHistoryCommand",
-                logger,
+                async () => await _sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, eventsForAccount)),
+                $"Sending SyncOperationsHistoryCommand for '{eventsForAccount.Count}' events",
+                _logger,
                 new { PaymentAccountId = paymentAccountId });
         }
     }
