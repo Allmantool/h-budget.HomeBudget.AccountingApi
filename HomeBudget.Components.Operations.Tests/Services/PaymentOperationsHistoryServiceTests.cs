@@ -7,6 +7,7 @@ using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
@@ -57,7 +58,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
             };
 
             var sut = BuildServiceUnderTest();
-            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
+            var periodIdentifier = new DateOnly(2024, 12, 27).ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
+            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
 
             result.Payload.Should().Be(12.10m);
         }
@@ -70,6 +72,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
 
             var categoryId = Guid.NewGuid();
 
+            var operationDay = new DateOnly(2023, 12, 15);
+
             var events = new List<PaymentOperationEvent>
             {
                 new()
@@ -81,7 +85,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                         Key = operationId,
                         CategoryId = categoryId,
                         Amount = 12.10m,
-                        OperationDay = new DateOnly(2023, 12, 12)
+                        OperationDay = operationDay
                     }
                 },
                 new()
@@ -93,7 +97,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                         Key = operationId,
                         CategoryId = categoryId,
                         Amount = 17.12m,
-                        OperationDay = new DateOnly(2023, 12, 15)
+                        OperationDay = operationDay
                     }
                 },
                 new()
@@ -105,15 +109,16 @@ namespace HomeBudget.Components.Operations.Tests.Services
                         Key = operationId,
                         CategoryId = categoryId,
                         Amount = 98.98m,
-                        OperationDay = new DateOnly(2023, 12, 12)
+                        OperationDay = operationDay
                     }
                 }
             };
 
             var sut = BuildServiceUnderTest();
-            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
+            var periodIdentifier = operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
+            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
 
-            result.Payload.Should().Be(17.12m);
+            result.Payload.Should().Be(98.98m);
         }
 
         [Test]
@@ -136,7 +141,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
             };
 
             var sut = BuildServiceUnderTest();
-            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
+            var periodIdentifier = new DateOnly(2024, 12, 27).ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
+            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
 
             result.Payload.Should().Be(0);
         }
@@ -171,12 +177,13 @@ namespace HomeBudget.Components.Operations.Tests.Services
             };
 
             var sut = BuildServiceUnderTest();
-            var result = await sut.SyncHistoryAsync(paymentAccountId, events);
+            var periodIdentifier = new DateOnly(2024, 12, 27).ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
+            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
 
             result.Payload.Should().Be(0);
         }
 
-        private PaymentOperationsHistoryService BuildServiceUnderTest()
+        private static PaymentOperationsHistoryService BuildServiceUnderTest()
         {
             var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
             var paymentAccountDocumentClientMock = new Mock<IPaymentAccountDocumentClient>();
@@ -207,7 +214,6 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .ReturnsAsync(() => Result<CategoryDocument>.Succeeded(payload));
 
             return new PaymentOperationsHistoryService(
-                paymentAccountDocumentClientMock.Object,
                 paymentsHistoryClientMock.Object,
                 categoriesClient.Object);
         }

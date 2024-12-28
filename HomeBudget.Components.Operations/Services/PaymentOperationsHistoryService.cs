@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
@@ -16,17 +15,14 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
-        IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ICategoryDocumentsClient categoryDocumentsClient)
         : IPaymentOperationsHistoryService
     {
         public async Task<Result<decimal>> SyncHistoryAsync(
-            Guid paymentAccountId,
+            string financialPeriodIdentifier,
             IEnumerable<PaymentOperationEvent> eventsForAccount)
         {
-            var initialBalance = await GetPaymentAccountInitialBalanceAsync(paymentAccountId.ToString());
-
             if (eventsForAccount.IsNullOrEmpty())
             {
                 return Result<decimal>.Succeeded(default);
@@ -39,8 +35,8 @@ namespace HomeBudget.Components.Operations.Services
 
             if (validAndMostUpToDateOperations.IsNullOrEmpty())
             {
-                await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
-                return Result<decimal>.Succeeded(initialBalance);
+                await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
+                return Result<decimal>.Succeeded(0);
             }
 
             if (validAndMostUpToDateOperations.Count == 1)
@@ -50,45 +46,36 @@ namespace HomeBudget.Components.Operations.Services
                 var record = new PaymentOperationHistoryRecord
                 {
                     Record = paymentOperation,
-                    Balance = initialBalance + await CalculateIncrementAsync(paymentOperation)
+                    Balance = await CalculateIncrementAsync(paymentOperation)
                 };
 
-                await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
-                await paymentsHistoryDocumentsClient.InsertOneAsync(paymentAccountId, record);
+                await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
+                await paymentsHistoryDocumentsClient.InsertOneAsync(financialPeriodIdentifier, record);
 
                 return Result<decimal>.Succeeded(record.Balance);
             }
 
-            await InsertManyAsync(paymentAccountId, validAndMostUpToDateOperations, initialBalance);
+            await InsertManyAsync(financialPeriodIdentifier, validAndMostUpToDateOperations);
 
-            var mostUpToDateHistoryDocument = await paymentsHistoryDocumentsClient.GetLastAsync(paymentAccountId);
+            var mostUpToDateHistoryDocument = await paymentsHistoryDocumentsClient.GetLastForPeriodAsync(financialPeriodIdentifier);
             var mostUpToDateHistoryRecord = mostUpToDateHistoryDocument?.Payload;
 
-            return Result<decimal>.Succeeded(mostUpToDateHistoryRecord?.Balance ?? initialBalance);
-        }
-
-        private async Task<decimal> GetPaymentAccountInitialBalanceAsync(string paymentAccountId)
-        {
-            var paymentAccountDocumentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
-            var document = paymentAccountDocumentResult.Payload;
-
-            return document == null ? 0 : document.Payload.InitialBalance;
+            return Result<decimal>.Succeeded(mostUpToDateHistoryRecord?.Balance ?? 0);
         }
 
         private async Task InsertManyAsync(
-            Guid paymentAccountId,
-            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations,
-            decimal initialBalance)
+            string financialPeriodIdentifier,
+            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
         {
             var operationsHistory = new List<PaymentOperationHistoryRecord>();
 
-            await paymentsHistoryDocumentsClient.RemoveAsync(paymentAccountId);
+            await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
 
             foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
                 var previousRecordBalance = operationsHistory.Any()
                     ? operationsHistory[^1].Balance
-                    : initialBalance;
+                    : 0;
 
                 operationsHistory.Add(
                     new PaymentOperationHistoryRecord
@@ -98,7 +85,7 @@ namespace HomeBudget.Components.Operations.Services
                     });
             }
 
-            await paymentsHistoryDocumentsClient.RewriteAllAsync(paymentAccountId, operationsHistory);
+            await paymentsHistoryDocumentsClient.RewriteAllAsync(financialPeriodIdentifier, operationsHistory);
         }
 
         private async Task<decimal> CalculateIncrementAsync(FinancialTransaction operation)
@@ -125,7 +112,7 @@ namespace HomeBudget.Components.Operations.Services
             var existedOperationEventGroups = eventsForAccount
                 .GroupBy(ev => ev.Payload.Key)
                 .Where(gr => gr.All(ev => ev.EventType != PaymentEventTypes.Removed))
-                .Where(gr => gr.Any(ev => ev.EventType == PaymentEventTypes.Added));
+                .Where(gr => gr.Any(ev => ev.EventType is PaymentEventTypes.Added or PaymentEventTypes.Updated));
 
             return existedOperationEventGroups
                 .Select(gr => gr

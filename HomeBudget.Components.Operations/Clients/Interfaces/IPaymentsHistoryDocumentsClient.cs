@@ -10,16 +10,18 @@ namespace HomeBudget.Components.Operations.Clients.Interfaces
 {
     public interface IPaymentsHistoryDocumentsClient : IDocumentClient
     {
-        Task<PaymentHistoryDocument> GetLastAsync(Guid accountingId);
+        Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier);
 
-        Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountingId);
+        Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null);
 
-        Task<PaymentHistoryDocument> GetByIdAsync(Guid accountingId, Guid operationId);
+        Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId);
 
-        Task RewriteAllAsync(Guid accountingId, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords);
+        Task RewriteAllAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords);
 
-        Task InsertOneAsync(Guid accountingId, PaymentOperationHistoryRecord payload);
+        Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload);
 
-        Task RemoveAsync(Guid accountingId);
+        Task RemoveAsync(string financialPeriodIdentifier);
+
+        Task<IEnumerable<PaymentHistoryDocument>> GetAllPeriodBalancesForAccountAsync(Guid accountId);
     }
 }

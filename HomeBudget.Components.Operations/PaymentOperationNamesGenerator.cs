@@ -1,12 +1,14 @@
 ﻿using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Components.Operations.Models;
+using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations
 {
     internal static class PaymentOperationNamesGenerator
     {
-        public static string GetEventSteamName(string paymentAccountId)
+        public static string GenerateForAccountMonthStream(string monthPeriodIdentifier)
             => string.Join(
-                NameConventions.EventPrefixSeparator, paymentAccountId, nameof(PaymentOperationEvent));
+                NameConventions.EventPrefixSeparator,
+                nameof(PaymentAccount),
+                monthPeriodIdentifier);
     }
 }

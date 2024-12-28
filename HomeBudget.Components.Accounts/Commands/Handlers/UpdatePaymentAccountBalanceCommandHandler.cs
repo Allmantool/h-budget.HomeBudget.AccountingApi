@@ -10,7 +10,8 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Accounts.Commands.Handlers
 {
-    internal class UpdatePaymentAccountBalanceCommandHandler(IPaymentAccountDocumentClient paymentAccountDocumentClient)
+    internal class UpdatePaymentAccountBalanceCommandHandler(
+        IPaymentAccountDocumentClient paymentAccountDocumentClient)
         : IRequestHandler<UpdatePaymentAccountBalanceCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(

@@ -2,7 +2,7 @@
 {
     public record PaymentOperationHistoryRecordResponse
     {
-        public HistoryOperationRecordResponse Record { get; set; }
-        public decimal Balance { get; set; }
+        public HistoryOperationRecordResponse Record { get; init; }
+        public decimal Balance { get; init; }
     }
 }

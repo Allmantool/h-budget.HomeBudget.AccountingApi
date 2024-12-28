@@ -7,7 +7,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
     internal static class HttpClientExtensions
     {
-        private const int BaseDelayUntilEventSourceReachASyncStateMs = 1000;
+        private const int BaseDelayUntilEventSourceReachASyncStateMs = 600;
 
         public static async Task<RestResponse<T>> ExecuteWithDelayAsync<T>(
             this IRestClient client,
@@ -18,6 +18,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             await Task.Delay(executionDelayInMs, cancellationToken);
 
             var response = await client.ExecuteAsync<T>(request, cancellationToken);
+
+            await Task.Delay(executionDelayInMs, cancellationToken);
 
             return response;
         }
@@ -31,6 +33,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             await Task.Delay(executionDelayInMs, cancellationToken);
 
             await client.ExecuteAsync(request, cancellationToken);
+
+            await Task.Delay(executionDelayInMs, cancellationToken);
         }
     }
 }
