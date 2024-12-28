@@ -14,19 +14,20 @@ using MediatR;
 using Polly;
 using Polly.Retry;
 
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 using HomeBudget.Core;
-using HomeBudget.Components.Operations.Commands.Models;
 
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentOperationsEventStoreClient : BaseEventStoreClient<PaymentOperationEvent>
     {
         private readonly Channel<PaymentOperationEvent> _paymentEventChannel = Channel.CreateUnbounded<PaymentOperationEvent>();
-        private readonly ConcurrentDictionary<Guid, PaymentOperationEvent> _latestEventsPerAccount = new();
+        private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
 
         private readonly AsyncRetryPolicy _retryPolicy;
 
@@ -73,7 +74,7 @@ namespace HomeBudget.Components.Operations.Clients
             var context = new Context { [nameof(PaymentOperationEvent.EventType)] = eventType };
 
             return await _retryPolicy.ExecuteAsync(
-                async (_) => await base.SendAsync(
+                async _ => await base.SendAsync(
                     eventForSending,
                     streamName ?? "",
                     eventType ?? "",
@@ -86,7 +87,7 @@ namespace HomeBudget.Components.Operations.Clients
             int maxEvents = int.MaxValue,
             CancellationToken token = default)
         {
-            return base.ReadAsync(PaymentOperationNamesGenerator.GetEventSteamName(streamName), maxEvents, token);
+            return base.ReadAsync(PaymentOperationNamesGenerator.GenerateForAccountMonthStream(streamName), maxEvents, token);
         }
 
         protected override Task OnEventAppearedAsync(PaymentOperationEvent eventData)
@@ -101,16 +102,16 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 while (_paymentEventChannel.Reader.TryRead(out var evt))
                 {
-                    _latestEventsPerAccount[evt.Payload.PaymentAccountId] = evt;
+                    _latestEventsPerAccount[evt.Payload.GetMonthPeriodIdentifier()] = evt;
                 }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(_eventStoreDbOptions.EventBatchingDelayInMs));
 
                 // Process the latest events for all accounts
-                foreach (var (paymentAccountId, latestEvent) in _latestEventsPerAccount.ToArray())
+                foreach (var (monthFinancialPeriodKey, latestEvent) in _latestEventsPerAccount)
                 {
                     await HandlePaymentOperationEventAsync(latestEvent.Payload);
-                    _latestEventsPerAccount.Remove(paymentAccountId, out _);
+                    _latestEventsPerAccount.Remove(monthFinancialPeriodKey, out _);
                 }
             }
         }
@@ -118,18 +119,19 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task HandlePaymentOperationEventAsync(FinancialTransaction transaction)
         {
             var paymentAccountId = transaction.PaymentAccountId;
+            var paymentPeriodEdIdentifier = transaction.GetMonthPeriodIdentifier();
 
-            var eventsForAccount = await BenchmarkService.WithBenchmarkAsync(
-                async () => await ReadAsync(paymentAccountId.ToString()).ToListAsync(),
-                $"Fetching events for account '{paymentAccountId}'",
+            var events = await BenchmarkService.WithBenchmarkAsync(
+                async () => await ReadAsync(transaction.GetMonthPeriodIdentifier()).ToListAsync(),
+                $"Fetching events for account '{paymentPeriodEdIdentifier}'",
                 _logger,
-                new { PaymentAccountId = paymentAccountId });
+                new { paymentPeriodEdIdentifier });
 
             await BenchmarkService.WithBenchmarkAsync(
-                async () => await _sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, eventsForAccount)),
-                $"Sending SyncOperationsHistoryCommand for '{eventsForAccount.Count}' events",
+                async () => await _sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events)),
+                $"Sending SyncOperationsHistoryCommand for '{events.Count}' events",
                 _logger,
-                new { PaymentAccountId = paymentAccountId });
+                new { paymentPeriodEdIdentifier });
         }
     }
 }

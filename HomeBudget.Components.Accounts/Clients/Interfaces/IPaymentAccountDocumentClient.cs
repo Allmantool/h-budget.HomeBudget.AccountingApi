@@ -18,6 +18,7 @@ namespace HomeBudget.Components.Accounts.Clients.Interfaces
         Task<Result<Guid>> InsertOneAsync(PaymentAccount payload);
 
         Task<Result<Guid>> RemoveAsync(string paymentAccountId);
+
         Task<Result<Guid>> UpdateAsync(string requestPaymentAccountGuid, PaymentAccount paymentAccountForUpdate);
     }
 }

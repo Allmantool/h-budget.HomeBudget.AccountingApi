@@ -10,6 +10,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.History;
@@ -19,7 +20,6 @@ using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Core.Models;
-using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
@@ -174,8 +174,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var operationGuid = Guid.Parse(saveResponse.Data.Payload.PaymentOperationId);
 
                 operationsGuids.Add(operationGuid);
-
-                await Task.Delay(TimeSpan.FromSeconds(0.1), CancellationToken.None);
             }
 
             var updateRequest = new UpdateOperationRequest
@@ -244,7 +242,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
-            var targetPaymentHistory = historyRecords.First(r => r.Record.Key.CompareTo(newOperationId) == 0);
+            var targetPaymentHistory = historyRecords.Single(r => r.Record.Key.CompareTo(newOperationId) == 0);
 
             targetPaymentHistory.Balance.Should().Be(0.2m);
         }
@@ -300,7 +298,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayInMs: 5000);
 
             return paymentsHistoryResponse.Data.Payload;
         }

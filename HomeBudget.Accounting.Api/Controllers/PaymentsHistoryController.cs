@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.History;
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Components.Accounts.Services.Interfaces;
+using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Core.Models;
 
@@ -15,20 +18,55 @@ namespace HomeBudget.Accounting.Api.Controllers
 {
     [Route(Endpoints.PaymentsHistoryByPaymentAccountId, Name = Endpoints.PaymentsHistory)]
     [ApiController]
-    public class PaymentsHistoryController(IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient, IMapper mapper) : ControllerBase
+    public class PaymentsHistoryController(
+        IPaymentAccountService paymentAccountService,
+        ICategoryDocumentsClient categoryDocumentsClient,
+        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
+        IMapper mapper)
+        : ControllerBase
     {
         [HttpGet]
         public async Task<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>> GetHistoryPaymentOperationsAsync(string paymentAccountId)
         {
             var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
 
-            var paymentAccountOperations = documents
-                .Select(d => d.Payload)
-                .OrderBy(op => op.Record.OperationDay)
-                .ThenBy(op => op.Record.OperationUnixTime)
-                .ToList();
+            var initialBalance = await paymentAccountService.GetInitialBalanceAsync(paymentAccountId);
 
-            return Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>.Succeeded(mapper.Map<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>(paymentAccountOperations));
+            var historyRecords = documents.Select(d => d.Payload);
+
+            var paymentAccountOperations = historyRecords
+                .GroupBy(op => op.Record.Key)
+                .Select(gr => gr
+                    .OrderBy(op => op.Record.OperationDay)
+                    .ThenBy(op => op.Record.OperationUnixTime)
+                    .Last())
+                .OrderBy(r => r.Record.OperationDay)
+                .ThenBy(r => r.Record.OperationUnixTime);
+
+            var categoriesResult = await categoryDocumentsClient.GetAsync();
+            var categories = categoriesResult.Payload;
+
+            var runningBalance = initialBalance;
+
+            foreach (var historyRecord in paymentAccountOperations)
+            {
+                var historyRecordCategory = categories.FirstOrDefault(c => c.Payload.Key.CompareTo(historyRecord.Record.CategoryId) == 0);
+
+                if (historyRecordCategory == null)
+                {
+                    continue;
+                }
+
+                var isIncome = historyRecordCategory.Payload.CategoryType == CategoryTypes.Income;
+                var operationAmount = historyRecord.Record.Amount;
+
+                runningBalance += isIncome ? Math.Abs(operationAmount) : -Math.Abs(operationAmount);
+                historyRecord.Balance = runningBalance;
+            }
+
+            var responsePayload = mapper.Map<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>(paymentAccountOperations);
+
+            return Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>.Succeeded(responsePayload);
         }
 
         [HttpGet("byId/{operationId}")]
