@@ -4,7 +4,7 @@ namespace HomeBudget.Components.Operations.Models
 {
     public record RemoveTransferPayload
     {
-        public Guid PaymentAccountId { get; set; }
-        public Guid TransferOperationId { get; set; }
+        public Guid PaymentAccountId { get; init; }
+        public Guid TransferOperationId { get; init; }
     }
 }

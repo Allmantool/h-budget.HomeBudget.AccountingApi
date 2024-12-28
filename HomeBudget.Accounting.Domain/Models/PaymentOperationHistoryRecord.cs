@@ -3,6 +3,6 @@
     public class PaymentOperationHistoryRecord
     {
         public FinancialTransaction Record { get; init; }
-        public decimal Balance { get; init; }
+        public decimal Balance { get; set; }
     }
 }

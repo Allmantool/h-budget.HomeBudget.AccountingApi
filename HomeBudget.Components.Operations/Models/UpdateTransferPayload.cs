@@ -4,11 +4,11 @@ namespace HomeBudget.Components.Operations.Models
 {
     public record UpdateTransferPayload
     {
-        public Guid TransferOperationId { get; set; }
-        public Guid Sender { get; set; }
-        public Guid Recipient { get; set; }
-        public decimal Amount { get; set; }
-        public decimal Multiplier { get; set; }
-        public DateOnly OperationAt { get; set; }
+        public Guid TransferOperationId { get; init; }
+        public Guid Sender { get; init; }
+        public Guid Recipient { get; init; }
+        public decimal Amount { get; init; }
+        public decimal Multiplier { get; init; }
+        public DateOnly OperationAt { get; init; }
     }
 }

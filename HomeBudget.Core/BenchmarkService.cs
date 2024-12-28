@@ -21,9 +21,11 @@ namespace HomeBudget.Core
                 var result = await operation();
                 stopwatch.Stop();
                 logger.LogInformation(
-                    "{OperationName} completed in {ElapsedMilliseconds} ms with context: {@Context}",
+                    "{OperationName} completed in '{Hours}:{Minutes}:{Seconds}' with context: {@Context}",
                     operationName,
-                    stopwatch.ElapsedMilliseconds,
+                    stopwatch.Elapsed.Hours,
+                    stopwatch.Elapsed.Minutes,
+                    stopwatch.Elapsed.Seconds,
                     context);
 
                 return result;
@@ -34,9 +36,11 @@ namespace HomeBudget.Core
 
                 logger.LogError(
                     ex,
-                    "{OperationName} failed after {ElapsedMilliseconds} ms with context: {@Context}",
+                    "{OperationName} failed after '{Hours}:{Minutes}:{Seconds}' ms with context: {@Context}",
                     operationName,
-                    stopwatch.ElapsedMilliseconds,
+                    stopwatch.Elapsed.Hours,
+                    stopwatch.Elapsed.Minutes,
+                    stopwatch.Elapsed.Seconds,
                     context);
 
                 throw;

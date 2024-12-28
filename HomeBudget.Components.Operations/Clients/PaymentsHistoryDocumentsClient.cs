@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -17,18 +19,25 @@ namespace HomeBudget.Components.Operations.Clients
         : BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.PaymentsHistoryDatabaseName),
             IPaymentsHistoryDocumentsClient
     {
-        public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountingId)
+        public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null)
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+            if (period != null)
+            {
+                var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(period.ToFinancialMonthIdentifier(accountId));
 
-            var payload = await targetCollection.FindAsync(_ => true);
+                var payload = await targetCollection.FindAsync(_ => true);
 
-            return await payload.ToListAsync();
+                return await payload.ToListAsync();
+            }
+
+            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
+
+            return await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
         }
 
-        public async Task<PaymentHistoryDocument> GetLastAsync(Guid accountingId)
+        public async Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier)
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
             return await targetCollection
                     .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
@@ -37,16 +46,32 @@ namespace HomeBudget.Components.Operations.Clients
                     .FirstOrDefaultAsync();
         }
 
-        public async Task<PaymentHistoryDocument> GetByIdAsync(Guid accountingId, Guid operationId)
+        public async Task<IEnumerable<PaymentHistoryDocument>> GetAllPeriodBalancesForAccountAsync(Guid accountId)
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
 
-            var payload = await targetCollection.FindAsync(d => d.Payload.Record.Key.CompareTo(operationId) == 0);
+            var finalBalanceForPeriodTasks = targetCollections.Select(cl =>
+            {
+                return cl
+                    .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                    .SortByDescending(f => f.Payload.Record.OperationDay)
+                    .Limit(1)
+                    .FirstOrDefaultAsync();
+            });
 
-            return await payload.SingleOrDefaultAsync();
+            return await Task.WhenAll(finalBalanceForPeriodTasks);
         }
 
-        public async Task InsertOneAsync(Guid accountingId, PaymentOperationHistoryRecord payload)
+        public async Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId)
+        {
+            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
+
+            var payload = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(d => d.Payload.Record.Key.CompareTo(operationId) == 0));
+
+            return payload.SingleOrDefault();
+        }
+
+        public async Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
         {
             var document = new PaymentHistoryDocument
             {
@@ -57,31 +82,48 @@ namespace HomeBudget.Components.Operations.Clients
                 }
             };
 
-            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
             await targetCollection.InsertOneAsync(document);
         }
 
-        public async Task RemoveAsync(Guid accountingId)
+        public async Task RemoveAsync(string financialPeriodIdentifier)
         {
-            var targetCollection = await GetPaymentAccountCollectionAsync(accountingId);
+            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
             await targetCollection.DeleteManyAsync(_ => true);
         }
 
-        public async Task RewriteAllAsync(Guid accountingId, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords)
+        public async Task RewriteAllAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords)
         {
-            await RemoveAsync(accountingId);
+            await RemoveAsync(financialPeriodIdentifier);
 
-            foreach (var historyRecord in operationHistoryRecords)
+            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+
+            var documents = operationHistoryRecords.Select(r => new PaymentHistoryDocument
             {
-                await InsertOneAsync(accountingId, historyRecord);
-            }
+                Payload = new PaymentOperationHistoryRecord
+                {
+                    Record = r.Record,
+                    Balance = r.Balance
+                }
+            });
+
+            await targetCollection.InsertManyAsync(documents);
         }
 
-        private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionAsync(Guid accountingId)
+        private async Task<IEnumerable<IMongoCollection<PaymentHistoryDocument>>> GetPaymentAccountCollectionsAsync(Guid accountId)
         {
-            var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(accountingId.ToString());
+            var dbCollections = await (await MongoDatabase.ListCollectionNamesAsync()).ToListAsync();
+
+            var paymentAccountCollections = dbCollections.Where(name => name.StartsWith(accountId.ToString()));
+
+            return paymentAccountCollections.Select(collectionName => MongoDatabase.GetCollection<PaymentHistoryDocument>(collectionName));
+        }
+
+        private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionForPeriodAsync(string financialPeriodIdentifier)
+        {
+            var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(financialPeriodIdentifier);
 
             var collectionIndexes = await collection.Indexes.ListAsync();
 
@@ -96,6 +138,23 @@ namespace HomeBudget.Components.Operations.Clients
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(indexKeysDefinition));
 
             return collection;
+        }
+
+        private static async Task<IReadOnlyCollection<PaymentHistoryDocument>> FilterByAsync(
+            IEnumerable<IMongoCollection<PaymentHistoryDocument>> collections,
+            FilterDefinition<PaymentHistoryDocument> filter)
+        {
+            var retrievalTasks = collections.Select(async collection =>
+            {
+                var payload = await collection.FindAsync(filter);
+                return await payload.ToListAsync();
+            });
+
+            var allDocuments = (await Task.WhenAll(retrievalTasks))
+                .SelectMany(docs => docs)
+                .ToList();
+
+            return allDocuments.AsReadOnly();
         }
     }
 }

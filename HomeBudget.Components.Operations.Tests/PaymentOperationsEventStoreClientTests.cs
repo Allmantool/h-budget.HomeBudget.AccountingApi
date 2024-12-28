@@ -48,7 +48,7 @@ namespace HomeBudget.Components.Operations.Tests
                 .Build();
 
             _paymentOperationsHistoryServiceMock
-                .Setup(s => s.SyncHistoryAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))
+                .Setup(s => s.SyncHistoryAsync(It.IsAny<string>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))
                 .ReturnsAsync(() => Result<decimal>.Succeeded(15));
 
             _serviceScopeMock
@@ -159,7 +159,7 @@ namespace HomeBudget.Components.Operations.Tests
                 foreach (var paymentEvent in paymentsEvents)
                 {
                     var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                    var streamName = PaymentOperationNamesGenerator.GetEventSteamName(paymentEvent.Payload.PaymentAccountId.ToString());
+                    var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
 
                     await _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
                 }
