@@ -43,7 +43,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events),
                 $"Execute SyncHistoryAsync for '{events.Count()}' events",
                 logger,
-                new { PaymentAccountId = accountId });
+                new { monthPeriodIdentifier });
 
             var periodBalancesPaymentDocuments = await BenchmarkService.WithBenchmarkAsync(
                async () => await historyDocumentsClient.GetAllPeriodBalancesForAccountAsync(accountId),
