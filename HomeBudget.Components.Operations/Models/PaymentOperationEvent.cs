@@ -1,8 +1,9 @@
 ﻿using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Core;
 
 namespace HomeBudget.Components.Operations.Models
 {
-    public record PaymentOperationEvent
+    public class PaymentOperationEvent : BaseEvent
     {
         public FinancialTransaction Payload { get; init; }
 
