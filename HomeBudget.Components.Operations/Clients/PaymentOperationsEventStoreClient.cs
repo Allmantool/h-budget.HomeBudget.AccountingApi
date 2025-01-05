@@ -74,11 +74,25 @@ namespace HomeBudget.Components.Operations.Clients
             var context = new Context { [nameof(PaymentOperationEvent.EventType)] = eventType };
 
             return await _retryPolicy.ExecuteAsync(
-                async _ => await base.SendAsync(
-                    eventForSending,
-                    streamName ?? "",
-                    eventType ?? "",
-                    token),
+                async retryPolicyCtx =>
+                {
+                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString());
+                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString());
+                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.Values), retryPolicyCtx.Values.ToString());
+
+                    _logger.LogInformation(
+                        "Event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}, operationKey: {OperationKey}",
+                        eventForSending.Payload.Key,
+                        retryPolicyCtx.CorrelationId,
+                        retryPolicyCtx.Count,
+                        retryPolicyCtx.OperationKey);
+
+                    return await base.SendAsync(
+                        eventForSending,
+                        streamName ?? "",
+                        eventType ?? "",
+                        token);
+                },
                 context);
         }
 
@@ -119,19 +133,19 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task HandlePaymentOperationEventAsync(FinancialTransaction transaction)
         {
             var paymentAccountId = transaction.PaymentAccountId;
-            var paymentPeriodEdIdentifier = transaction.GetMonthPeriodIdentifier();
+            var paymentPeriodAggregationId = transaction.GetMonthPeriodIdentifier();
 
             var events = await BenchmarkService.WithBenchmarkAsync(
                 async () => await ReadAsync(transaction.GetMonthPeriodIdentifier()).ToListAsync(),
-                $"Fetching events for account '{paymentPeriodEdIdentifier}'",
+                $"Fetching events for '{paymentPeriodAggregationId}'",
                 _logger,
-                new { paymentPeriodEdIdentifier });
+                new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () => await _sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events)),
                 $"Sending SyncOperationsHistoryCommand for '{events.Count}' events",
                 _logger,
-                new { paymentPeriodEdIdentifier });
+                new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
         }
     }
 }
