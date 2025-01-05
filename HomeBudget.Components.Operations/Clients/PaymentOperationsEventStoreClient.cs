@@ -78,7 +78,7 @@ namespace HomeBudget.Components.Operations.Clients
                 {
                     eventForSending.Metadata.Add(nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString());
                     eventForSending.Metadata.Add(nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString());
-                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.OperationKey), retryPolicyCtx.OperationKey.ToString());
+                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.Values), retryPolicyCtx.Values.ToString());
 
                     _logger.LogInformation(
                         "Event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}, operationKey: {OperationKey}",
