@@ -24,4 +24,5 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
+          RENOVATE_CONFIG_FILE: "/renovate.json"
           RENOVATE_EXTRA_FLAGS: "--autodiscover"
