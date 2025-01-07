@@ -2,6 +2,12 @@
     "enabledManagers": [
         "nuget"
     ],
+    "extends": [
+        "config:base"
+    ],
+    "nuget": {
+        "enabled": true
+    },
     "defaultRegistryUrls": [
         "https://api.nuget.org/v3/index.json"
     ],
