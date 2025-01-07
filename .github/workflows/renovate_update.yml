@@ -22,6 +22,6 @@ jobs:
       - name: Run Renovate
         run: npx renovate --autodiscover
         env:
-          GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           RENOVATE_CONFIG_FILE: "./renovate.json"
           LOG_LEVEL: debug
