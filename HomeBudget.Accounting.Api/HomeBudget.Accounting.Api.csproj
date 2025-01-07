@@ -48,18 +48,13 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>$(AssemblyName).Tests</_Parameter1>
       <_Parameter1>HomeBudget.Accounting.Api.IntegrationTests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>$(AssemblyName).Tests</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Update="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
   </ItemGroup>
 
 </Project>
