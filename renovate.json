@@ -1,0 +1,25 @@
+{
+    "enabledManagers": [
+        "nuget"
+    ],
+    "defaultRegistryUrls": [
+        "https://api.nuget.org/v3/index.json"
+    ],
+    "packageRules": [
+        {
+            "matchRepositories": [
+                "*"
+            ],
+            "matchUpdateTypes": [
+                "minor",
+                "patch"
+            ]
+        }
+    ],
+    "labels": [
+        "Renovate-update-dependencies"
+    ],
+    "reviewers": [
+        "[REVIEWER_EMAIL_ADDRESS_GOES_HERE]"
+    ]
+}
