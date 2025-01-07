@@ -20,8 +20,6 @@ jobs:
           fetch-depth: 0
 
       - name: Run Renovate
-        run: npx renovate --autodiscover
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          RENOVATE_CONFIG_FILE: "./renovate.json"
-          LOG_LEVEL: debug
+        uses: renovatebot/github-action@v41.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
