@@ -73,8 +73,7 @@ RUN dotnet publish "HomeBudgetAccountingApi.sln" \
     --framework net9.0 \
     -c Release \
     -v Diagnostic \
-    -o /app/publish \
-    /p:ExcludeAssets=Compile,Runtime
+    -o /app/publish
 
 FROM base AS final
 WORKDIR /app
