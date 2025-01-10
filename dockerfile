@@ -59,6 +59,12 @@ COPY ["HomeBudget.Accounting.Infrastructure/*.csproj", "HomeBudget.Accounting.In
 
 COPY . .
 
+# Clean artifacts from test projects
+RUN dotnet sln HomeBudgetAccountingApi.sln remove \
+    HomeBudget.Accounting.Api.IntegrationTests/HomeBudget.Accounting.Api.IntegrationTests.csproj \
+    HomeBudget.Accounting.Api.Tests/HomeBudget.Accounting.Api.Tests.csproj \
+    HomeBudget.Components.Operations.Tests/HomeBudget.Components.Operations.Tests.csproj
+
 RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --framework:net9.0 -maxcpucount:1 -o /app/build
 
 # Not compatible with .net 9.0 (will be updated later)
