@@ -3,7 +3,7 @@
         "nuget"
     ],
     "extends": [
-        "config:base"
+        "config:recommended"
     ],
     "nuget": {
         "enabled": true
