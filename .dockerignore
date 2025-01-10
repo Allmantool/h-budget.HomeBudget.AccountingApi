@@ -27,3 +27,5 @@ LICENSE
 **/docker-compose*.yml
 bin/
 obj/
+# Exclude all test project directories
+**/*Tests/
