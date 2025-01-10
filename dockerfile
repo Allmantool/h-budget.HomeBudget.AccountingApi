@@ -55,7 +55,7 @@ COPY ["HomeBudget.Components.Accounts/*.csproj", "HomeBudget.Components.Accounts
 COPY ["HomeBudget.Accounting.Infrastructure/*.csproj", "HomeBudget.Accounting.Infrastructure/"]
 
 # Test project no need for final docker image release, but can be cause of dependency mismatch
-# COPY ["HomeBudget.Accounting.Api.IntegrationTests/*.csproj", "HomeBudget.Accounting.Api.IntegrationTests/"]
+COPY ["HomeBudget.Accounting.Api.IntegrationTests/*.csproj", "HomeBudget.Accounting.Api.IntegrationTests/"]
 
 COPY . .
 

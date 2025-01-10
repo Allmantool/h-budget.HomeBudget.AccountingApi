@@ -28,4 +28,4 @@ LICENSE
 bin/
 obj/
 # Exclude all test project directories
-**/*Tests/
+# **/*Tests/
