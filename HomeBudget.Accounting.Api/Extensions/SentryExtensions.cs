@@ -165,8 +165,15 @@ namespace HomeBudget.Accounting.Api.Extensions
             out SentryConfigurationOptions verifiedOptions)
         {
             verifiedOptions = null;
-            var sentryDns = sentryOptions.Dns ?? configuration["Sentry:Dsn"] ?? throw new InvalidOperationException("Sentry DSN is missing.");
-            var isOptionsValid = !string.IsNullOrWhiteSpace(sentryDns);
+
+            var sentryDns = sentryOptions.Dns ?? configuration["Sentry:Dsn"];
+
+            var isNotNullOrEmptyDns = !string.IsNullOrWhiteSpace(sentryDns);
+
+            var isValidUri = Uri.TryCreate(sentryDns, UriKind.Absolute, out var uri)
+                             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+            var isOptionsValid = isNotNullOrEmptyDns && isValidUri;
 
             if (isOptionsValid)
             {
