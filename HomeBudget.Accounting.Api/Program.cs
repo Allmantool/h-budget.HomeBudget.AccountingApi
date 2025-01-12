@@ -73,7 +73,7 @@ services
             .AddPrometheusExporter()
     );
 
-configuration.InitializeLogger(environment, webAppBuilder.Host);
+services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
 
 webHost.AddAndConfigureSentry();
 
