@@ -11,7 +11,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Core;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Exceptions;
@@ -22,12 +24,13 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
     internal static class CustomLoggerExtensions
     {
-        public static ILogger InitializeLogger(
+        public static Logger InitializeLogger(
             this IConfiguration configuration,
             IWebHostEnvironment environment,
+            ILoggingBuilder loggingBuilder,
             ConfigureHostBuilder host)
         {
-            Log.Logger = new LoggerConfiguration()
+            var logger = new LoggerConfiguration()
                 .Enrich.FromLogContext()
                 .Enrich.WithMachineName()
                 .Enrich.WithExceptionDetails()
@@ -42,9 +45,14 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
-            host.UseSerilog(Log.Logger);
+            loggingBuilder.ClearProviders();
+            loggingBuilder.AddSerilog(logger);
 
-            return Log.Logger;
+            host.UseSerilog(logger);
+
+            Log.Logger = logger;
+
+            return logger;
         }
 
         private static LoggerConfiguration AddElasticSearchSupport(
