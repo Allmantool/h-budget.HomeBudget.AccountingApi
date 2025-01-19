@@ -3,10 +3,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
-
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Models;
 
@@ -14,10 +13,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
         IMapper mapper,
-        IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
     {
-        protected async Task<Result<Guid>> HandleAsync<T>(
+        protected Task<Result<Guid>> HandleAsync<T>(
             T request,
             CancellationToken cancellationToken)
         {
@@ -27,11 +25,19 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var paymentMessage = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-            fireAndForgetHandler.Execute(async producer => await producer.ProduceAsync(paymentAccountId.ToString(), paymentMessage.Payload, cancellationToken));
+            // TODO: Verify that all required information has been sent.
+            fireAndForgetHandler.Execute(async producer =>
+            {
+                var topic = new SubscriptionTopic
+                {
+                    Title = $"payment-account-{paymentAccountId}",
+                    ConsumerType = ConsumerTypes.PaymentOperations
+                };
 
-            await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
+                await producer.ProduceAsync(topic.Title, paymentMessage.Payload, cancellationToken);
+            });
 
-            return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
+            return Task.FromResult(Result<Guid>.Succeeded(paymentEvent.Payload.Key));
         }
     }
 }

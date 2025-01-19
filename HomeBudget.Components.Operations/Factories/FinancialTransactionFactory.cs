@@ -17,11 +17,12 @@ namespace HomeBudget.Components.Operations.Factories
             string contractorId,
             DateOnly operationDay)
         {
+            /*
             if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
             {
                 return Result<FinancialTransaction>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
             }
-
+            */
             var payload = new FinancialTransaction
             {
                 Key = Guid.NewGuid(),
@@ -29,8 +30,8 @@ namespace HomeBudget.Components.Operations.Factories
                 Amount = amount,
                 Comment = comment,
                 PaymentAccountId = paymentAccountId,
-                CategoryId = categoryGuid,
-                ContractorId = contractorGuid,
+                CategoryId = Guid.TryParse(categoryId, out var categoryGuid) ? categoryGuid : Guid.NewGuid(),
+                ContractorId = Guid.TryParse(contractorId, out var contractorGuid) ? contractorGuid : Guid.NewGuid(),
                 TransactionType = TransactionTypes.Payment
             };
 

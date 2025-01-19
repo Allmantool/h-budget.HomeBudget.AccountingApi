@@ -10,7 +10,6 @@ using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
@@ -19,11 +18,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         IMapper mapper,
         ISender sender,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
         : BasePaymentCommandHandler(
                 mapper,
-                operationsDeliveryHandler,
                 fireAndForgetHandler),
             IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {

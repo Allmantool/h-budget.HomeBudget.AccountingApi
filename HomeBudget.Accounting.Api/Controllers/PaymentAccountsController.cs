@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
@@ -19,6 +22,7 @@ namespace HomeBudget.Accounting.Api.Controllers
     [ApiController]
     [Route(Endpoints.PaymentAccounts, Name = Endpoints.PaymentAccounts)]
     public class PaymentAccountsController(
+        Channel<SubscriptionTopic> topicsChannel,
         IMapper mapper,
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentAccountFactory paymentAccountFactory) : ControllerBase
@@ -65,7 +69,9 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreatePaymentAccountRequest request)
+        public async Task<Result<Guid>> CreateNewAsync(
+            [FromBody] CreatePaymentAccountRequest request,
+            CancellationToken cancellationToken = default)
         {
             var newPaymentAccount = paymentAccountFactory.Create(
                 request.Agent,
@@ -75,6 +81,14 @@ namespace HomeBudget.Accounting.Api.Controllers
                 BaseEnumeration.FromValue<AccountTypes>(request.AccountType));
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
+
+            var topic = new SubscriptionTopic
+            {
+                Title = $"payment-account-{newPaymentAccount.Key}",
+                ConsumerType = ConsumerTypes.PaymentOperations
+            };
+
+            await topicsChannel.Writer.WriteAsync(topic, cancellationToken);
 
             return Result<Guid>.Succeeded(saveResult.Payload);
         }
