@@ -99,7 +99,11 @@ namespace HomeBudget.Components.Operations.Services
 
             var documentResult = await categoryDocumentsClient.GetByIdAsync(categoryId);
             var documentPayload = documentResult.Payload;
-            var category = documentPayload.Payload;
+
+            // TODO: should be verified (case when category is null)
+            var category = documentPayload == null
+                ? new Category(CategoryTypes.Expense, new[] { "with empty category" })
+                : documentPayload.Payload;
 
             return category.CategoryType == CategoryTypes.Income
                 ? Math.Abs(operation.Amount)
