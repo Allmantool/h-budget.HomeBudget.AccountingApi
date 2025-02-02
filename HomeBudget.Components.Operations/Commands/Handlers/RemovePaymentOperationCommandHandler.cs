@@ -14,7 +14,7 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class RemovePaymentOperationCommandHandler(
-        Logger<ApplyTransferCommandHandler> logger,
+        ILogger<ApplyTransferCommandHandler> logger,
         IMapper mapper,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
         : BasePaymentCommandHandler(
