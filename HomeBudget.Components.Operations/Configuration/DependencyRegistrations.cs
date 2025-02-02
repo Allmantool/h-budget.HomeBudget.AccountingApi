@@ -1,6 +1,6 @@
 ﻿using System;
-using EventStore.Client;
 
+using EventStore.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -9,10 +9,12 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Components.Operations.Builders;
+using HomeBudget.Components.Operations.Factories;
+using HomeBudget.Components.Operations.Consumers;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
-using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
@@ -32,13 +34,20 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
-                .AddMediatR(configuration =>
-                {
-                    configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
-                })
+                .AddScoped<IKafkaConsumer, PaymentOperationsConsumer>()
+                .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
                 .RegisterMongoDbClient(webHostEnvironment);
+        }
+
+        private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
+        {
+            return services
+                .AddMediatR(configuration =>
+                {
+                    configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
+                });
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
@@ -46,7 +55,7 @@ namespace HomeBudget.Components.Operations.Configuration
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
-                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+                .AddScoped<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)

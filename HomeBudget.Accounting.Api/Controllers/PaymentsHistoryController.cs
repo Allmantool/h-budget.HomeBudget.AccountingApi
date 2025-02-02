@@ -84,7 +84,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetOperationGuid);
 
-            var operationById = document.Payload;
+            var operationById = document?.Payload;
 
             return operationById == null
                 ? Result<PaymentOperationHistoryRecordResponse>.Failure($"The operation with '{operationId}' hasn't been found")

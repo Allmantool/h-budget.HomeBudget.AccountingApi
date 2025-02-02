@@ -4,10 +4,11 @@ namespace HomeBudget.Components.Operations.Models
 {
     public record PaymentOperationPayload
     {
-        public decimal Amount { get; set; }
-        public string Comment { get; set; }
-        public string CategoryId { get; set; }
-        public string ContractorId { get; set; }
-        public DateOnly OperationDate { get; set; }
+        public int ScopeOperationId { get; init; }
+        public decimal Amount { get; init; }
+        public string Comment { get; init; }
+        public string CategoryId { get; init; }
+        public string ContractorId { get; init; }
+        public DateOnly OperationDate { get; init; }
     }
 }

@@ -34,6 +34,7 @@ namespace HomeBudget.Components.Operations.Services
 
             var operationForAddResult = financialTransactionFactory.CreatePayment(
                 paymentAccountId,
+                payload.ScopeOperationId,
                 payload.Amount,
                 payload.Comment,
                 payload.CategoryId,
