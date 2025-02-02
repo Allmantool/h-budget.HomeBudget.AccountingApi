@@ -1,10 +1,21 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
     <CodeAnalysisRuleSet>$(SolutionDir)StyleCopConfig.ruleset</CodeAnalysisRuleSet>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DebugType>Full</DebugType>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'" />
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.6.0.109712" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'" />
+  <ItemGroup Condition="$(MSBuildProjectExtension) != '.dbproj'">
+    <PackageReference Include="StyleCop.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>
