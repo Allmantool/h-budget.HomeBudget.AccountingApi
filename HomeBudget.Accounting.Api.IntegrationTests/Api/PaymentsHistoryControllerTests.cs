@@ -263,13 +263,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayInMs: 6000);
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
 
-            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest);
+            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest, executionDelayInMs: 6000);
 
             var result = getResponse.Data;
             var payload = result.Payload;
