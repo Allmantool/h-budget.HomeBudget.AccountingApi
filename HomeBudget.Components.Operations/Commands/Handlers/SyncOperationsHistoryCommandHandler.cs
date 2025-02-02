@@ -21,7 +21,6 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         ISender sender,
         ILogger<SyncOperationsHistoryCommandHandler> logger,
         IPaymentAccountService paymentAccountService,
-
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
         IPaymentOperationsHistoryService operationsHistoryService)
         : IRequestHandler<SyncOperationsHistoryCommand, Result<decimal>>

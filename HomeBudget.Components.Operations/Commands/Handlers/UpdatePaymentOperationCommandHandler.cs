@@ -4,26 +4,26 @@ using System.Threading.Tasks;
 
 using AutoMapper;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class UpdatePaymentOperationCommandHandler(
+        ILogger<UpdatePaymentOperationCommandHandler> logger,
         IMapper mapper,
         ISender sender,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
         : BasePaymentCommandHandler(
+                logger,
                 mapper,
-                operationsDeliveryHandler,
                 fireAndForgetHandler),
             IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {
@@ -34,19 +34,21 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             var accountId = operationForUpdate.PaymentAccountId;
             var operationBeforeUpdate = await historyDocumentsClient.GetByIdAsync(accountId, operationId);
 
-            if (operationBeforeUpdate != null)
+            if (operationBeforeUpdate == null)
             {
-                var updateOperationIdentifier = request.OperationForUpdate.OperationDay.ToFinancialPeriod();
-                var deleteOperationIdentifier = operationBeforeUpdate.Payload.Record.OperationDay.ToFinancialPeriod();
+                return await HandleAsync(request, cancellationToken);
+            }
 
-                var ifFFinancialPeriodHasBeenChanged = updateOperationIdentifier.StartDate != deleteOperationIdentifier.StartDate;
+            var updateOperationIdentifier = request.OperationForUpdate.OperationDay.ToFinancialPeriod();
+            var deleteOperationIdentifier = operationBeforeUpdate.Payload.Record.OperationDay.ToFinancialPeriod();
 
-                if (ifFFinancialPeriodHasBeenChanged)
-                {
-                    var removeCommand = new RemovePaymentOperationCommand(operationBeforeUpdate.Payload.Record);
+            var ifFFinancialPeriodHasBeenChanged = updateOperationIdentifier.StartDate != deleteOperationIdentifier.StartDate;
 
-                    await sender.Send(removeCommand, cancellationToken);
-                }
+            if (ifFFinancialPeriodHasBeenChanged)
+            {
+                var removeCommand = new RemovePaymentOperationCommand(operationBeforeUpdate.Payload.Record);
+
+                await sender.Send(removeCommand, cancellationToken);
             }
 
             return await HandleAsync(request, cancellationToken);

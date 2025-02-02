@@ -52,13 +52,16 @@ namespace HomeBudget.Components.Operations.Clients
                     onRetry: (exception, timeSpan, retryAttempt, context) =>
                     {
                         var eventName = context[nameof(PaymentOperationEvent.EventType)] as string;
+                        var eventKey = context[nameof(PaymentOperationEvent.EventType)] as string;
 
                         logger.LogWarning(
                             "Retry attempt '{RetryAttempt}' for event '{EventName}' failed. Waiting '{RetryDelay}' before next attempt. " +
+                            "Event key: {EventKey}" +
                             "Exception: {Exception}",
                             retryAttempt,
                             eventName,
                             timeSpan,
+                            eventKey,
                             exception.Message);
                     });
 
@@ -71,14 +74,21 @@ namespace HomeBudget.Components.Operations.Clients
             string eventType = default,
             CancellationToken token = default)
         {
-            var context = new Context { [nameof(PaymentOperationEvent.EventType)] = eventType };
+            var context = new Context
+            {
+                [nameof(PaymentOperationEvent.EventType)] = eventType,
+                [nameof(PaymentOperationEvent.Payload.Key)] = eventForSending.Payload?.Key
+            };
 
             return await _retryPolicy.ExecuteAsync(
                 async retryPolicyCtx =>
                 {
-                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString());
-                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString());
-                    eventForSending.Metadata.Add(nameof(retryPolicyCtx.Values), retryPolicyCtx.Values.ToString());
+                    eventForSending.Metadata = new Dictionary<string, string>
+                    {
+                        { nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString() },
+                        { nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString() },
+                        { nameof(retryPolicyCtx.Values), retryPolicyCtx.Values.ToString() }
+                    };
 
                     _logger.LogInformation(
                         "Event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}, operationKey: {OperationKey}",
