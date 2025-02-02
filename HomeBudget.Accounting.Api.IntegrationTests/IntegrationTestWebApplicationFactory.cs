@@ -42,6 +42,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     ProducerSettings = new ProducerSettings
                     {
                         BootstrapServers = _containersConnections.KafkaContainer
+                    },
+                    ConsumerSettings = new ConsumerSettings
+                    {
+                        BootstrapServers = _containersConnections.KafkaContainer
+                    },
+                    AdminSettings = new AdminSettings
+                    {
+                        BootstrapServers = _containersConnections.KafkaContainer
                     }
                 };
 
@@ -50,7 +58,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     ConnectionString = _containersConnections.MongoDbContainer
                 };
 
-                services.AddOptions<KafkaOptions>().Configure(options => options.ProducerSettings = kafkaOptions.ProducerSettings);
+                services.AddOptions<KafkaOptions>().Configure(options =>
+                {
+                    options.AdminSettings = kafkaOptions.AdminSettings;
+                    options.ProducerSettings = kafkaOptions.ProducerSettings;
+                    options.ConsumerSettings = kafkaOptions.ConsumerSettings;
+                });
                 services.AddOptions<MongoDbOptions>().Configure(options =>
                 {
                     options.ConnectionString = mongoDbOptions.ConnectionString;
@@ -61,7 +74,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 services.AddEventStoreClient(
                     _containersConnections.EventSourceDbContainer,
-                    (_) => EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer));
+                    _ => EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer));
             });
 
             base.ConfigureWebHost(builder);

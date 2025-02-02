@@ -13,5 +13,6 @@ namespace HomeBudget.Accounting.Domain.Models
         public Guid CategoryId { get; init; }
         public Guid PaymentAccountId { get; init; }
         public decimal Amount { get; init; }
+        public int ScopedOperationId { get; init; }
     }
 }

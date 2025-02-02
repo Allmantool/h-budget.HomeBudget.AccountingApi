@@ -9,6 +9,7 @@ namespace HomeBudget.Accounting.Domain.Factories
     {
         Result<FinancialTransaction> CreatePayment(
             Guid paymentAccountId,
+            int scopeOperationId,
             decimal amount,
             string comment,
             string categoryId,

@@ -149,7 +149,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var createOperationResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var createOperationResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayInMs: 2000);
 
             var newOperationId = createOperationResult.Data.Payload.PaymentOperationId;
 
@@ -157,7 +157,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest, executionDelayInMs: 2000);
 
             var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
@@ -169,7 +169,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
-            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
+            var categoryIdResult = await SaveCategoryAsync(
+                CategoryTypes.Income,
+                nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
 
             var requestBody = new CreateOperationRequest
             {

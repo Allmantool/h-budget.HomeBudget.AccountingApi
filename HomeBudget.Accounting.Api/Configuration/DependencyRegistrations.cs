@@ -6,6 +6,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson.Serialization;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
@@ -28,7 +29,8 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterPaymentAccountsDependencies()
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
-                .RegisterCategoriesDependencies();
+                .RegisterCategoriesDependencies()
+                .RegisterInfrastructureDependencies();
         }
 
         private static IServiceCollection SetUpConfigurationOptions(
