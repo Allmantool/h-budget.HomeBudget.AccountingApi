@@ -65,7 +65,7 @@ namespace HomeBudget.Components.Operations.Configuration
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
         {
-            services.AddScoped<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
+            services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
 
             var serviceProvider = services.BuildServiceProvider();
             var databaseOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;

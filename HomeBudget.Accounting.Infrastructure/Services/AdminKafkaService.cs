@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
+
+using Microsoft.Extensions.Logging;
 
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
-using Microsoft.Extensions.Logging;
 
 namespace HomeBudget.Accounting.Infrastructure.Services
 {
     internal class AdminKafkaService(IAdminClient adminClient, ILogger<AdminKafkaService> logger)
         : IAdminKafkaService
     {
-        public async Task CreateTopicAsync(string topicName)
+        public async Task CreateTopicAsync(string topicName, CancellationToken stoppingToken)
         {
             var topicSpecification = new TopicSpecification
             {

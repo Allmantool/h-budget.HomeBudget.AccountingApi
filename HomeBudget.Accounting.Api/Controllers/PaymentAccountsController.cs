@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Core.Models;
 
@@ -84,7 +85,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var topic = new SubscriptionTopic
             {
-                Title = $"payment-account-{newPaymentAccount.Key}",
+                Title = KafkaTopicTitleFactory.GetPaymentAccountTopic(newPaymentAccount.Key),
                 ConsumerType = ConsumerTypes.PaymentOperations
             };
 

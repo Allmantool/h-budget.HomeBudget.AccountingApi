@@ -11,6 +11,7 @@ namespace HomeBudget.Components.Operations.Factories
     {
         public Result<FinancialTransaction> CreatePayment(
             Guid paymentAccountId,
+            int scopeOperationId,
             decimal amount,
             string comment,
             string categoryId,
@@ -23,9 +24,11 @@ namespace HomeBudget.Components.Operations.Factories
                 return Result<FinancialTransaction>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
             }
             */
+
             var payload = new FinancialTransaction
             {
                 Key = Guid.NewGuid(),
+                ScopedOperationId = scopeOperationId,
                 OperationDay = operationDay,
                 Amount = amount,
                 Comment = comment,

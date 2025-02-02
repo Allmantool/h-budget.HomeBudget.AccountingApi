@@ -32,7 +32,12 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 BootstrapServers = consumerSettings.BootstrapServers,
                 GroupId = consumerSettings.GroupId,
                 AutoOffsetReset = AutoOffsetReset.Earliest,
-                EnableAutoCommit = consumerSettings.EnableAutoCommit
+                EnableAutoCommit = consumerSettings.EnableAutoCommit,
+                AllowAutoCreateTopics = false,
+                MaxPollIntervalMs = 300000,
+                SessionTimeoutMs = 10000,
+                HeartbeatIntervalMs = 3000,
+                Debug = "all"
             };
 
             _logger = logger;

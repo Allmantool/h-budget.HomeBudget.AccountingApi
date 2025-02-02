@@ -169,7 +169,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
-            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
+            var categoryIdResult = await SaveCategoryAsync(
+                CategoryTypes.Income,
+                nameof(DeleteById_WithValidOperationRef_OperationsAmountShouldBeDescriesed));
 
             var requestBody = new CreateOperationRequest
             {

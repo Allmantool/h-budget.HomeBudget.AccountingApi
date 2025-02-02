@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Operations.Consumers
 
             consumerSettings.ClientId = ConsumerTypes.PaymentOperations;
             consumerSettings.GroupId = "payment-account-operations";
-            consumerSettings.EnableAutoCommit = true;
+            consumerSettings.EnableAutoCommit = false;
 
             return options;
         }
@@ -45,9 +45,18 @@ namespace HomeBudget.Components.Operations.Consumers
                     {
                         var message = payload.Message;
 
+                        if (message == null || string.IsNullOrWhiteSpace(message.Value))
+                        {
+                            return;
+                        }
+
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
                         await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
+                    }
+                    catch (JsonException ex)
+                    {
+                        logger.LogError("Failed to deserialize message: {Message}. Error: {Error}", payload.Message.Value, ex.Message);
                     }
                     catch (Exception ex)
                     {

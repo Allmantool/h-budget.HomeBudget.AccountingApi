@@ -3,6 +3,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
+using Microsoft.Extensions.Logging;
+
+using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
@@ -12,6 +15,7 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
+        ILogger logger,
         IMapper mapper,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
     {
@@ -30,11 +34,18 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             {
                 var topic = new SubscriptionTopic
                 {
-                    Title = $"payment-account-{paymentAccountId}",
+                    Title = KafkaTopicTitleFactory.GetPaymentAccountTopic(paymentAccountId),
                     ConsumerType = ConsumerTypes.PaymentOperations
                 };
 
-                await producer.ProduceAsync(topic.Title, paymentMessage.Payload, cancellationToken);
+                try
+                {
+                    await producer.ProduceAsync(topic.Title, paymentMessage.Payload, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError("Error during producing message event. The error: {Message}", ex.Message);
+                }
             });
 
             return Task.FromResult(Result<Guid>.Succeeded(paymentEvent.Payload.Key));

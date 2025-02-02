@@ -2,7 +2,7 @@
 {
     public record SubscriptionTopic
     {
-        public string Title { get; set; }
-        public string ConsumerType { get; set; }
+        public string Title { get; init; }
+        public string ConsumerType { get; init; }
     }
 }
