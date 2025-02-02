@@ -2,8 +2,8 @@
 {
     public class TestContainersConnections
     {
-        public string EventSourceDbContainer { get; set; }
-        public string KafkaContainer { get; set; }
-        public string MongoDbContainer { get; set; }
+        public string EventSourceDbContainer { get; init; }
+        public string KafkaContainer { get; init; }
+        public string MongoDbContainer { get; init; }
     }
 }
