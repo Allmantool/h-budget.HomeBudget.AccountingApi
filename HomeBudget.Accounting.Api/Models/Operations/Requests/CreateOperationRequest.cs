@@ -4,7 +4,7 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
 {
     public record CreateOperationRequest
     {
-        public int ScopeOperationId { get; set; }
+        public int ScopeOperationId { get; init; }
         public decimal Amount { get; init; }
         public string Comment { get; init; }
         public string ContractorId { get; init; }

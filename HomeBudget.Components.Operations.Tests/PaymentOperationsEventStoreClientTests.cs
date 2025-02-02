@@ -87,14 +87,14 @@ namespace HomeBudget.Components.Operations.Tests
 
                 _sut = new PaymentOperationsEventStoreClient(
                     Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
+                    Mock.Of<IServiceScopeFactory>(),
                     client,
                     Options.Create(
                     new EventStoreDbOptions
                     {
                         RetryAttempts = 3,
                         TimeoutInSeconds = 10
-                    }),
-                    _senderMock.Object);
+                    }));
 
                 var paymentsEvents = new List<PaymentOperationEvent>
                 {
