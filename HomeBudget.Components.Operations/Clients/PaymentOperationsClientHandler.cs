@@ -2,6 +2,7 @@
 
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
+
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Core.Options;
 
@@ -14,16 +15,17 @@ namespace HomeBudget.Components.Operations.Clients
         public PaymentOperationsClientHandler(IOptions<KafkaOptions> options)
         {
             var kafkaOptions = options.Value;
+
             var producerSettings = kafkaOptions.ProducerSettings;
 
-            var conf = new ProducerConfig(new ProducerConfig
+            var producerConfig = new ProducerConfig
             {
                 ClientId = "PaymentOperationsClientId",
                 BootstrapServers = producerSettings.BootstrapServers,
                 MessageTimeoutMs = producerSettings.MessageTimeoutMs ?? TimeSpan.FromSeconds(3).Microseconds,
-            });
+            };
 
-            KafkaProducer = new ProducerBuilder<byte[], byte[]>(conf).Build();
+            KafkaProducer = new ProducerBuilder<byte[], byte[]>(producerConfig).Build();
         }
 
         public Handle Handle => KafkaProducer.Handle;

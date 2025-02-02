@@ -3,21 +3,23 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
+using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Infrastructure.Factories;
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
+        ILogger logger,
         IMapper mapper,
-        IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
         IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
     {
-        protected async Task<Result<Guid>> HandleAsync<T>(
+        protected Task<Result<Guid>> HandleAsync<T>(
             T request,
             CancellationToken cancellationToken)
         {
@@ -27,11 +29,26 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var paymentMessage = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-            fireAndForgetHandler.Execute(async producer => await producer.ProduceAsync(paymentAccountId.ToString(), paymentMessage.Payload, cancellationToken));
+            // TODO: Verify that all required information has been sent.
+            fireAndForgetHandler.Execute(async producer =>
+            {
+                var topic = new SubscriptionTopic
+                {
+                    Title = KafkaTopicTitleFactory.GetPaymentAccountTopic(paymentAccountId),
+                    ConsumerType = ConsumerTypes.PaymentOperations
+                };
 
-            await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
+                try
+                {
+                    await producer.ProduceAsync(topic.Title, paymentMessage.Payload, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError("Error during producing message event. The error: {Message}", ex.Message);
+                }
+            });
 
-            return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
+            return Task.FromResult(Result<Guid>.Succeeded(paymentEvent.Payload.Key));
         }
     }
 }
