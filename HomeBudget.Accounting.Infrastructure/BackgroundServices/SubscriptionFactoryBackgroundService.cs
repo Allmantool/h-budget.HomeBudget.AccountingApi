@@ -16,7 +16,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
     internal class SubscriptionFactoryBackgroundService(
     Channel<SubscriptionTopic> topicsChannel,
-    IServiceProvider serviceProvider,
+    IServiceScopeFactory serviceScopeFactory,
     ILogger<SubscriptionFactoryBackgroundService> logger)
     : BackgroundService
     {
@@ -42,7 +42,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
         {
             try
             {
-                using var scope = serviceProvider.CreateScope();
+                using var scope = serviceScopeFactory.CreateScope();
                 var sp = scope.ServiceProvider;
 
                 var kafkaAdminServiceFactory = sp.GetRequiredService<IKafkaAdminServiceFactory>();
