@@ -9,17 +9,10 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
-    internal class KafkaAdminServiceFactory : IKafkaAdminServiceFactory
+    internal class KafkaAdminServiceFactory(ILogger<AdminKafkaService> logger, IOptions<KafkaOptions> options)
+        : IKafkaAdminServiceFactory
     {
-        private readonly ILogger<AdminKafkaService> _logger;
-        private readonly AdminSettings _adminSettings;
-
-        public KafkaAdminServiceFactory(ILogger<AdminKafkaService> logger, IOptions<KafkaOptions> options)
-        {
-            _logger = logger;
-            var kafkaOptions = options.Value;
-            _adminSettings = kafkaOptions.AdminSettings;
-        }
+        private readonly AdminSettings _adminSettings = options.Value.AdminSettings;
 
         public IAdminKafkaService Build()
         {
@@ -30,9 +23,17 @@ namespace HomeBudget.Accounting.Infrastructure.Factories
                 Debug = "all"
             };
 
-            var adminClient = new AdminClientBuilder(config).Build();
+            try
+            {
+                var adminClient = new AdminClientBuilder(config).Build();
 
-            return new AdminKafkaService(adminClient, _logger);
+                return new AdminKafkaService(adminClient, logger);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during kafka admin client creation: {ExceptionMessage}", ex.Message);
+                throw;
+            }
         }
     }
 }
