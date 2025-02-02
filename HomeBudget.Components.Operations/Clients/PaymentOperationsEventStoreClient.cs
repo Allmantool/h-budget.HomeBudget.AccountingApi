@@ -8,6 +8,7 @@ using System.Threading.Channels;
 
 using EventStore.Client;
 using Grpc.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatR;
@@ -32,18 +33,19 @@ namespace HomeBudget.Components.Operations.Clients
         private readonly AsyncRetryPolicy _retryPolicy;
 
         private readonly ILogger<PaymentOperationsEventStoreClient> _logger;
-        private readonly ISender _sender;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly EventStoreDbOptions _eventStoreDbOptions;
 
         public PaymentOperationsEventStoreClient(
             ILogger<PaymentOperationsEventStoreClient> logger,
+            IServiceScopeFactory serviceScopeFactory,
             EventStoreClient client,
-            IOptions<EventStoreDbOptions> options,
-            ISender sender) : base(client, options.Value)
+            IOptions<EventStoreDbOptions> options)
+            : base(client, options.Value)
         {
             _eventStoreDbOptions = options.Value;
             _logger = logger;
-            _sender = sender;
+            _serviceScopeFactory = serviceScopeFactory;
             _retryPolicy = Policy
                 .Handle<RpcException>(ex => ex.StatusCode == StatusCode.DeadlineExceeded)
                 .WaitAndRetryAsync(
@@ -152,7 +154,12 @@ namespace HomeBudget.Components.Operations.Clients
                 new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
 
             await BenchmarkService.WithBenchmarkAsync(
-                async () => await _sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events)),
+                async () =>
+                {
+                    await using var scope = _serviceScopeFactory.CreateAsyncScope();
+                    var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+                    await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events));
+                },
                 $"Sending SyncOperationsHistoryCommand for '{events.Count}' events",
                 _logger,
                 new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
