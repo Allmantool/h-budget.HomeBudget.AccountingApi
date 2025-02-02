@@ -2,6 +2,6 @@
 {
     public class AdminSettings
     {
-        public string BootstrapServers { get; set; }
+        public string BootstrapServers { get; init; }
     }
 }

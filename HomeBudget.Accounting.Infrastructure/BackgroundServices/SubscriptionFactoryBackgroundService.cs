@@ -15,9 +15,9 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
     internal class SubscriptionFactoryBackgroundService(
-    Channel<SubscriptionTopic> topicsChannel,
-    IServiceScopeFactory serviceScopeFactory,
-    ILogger<SubscriptionFactoryBackgroundService> logger)
+        Channel<SubscriptionTopic> topicsChannel,
+        IServiceScopeFactory serviceScopeFactory,
+        ILogger<SubscriptionFactoryBackgroundService> logger)
     : BackgroundService
     {
         private readonly ConcurrentDictionary<string, IKafkaConsumer> _consumers = new();
@@ -46,10 +46,22 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 var sp = scope.ServiceProvider;
 
                 var kafkaAdminServiceFactory = sp.GetRequiredService<IKafkaAdminServiceFactory>();
-                var adminKafkaService = kafkaAdminServiceFactory.Build();
+                if (kafkaAdminServiceFactory == null)
+                {
+                    logger.LogError("{KafkaFactory} could not be resolved.", nameof(IKafkaAdminServiceFactory));
+                    return;
+                }
+
+                using var adminKafkaService = kafkaAdminServiceFactory.Build();
                 await adminKafkaService.CreateTopicAsync(topic.Title, stoppingToken);
 
                 var kafkaConsumersFactory = sp.GetRequiredService<IKafkaConsumersFactory>();
+                if (kafkaConsumersFactory == null)
+                {
+                    logger.LogError("{kafkaConsumersFactory} could not be resolved.", nameof(kafkaConsumersFactory));
+                    return;
+                }
+
                 var consumer = kafkaConsumersFactory
                     .WithServiceProvider(sp)
                     .Build(topic.ConsumerType);
