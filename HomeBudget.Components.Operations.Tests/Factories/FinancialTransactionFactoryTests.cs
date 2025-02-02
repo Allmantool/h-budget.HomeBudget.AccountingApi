@@ -18,6 +18,7 @@ namespace HomeBudget.Components.Operations.Tests.Factories
         {
             var result = _sut.CreatePayment(
                 Guid.Empty,
+                120,
                 10m,
                 "some comment",
                 Guid.Empty.ToString(),
