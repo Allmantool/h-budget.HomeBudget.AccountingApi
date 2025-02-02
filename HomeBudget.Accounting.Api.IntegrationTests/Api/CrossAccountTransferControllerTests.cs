@@ -84,7 +84,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(createTransferRequestBody);
 
-            var transferOperationResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest);
+            var transferOperationResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayInMs: 2000);
 
             var removeTransferRequestBody = new RemoveTransferRequest
             {
@@ -95,7 +95,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var removeRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Delete)
                  .AddJsonBody(removeTransferRequestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest, executionDelayInMs: 2500);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
 
