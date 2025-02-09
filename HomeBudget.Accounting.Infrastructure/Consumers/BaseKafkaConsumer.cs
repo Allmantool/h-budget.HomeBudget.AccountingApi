@@ -93,9 +93,9 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     }
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException ex)
             {
-                _logger.LogInformation("Consumer loop canceled.");
+                _logger.LogInformation("Consumer loop canceled. Error: {ExceptionDetails}", ex.Message);
             }
             finally
             {

@@ -27,9 +27,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var paymentAccountId = paymentEvent.Payload.PaymentAccountId;
 
-            var paymentMessage = PaymentEventToMessageConverter.Convert(paymentEvent);
+            var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-            // TODO: Verify that all required information has been sent.
             fireAndForgetHandler.Execute(async producer =>
             {
                 var topic = new SubscriptionTopic
@@ -40,7 +39,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
                 try
                 {
-                    await producer.ProduceAsync(topic.Title, paymentMessage.Payload, cancellationToken);
+                    var message = paymentMessageResult.Payload;
+                    await producer.ProduceAsync(topic.Title, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {

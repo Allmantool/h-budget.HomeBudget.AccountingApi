@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using EventStore.Client;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Core;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
@@ -114,6 +116,24 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 },
                 cancellationToken: cancellationToken
             );
+        }
+
+        public async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
+        {
+            eventForSending.Metadata.Add(EventMetadataKeys.ExceptionDetails, JsonSerializer.Serialize(exception));
+
+            var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
+
+            var eventData = new EventData(
+                Uuid.NewUuid(),
+                "Dead_letter_event_type",
+                utf8Bytes.AsMemory());
+
+            await client.AppendToStreamAsync(
+                    "Dead_letter_stream",
+                    StreamState.Any,
+                    [eventData],
+                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds));
         }
 
         private async Task EnsureSubscriptionAsync(string streamName, CancellationToken token)
