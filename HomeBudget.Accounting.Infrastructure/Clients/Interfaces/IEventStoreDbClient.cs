@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 using EventStore.Client;
 
+using HomeBudget.Core;
+
 namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
 {
     public interface IEventStoreDbClient<T>
@@ -24,5 +26,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
             string streamName,
             Func<T, Task> onEventAppeared,
             CancellationToken cancellationToken = default);
+
+        Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception);
     }
 }
