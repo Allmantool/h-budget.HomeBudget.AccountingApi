@@ -9,12 +9,16 @@ namespace HomeBudget.Core
     {
         public long SequenceNumber { get; set; }
 
+        public Guid EnvelopId { get; set; }
+
         public DateTime OccurredOn { get; } = DateTime.UtcNow;
+
+        public DateTime ProcessedAt { get; set; }
 
         public Dictionary<string, string> Metadata { get; set; } = new()
         {
             {
-                EventMetadataKeys.Version, "0.0.1"
+                EventMetadataKeys.Version, "0.0.2"
             }
         };
     }

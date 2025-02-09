@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,10 +8,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Core.Options;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
+
+using HomeBudget.Core.Constants;
 
 namespace HomeBudget.Components.Operations.Consumers
 {
@@ -50,7 +54,13 @@ namespace HomeBudget.Components.Operations.Consumers
                             return;
                         }
 
+                        message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
+
+                        logger.LogInformation("Payment operation message has been consumed: {MessageId}", message.Key);
+
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
+
+                        paymentEvent.Metadata.Add(EventMetadataKeys.FromMessage, message.Key);
 
                         await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
                     }

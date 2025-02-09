@@ -85,25 +85,50 @@ namespace HomeBudget.Components.Operations.Clients
             return await _retryPolicy.ExecuteAsync(
                 async retryPolicyCtx =>
                 {
-                    eventForSending.Metadata = new Dictionary<string, string>
+                    try
                     {
-                        { nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString() },
-                        { nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString() },
-                        { nameof(retryPolicyCtx.Values), retryPolicyCtx.Values.ToString() }
-                    };
+                        eventForSending.Metadata = new Dictionary<string, string>
+                        {
+                            { nameof(retryPolicyCtx.CorrelationId), retryPolicyCtx.CorrelationId.ToString() },
+                            { nameof(retryPolicyCtx.Count), retryPolicyCtx.Count.ToString() },
+                            { nameof(retryPolicyCtx.Values), string.Join(",", retryPolicyCtx.Values) }
+                        };
 
-                    _logger.LogInformation(
-                        "Event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}, operationKey: {OperationKey}",
-                        eventForSending.Payload.Key,
-                        retryPolicyCtx.CorrelationId,
-                        retryPolicyCtx.Count,
-                        retryPolicyCtx.OperationKey);
+                        eventForSending.EnvelopId = retryPolicyCtx.CorrelationId;
 
-                    return await base.SendAsync(
-                        eventForSending,
-                        streamName ?? "",
-                        eventType ?? "",
-                        token);
+                        _logger.LogInformation(
+                            "Sending event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}",
+                            eventForSending.Payload.Key,
+                            retryPolicyCtx.CorrelationId,
+                            retryPolicyCtx.Count);
+
+                        var result = await base.SendAsync(
+                            eventForSending,
+                            streamName ?? "",
+                            eventType ?? "",
+                            token);
+
+                        _logger.LogInformation(
+                            "Event sent successfully for operation: {OperationKey}, correlationId: {CorrelationId}",
+                            eventForSending.Payload.Key,
+                            retryPolicyCtx.CorrelationId);
+
+                        return result;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Failed to send event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}",
+                            eventForSending.Payload.Key,
+                            retryPolicyCtx.CorrelationId,
+                            retryPolicyCtx.Count);
+
+                        await SendToDeadLetterQueueAsync(eventForSending, ex);
+
+                        // Re-throw the exception to trigger retry
+                        throw;
+                    }
                 },
                 context);
         }
@@ -152,6 +177,13 @@ namespace HomeBudget.Components.Operations.Clients
                 $"Fetching events for '{paymentPeriodAggregationId}'",
                 _logger,
                 new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
+
+            var processedAt = DateTime.UtcNow;
+
+            foreach (var operationEvent in events)
+            {
+                operationEvent.ProcessedAt = processedAt;
+            }
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () =>
