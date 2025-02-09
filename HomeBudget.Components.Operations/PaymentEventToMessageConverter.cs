@@ -23,19 +23,25 @@ namespace HomeBudget.Components.Operations
                 return Result<Message<string, string>>.Failure($"'{nameof(PaymentOperationEvent)}' can not be null");
             }
 
+            var processedAt = DateTime.UtcNow;
+            var messageId = eventPayload.GetIdentifier();
+            var messagePayload = JsonSerializer.Serialize(paymentEvent);
+
+            var headers = new Headers
+            {
+                new Header(KafkaMessageHeaders.Type, Encoding.UTF8.GetBytes(nameof(PaymentOperationEvent))),
+                new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
+                new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(BasePaymentCommandHandler))),
+                new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(processedAt.ToString("O"))),
+            };
+
             var message = new Message<string, string>
             {
-                Key = eventPayload.GetIdentifier(),
-                Value = JsonSerializer.Serialize(paymentEvent),
-                Timestamp = new Timestamp(DateTime.UtcNow),
-                Headers =
-                {
-                    new Header(KafkaMessageHeaders.Type, Encoding.UTF8.GetBytes(nameof(PaymentOperationEvent))),
-                    new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
-                    new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(BasePaymentCommandHandler))),
-                    new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O"))),
-                }
+                Key = messageId,
+                Value = messagePayload,
+                Timestamp = new Timestamp(processedAt),
+                Headers = headers
             };
 
             return Result<Message<string, string>>.Succeeded(message);
