@@ -3,55 +3,52 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Microsoft.Extensions.Logging;
-
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using Microsoft.Extensions.Logging;
 
-namespace HomeBudget.Accounting.Infrastructure.Services
+using HomeBudget.Core.Models;
+
+namespace HomeBudget.Accounting.Infrastructure.Services;
+
+internal class AdminKafkaService(
+    AdminSettings adminSettings,
+    IAdminClient adminClient,
+    ILogger<AdminKafkaService> logger)
+    : IAdminKafkaService
 {
-    internal class AdminKafkaService(IAdminClient adminClient, ILogger<AdminKafkaService> logger)
-        : IAdminKafkaService
+    public async Task CreateTopicAsync(string topicName, CancellationToken stoppingToken)
     {
-        public async Task CreateTopicAsync(string topicName, CancellationToken stoppingToken)
+        var topicSpecification = new TopicSpecification
         {
-            var topicSpecification = new TopicSpecification
-            {
-                Name = topicName,
-                NumPartitions = 3,
-                ReplicationFactor = 1
-            };
+            Name = topicName,
+            NumPartitions = adminSettings.NumPartitions,
+            ReplicationFactor = adminSettings.ReplicationFactor
+        };
 
-            var createTopicOptions = new CreateTopicsOptions
-            {
-                OperationTimeout = TimeSpan.FromSeconds(30),
-                RequestTimeout = TimeSpan.FromSeconds(30)
-            };
+        var createTopicOptions = new CreateTopicsOptions
+        {
+            OperationTimeout = TimeSpan.FromSeconds(adminSettings.OperationTimeoutInSeconds),
+            RequestTimeout = TimeSpan.FromSeconds(adminSettings.RequestTimeoutInSeconds)
+        };
 
-            var topics = new List<TopicSpecification> { topicSpecification };
+        var topics = new List<TopicSpecification> { topicSpecification };
 
-            try
+        try
+        {
+            await adminClient.CreateTopicsAsync(topics, createTopicOptions);
+            logger.LogInformation($"Topic '{topicName}' created successfully.");
+        }
+        catch (CreateTopicsException ex)
+        {
+            foreach (var result in ex.Results)
             {
-                await adminClient.CreateTopicsAsync(
-                    topics,
-                    createTopicOptions);
-            }
-            catch (CreateTopicsException ex)
-            {
-                foreach (var result in ex.Results)
-                {
-                    logger.LogError($"An error occurred creating topic {result.Topic}: {result.Error.Reason}");
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError($"An unexpected error occurred: {ex.Message}");
+                logger.LogError($"An error occurred creating topic {result.Topic}: {result.Error.Reason}");
             }
         }
-
-        public void Dispose()
+        catch (Exception ex)
         {
-            adminClient.Dispose();
+            logger.LogError($"An unexpected error occurred: {ex.Message}");
         }
     }
 }

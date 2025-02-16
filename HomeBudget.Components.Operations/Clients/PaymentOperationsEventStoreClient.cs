@@ -97,10 +97,9 @@ namespace HomeBudget.Components.Operations.Clients
                         eventForSending.EnvelopId = retryPolicyCtx.CorrelationId;
 
                         _logger.LogInformation(
-                            "Sending event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}",
+                            "Sending event for operation: {OperationKey}, correlationId: {CorrelationId}",
                             eventForSending.Payload.Key,
-                            retryPolicyCtx.CorrelationId,
-                            retryPolicyCtx.Count);
+                            retryPolicyCtx.CorrelationId);
 
                         var result = await base.SendAsync(
                             eventForSending,
@@ -119,10 +118,9 @@ namespace HomeBudget.Components.Operations.Clients
                     {
                         _logger.LogError(
                             ex,
-                            "Failed to send event for operation: {OperationKey}, correlationId: {CorrelationId}, attempt: {AttemptCount}",
+                            "Failed to send event for operation: {OperationKey}, correlationId: {CorrelationId}",
                             eventForSending.Payload.Key,
-                            retryPolicyCtx.CorrelationId,
-                            retryPolicyCtx.Count);
+                            retryPolicyCtx.CorrelationId);
 
                         await SendToDeadLetterQueueAsync(eventForSending, ex);
 

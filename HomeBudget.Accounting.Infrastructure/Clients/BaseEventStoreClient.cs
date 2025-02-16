@@ -120,7 +120,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         public async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
         {
-            eventForSending.Metadata.Add(EventMetadataKeys.ExceptionDetails, JsonSerializer.Serialize(exception));
+            eventForSending.Metadata.Add(EventMetadataKeys.ExceptionDetails, exception.Message);
 
             var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
 
