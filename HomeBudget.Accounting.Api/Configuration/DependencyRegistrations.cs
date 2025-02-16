@@ -30,7 +30,7 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
                 .RegisterCategoriesDependencies()
-                .RegisterInfrastructureDependencies();
+                .RegisterInfrastructureDependencies(configuration);
         }
 
         private static IServiceCollection SetUpConfigurationOptions(

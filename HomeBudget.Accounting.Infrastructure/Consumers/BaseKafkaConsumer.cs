@@ -10,11 +10,11 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
-    public abstract class BaseKafkaConsumer<TKey, TValue>
-        : IKafkaConsumer
+    public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
+        private bool _disposed;
 
         protected BaseKafkaConsumer(
             KafkaOptions kafkaOptions,
@@ -31,20 +31,20 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 BootstrapServers = consumerSettings.BootstrapServers,
                 GroupId = consumerSettings.GroupId,
-                AutoOffsetReset = AutoOffsetReset.Earliest,
+                AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
-                AllowAutoCreateTopics = false,
-                MaxPollIntervalMs = 300000,
-                SessionTimeoutMs = 10000,
-                HeartbeatIntervalMs = 3000,
+                AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
+                MaxPollIntervalMs = consumerSettings.MaxPollIntervalMs,
+                SessionTimeoutMs = consumerSettings.SessionTimeoutMs,
+                HeartbeatIntervalMs = consumerSettings.HeartbeatIntervalMs,
                 Debug = "all"
             };
 
             _logger = logger;
 
             _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
-                .SetErrorHandler((_, error) => { _logger.LogError($"Error: {error.Reason}"); })
-                .SetLogHandler((_, logMessage) => { _logger.LogInformation($"Log: {logMessage.Message}"); })
+                .SetErrorHandler((_, error) => _logger.LogError($"Error: {error.Reason}"))
+                .SetLogHandler((_, logMessage) => _logger.LogInformation($"Log: {logMessage.Message}"))
                 .Build();
         }
 
@@ -91,9 +91,17 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     {
                         _logger.LogError($"Consume error: {ex.Error.Reason}");
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Consume error: {ex.Message}");
+                    }
                 }
             }
             catch (OperationCanceledException ex)
+            {
+                _logger.LogInformation("Consumer loop canceled. '{Exception}' error: {ExceptionDetails}", nameof(OperationCanceledException), ex.Message);
+            }
+            catch (Exception ex)
             {
                 _logger.LogInformation("Consumer loop canceled. Error: {ExceptionDetails}", ex.Message);
             }
@@ -113,6 +121,32 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 _logger.LogError($"Error while closing consumer: {ex.Message}");
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                _consumer?.Dispose();
+            }
+
+            _disposed = true;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        public void Unsubscribe()
+        {
+            _consumer.Unsubscribe();
         }
     }
 }

@@ -34,7 +34,6 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
-                .AddScoped<IKafkaConsumer, PaymentOperationsConsumer>()
                 .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
@@ -55,7 +54,8 @@ namespace HomeBudget.Components.Operations.Configuration
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
-                .AddScoped<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+                .AddTransient<IKafkaConsumer, PaymentOperationsConsumer>()
+                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
