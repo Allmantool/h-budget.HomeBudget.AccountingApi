@@ -8,28 +8,29 @@ using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
-    internal class KafkaConsumersFactory
-        : IKafkaConsumersFactory
+    internal class KafkaConsumersFactory(IServiceProvider serviceProvider) : IKafkaConsumersFactory
     {
-        private IServiceProvider _serviceProvider;
+        private string _topicToSubscribe;
+
+        public IKafkaConsumersFactory WithTopic(string topicTitle)
+        {
+            _topicToSubscribe = topicTitle;
+
+            return this;
+        }
 
         public IKafkaConsumer Build(string consumerType)
         {
-            if (_serviceProvider == null)
+            if (serviceProvider == null)
             {
                 throw new InvalidEnumArgumentException($"Pls. provide {nameof(IServiceProvider)}");
             }
 
-            var consumers = _serviceProvider.GetServices<IKafkaConsumer>();
+            var consumers = serviceProvider.GetServices<IKafkaConsumer>();
 
-            return consumers.FirstOrDefault(c => string.Equals(c.GetType().Name, consumerType, StringComparison.OrdinalIgnoreCase));
-        }
+            var consumer = consumers.FirstOrDefault(c => string.Equals(c.GetType().Name, consumerType, StringComparison.OrdinalIgnoreCase));
 
-        public IKafkaConsumersFactory WithServiceProvider(IServiceProvider serviceProvider)
-        {
-            _serviceProvider = serviceProvider;
-
-            return this;
+            return consumer;
         }
     }
 }

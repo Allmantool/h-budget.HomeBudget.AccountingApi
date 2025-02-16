@@ -1,86 +1,127 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Threading;
+using System.Linq;
 using System.Threading.Channels;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
+using HomeBudget.Accounting.Infrastructure.Services;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
     internal class SubscriptionFactoryBackgroundService(
+        IOptions<KafkaOptions> options,
         Channel<SubscriptionTopic> topicsChannel,
+        IKafkaConsumersFactory kafkaConsumersFactory,
         IServiceScopeFactory serviceScopeFactory,
         ILogger<SubscriptionFactoryBackgroundService> logger)
     : BackgroundService
     {
         private readonly ConcurrentDictionary<string, IKafkaConsumer> _consumers = new();
         private const int MaxDegreeOfConcurrency = 10;
+        private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var semaphore = new SemaphoreSlim(MaxDegreeOfConcurrency);
+            var consumeTasks = Task.Run(() => ConsumeKafkaMessagesLoopAsync(stoppingToken), stoppingToken);
 
-            await foreach (var topic in topicsChannel.Reader.ReadAllAsync(stoppingToken))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await semaphore.WaitAsync(stoppingToken);
+                try
+                {
+                    if (topicsChannel.Reader.Completion.IsCompleted)
+                    {
+                        logger.LogWarning("The topics channel has been completed. No more topics will be processed.");
+                        break;
+                    }
 
-                _ = ProcessTopicAsync(topic, semaphore, stoppingToken);
+                    await foreach (var topic in topicsChannel.Reader.ReadAllAsync(stoppingToken))
+                    {
+                        logger.LogInformation("Received new topic: {Title}", topic.Title);
+
+                        await _semaphore.WaitAsync(stoppingToken);
+                        _ = Task.Run(() => ProcessTopicAsync(topic, stoppingToken), stoppingToken);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    logger.LogInformation("Shutting down {BackgroundService}...", nameof(SubscriptionFactoryBackgroundService));
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Unexpected error in {BackgroundService}. Restarting in {ConsumerDelay} seconds...",
+                        nameof(SubscriptionFactoryBackgroundService),
+                        options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds);
+
+                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
+                }
+            }
+
+            await consumeTasks;
+        }
+
+        private async Task ConsumeKafkaMessagesLoopAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (_consumers.Count == 0)
+                    {
+                        logger.LogInformation("No active consumers. Waiting for new topics...");
+                        await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInSeconds), stoppingToken);
+                        continue;
+                    }
+
+                    logger.LogInformation("Consuming messages for {Count} active topics...", _consumers.Count);
+                    await Task.WhenAll(_consumers.Values.Select(c => c.ConsumeAsync(stoppingToken)));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error while consuming Kafka messages.");
+                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInSeconds), stoppingToken);
+                }
             }
         }
 
-        private async Task ProcessTopicAsync(
-            SubscriptionTopic topic,
-            SemaphoreSlim semaphore,
-            CancellationToken stoppingToken)
+        private async Task ProcessTopicAsync(SubscriptionTopic topic, CancellationToken stoppingToken)
         {
+            using var semaphoreGuard = new SemaphoreGuard(_semaphore);
             try
             {
                 using var scope = serviceScopeFactory.CreateScope();
                 var sp = scope.ServiceProvider;
 
-                var kafkaAdminServiceFactory = sp.GetRequiredService<IKafkaAdminServiceFactory>();
-                if (kafkaAdminServiceFactory == null)
-                {
-                    logger.LogError("{KafkaFactory} could not be resolved.", nameof(IKafkaAdminServiceFactory));
-                    return;
-                }
-
-                using var adminKafkaService = kafkaAdminServiceFactory.Build();
+                var adminKafkaService = sp.GetRequiredService<IAdminKafkaService>();
                 await adminKafkaService.CreateTopicAsync(topic.Title, stoppingToken);
 
-                var kafkaConsumersFactory = sp.GetRequiredService<IKafkaConsumersFactory>();
-                if (kafkaConsumersFactory == null)
+                if (_consumers.ContainsKey(topic.Title))
                 {
-                    logger.LogError("{kafkaConsumersFactory} could not be resolved.", nameof(kafkaConsumersFactory));
+                    logger.LogWarning("Topic {Title} is already being processed.", topic.Title);
                     return;
                 }
 
                 var consumer = kafkaConsumersFactory
-                    .WithServiceProvider(sp)
+                    .WithTopic(topic.Title)
                     .Build(topic.ConsumerType);
 
-                consumer.Subscribe(topic.Title);
-
-                _consumers.TryAdd(topic.Title, consumer);
-
-                logger.LogInformation(
-                    "Subscribed to topic {Title}, consumer type {ConsumerType}",
-                    topic.Title,
-                    topic.ConsumerType);
-
-                _ = consumer.ConsumeAsync(stoppingToken).ContinueWith(
-                    _ =>
-                    {
-                        _consumers.TryRemove(topic.Title, out var _);
-                        semaphore.Release();
-                    }, stoppingToken);
+                if (_consumers.TryAdd(topic.Title, consumer))
+                {
+                    consumer.Subscribe(topic.Title);
+                    logger.LogInformation("Subscribed to topic {Title}, consumer type {ConsumerType}", topic.Title, topic.ConsumerType);
+                }
             }
             catch (Exception ex)
             {
@@ -90,29 +131,40 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     nameof(SubscriptionFactoryBackgroundService),
                     topic.Title,
                     ex.Message);
-
-                semaphore.Release();
             }
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            foreach (var consumer in _consumers.Values)
+            logger.LogInformation("Stopping {BackgroundService}...", nameof(SubscriptionFactoryBackgroundService));
+
+            foreach (var topic in _consumers.Keys)
             {
+                if (!_consumers.TryRemove(topic, out var consumer))
+                {
+                    continue;
+                }
+
                 try
                 {
-                    // await consumer.StopAsync(cancellationToken);
+                    logger.LogInformation("Unsubscribing from topic {Topic}", topic);
+                    consumer.Unsubscribe();
+                    consumer.Dispose();
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(
-                        ex,
-                        "Failed to stop consumer for topic: {ErrorMessage}",
-                        ex.Message);
+                    logger.LogError(ex, "Failed to stop consumer for topic {Topic}: {ErrorMessage}", topic, ex.Message);
                 }
             }
 
+            _semaphore.Dispose();
             await base.StopAsync(cancellationToken);
+        }
+
+        public override void Dispose()
+        {
+            _semaphore.Dispose();
+            base.Dispose();
         }
     }
 }

@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Core.Options
 {
-    public class KafkaOptions
+    public record KafkaOptions
     {
         public AdminSettings AdminSettings { get; set; }
         public ProducerSettings ProducerSettings { get; set; }
