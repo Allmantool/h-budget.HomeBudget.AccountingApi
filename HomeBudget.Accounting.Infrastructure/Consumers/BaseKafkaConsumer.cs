@@ -14,6 +14,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
     public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
+        public Guid ConsumerId { get; }
+
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
         private bool _disposed;
@@ -29,13 +31,13 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerSettings = kafkaOptions.ConsumerSettings;
 
-            var consumerId = Guid.NewGuid().ToString();
+            ConsumerId = Guid.NewGuid();
 
             var consumerConfig = new ConsumerConfig
             {
-                ClientId = consumerId,
+                ClientId = ConsumerId.ToString(),
                 BootstrapServers = consumerSettings.BootstrapServers,
-                GroupId = $"{consumerSettings.GroupId}-{consumerId}",
+                GroupId = $"{consumerSettings.GroupId}-{ConsumerId}",
                 AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,

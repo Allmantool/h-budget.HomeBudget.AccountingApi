@@ -7,7 +7,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers.Interfaces
 {
     public interface IKafkaConsumer : IDisposable
     {
-        public IReadOnlyCollection<string> Subscriptions { get; }
+        Guid ConsumerId { get; }
+        IReadOnlyCollection<string> Subscriptions { get; }
         void Subscribe(string topic);
         Task ConsumeAsync(CancellationToken stoppingToken);
         void Unsubscribe();

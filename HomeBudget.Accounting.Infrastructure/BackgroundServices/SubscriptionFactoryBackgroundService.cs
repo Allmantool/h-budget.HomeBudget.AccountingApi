@@ -88,7 +88,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
                     logger.LogInformation("Consuming messages for {Count} active topics...", _consumers.Count);
                     var consumersWithSubscriptions = _consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty());
-                    await Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken)));
+                    _ = Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken)));
                 }
                 catch (Exception ex)
                 {
