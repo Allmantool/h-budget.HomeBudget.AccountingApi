@@ -40,7 +40,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 try
                 {
                     var message = paymentMessageResult.Payload;
-                    await producer.ProduceAsync(topic.Title, message, cancellationToken);
+                    await producer.ProduceAsync(topic.Title.ToLower(), message, cancellationToken);
                 }
                 catch (Exception ex)
                 {
