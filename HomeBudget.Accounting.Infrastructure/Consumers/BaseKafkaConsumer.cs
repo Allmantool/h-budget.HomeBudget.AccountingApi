@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,6 +7,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
@@ -27,10 +29,13 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerSettings = kafkaOptions.ConsumerSettings;
 
+            var consumerId = Guid.NewGuid().ToString();
+
             var consumerConfig = new ConsumerConfig
             {
+                ClientId = consumerId,
                 BootstrapServers = consumerSettings.BootstrapServers,
-                GroupId = consumerSettings.GroupId,
+                GroupId = $"{consumerSettings.GroupId}-{consumerId}",
                 AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
@@ -48,6 +53,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 .Build();
         }
 
+        public IReadOnlyCollection<string> Subscriptions => _consumer.Subscription.AsReadOnly();
+
         public void Subscribe(string topic)
         {
             if (string.IsNullOrEmpty(topic))
@@ -55,8 +62,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(topic));
             }
 
-            _consumer.Subscribe(topic);
-            _logger.LogInformation($"Subscribed to topic: {topic}");
+            _consumer.Subscribe(topic.ToLower());
+            _logger.LogInformation($"Subscribed to topic: {topic.ToLower()}");
         }
 
         public abstract Task ConsumeAsync(CancellationToken cancellationToken);
@@ -76,7 +83,12 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 {
                     try
                     {
-                        var messagePayload = _consumer.Consume(cancellationToken);
+                        if (_consumer.Subscription.IsNullOrEmpty())
+                        {
+                            continue;
+                        }
+
+                        var messagePayload = _consumer.Consume(TimeSpan.FromMilliseconds(500));
 
                         if (messagePayload == null)
                         {

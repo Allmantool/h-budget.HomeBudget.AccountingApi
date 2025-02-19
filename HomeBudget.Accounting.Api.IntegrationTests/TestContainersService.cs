@@ -62,6 +62,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 await MongoDbContainer.StartAsync();
             }
+
+            await Task.Delay(TimeSpan.FromMinutes(1));
         }
 
         public async Task StopAsync()
