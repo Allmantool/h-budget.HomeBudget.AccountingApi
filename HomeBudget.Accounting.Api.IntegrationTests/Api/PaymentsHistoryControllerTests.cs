@@ -139,12 +139,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 1000);
+                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
-            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 19.2m, 28.2m, 38.2m });
+            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([19.2m, 28.2m, 38.2m]);
         }
 
         [Test]
