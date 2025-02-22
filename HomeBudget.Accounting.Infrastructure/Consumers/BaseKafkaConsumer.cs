@@ -16,6 +16,9 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public Guid ConsumerId { get; }
 
+        private const int MaxDegreeOfConcurrency = 1;
+        private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
+
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
         private bool _disposed;
@@ -79,17 +82,25 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(processMessageAsync));
             }
 
+            using var semaphoreGuard = new SemaphoreGuard(_semaphore);
+
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
+                        if (_disposed || _consumer == null)
+                        {
+                            return;
+                        }
+
                         if (_consumer.Subscription.IsNullOrEmpty())
                         {
                             continue;
                         }
 
+                        await _semaphore.WaitAsync(cancellationToken);
                         var messagePayload = _consumer.Consume(TimeSpan.FromMilliseconds(500));
 
                         if (messagePayload == null)
@@ -146,6 +157,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             if (disposing)
             {
+                _semaphore?.Dispose();
                 _consumer?.Dispose();
             }
 

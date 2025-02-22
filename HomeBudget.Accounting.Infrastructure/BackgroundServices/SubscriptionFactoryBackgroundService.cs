@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
     : BackgroundService
     {
         private readonly ConcurrentDictionary<string, IKafkaConsumer> _consumers = new();
-        private const int MaxDegreeOfConcurrency = 15;
+        private const int MaxDegreeOfConcurrency = 50;
         private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,7 +53,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                         _ = Task.Run(() => ProcessTopicAsync(topic, stoppingToken), stoppingToken);
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException ex)
                 {
                     logger.LogInformation("Shutting down {BackgroundService}...", nameof(SubscriptionFactoryBackgroundService));
                     break;
