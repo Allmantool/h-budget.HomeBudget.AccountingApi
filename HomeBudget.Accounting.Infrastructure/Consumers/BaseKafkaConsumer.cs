@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,12 +7,18 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
     public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
+        public Guid ConsumerId { get; }
+
+        private const int MaxDegreeOfConcurrency = 1;
+        private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
+
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
         private bool _disposed;
@@ -27,10 +34,13 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerSettings = kafkaOptions.ConsumerSettings;
 
+            ConsumerId = Guid.NewGuid();
+
             var consumerConfig = new ConsumerConfig
             {
+                ClientId = ConsumerId.ToString(),
                 BootstrapServers = consumerSettings.BootstrapServers,
-                GroupId = consumerSettings.GroupId,
+                GroupId = $"{consumerSettings.GroupId}-{ConsumerId}",
                 AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
@@ -48,6 +58,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 .Build();
         }
 
+        public IReadOnlyCollection<string> Subscriptions => _consumer.Subscription.AsReadOnly();
+
         public void Subscribe(string topic)
         {
             if (string.IsNullOrEmpty(topic))
@@ -55,8 +67,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(topic));
             }
 
-            _consumer.Subscribe(topic);
-            _logger.LogInformation($"Subscribed to topic: {topic}");
+            _consumer.Subscribe(topic.ToLower());
+            _logger.LogInformation($"Subscribed to topic: {topic.ToLower()}");
         }
 
         public abstract Task ConsumeAsync(CancellationToken cancellationToken);
@@ -70,13 +82,26 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(processMessageAsync));
             }
 
+            using var semaphoreGuard = new SemaphoreGuard(_semaphore);
+
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
                     {
-                        var messagePayload = _consumer.Consume(cancellationToken);
+                        if (_disposed || _consumer == null)
+                        {
+                            return;
+                        }
+
+                        if (_consumer.Subscription.IsNullOrEmpty())
+                        {
+                            continue;
+                        }
+
+                        await _semaphore.WaitAsync(cancellationToken);
+                        var messagePayload = _consumer.Consume(TimeSpan.FromMilliseconds(500));
 
                         if (messagePayload == null)
                         {
@@ -132,6 +157,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             if (disposing)
             {
+                _semaphore?.Dispose();
                 _consumer?.Dispose();
             }
 
