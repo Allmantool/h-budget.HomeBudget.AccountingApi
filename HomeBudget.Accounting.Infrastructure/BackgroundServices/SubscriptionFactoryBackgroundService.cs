@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services;
+using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -86,7 +87,8 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     }
 
                     logger.LogInformation("Consuming messages for {Count} active topics...", _consumers.Count);
-                    await Task.WhenAll(_consumers.Values.Select(c => c.ConsumeAsync(stoppingToken)));
+                    var consumersWithSubscriptions = _consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty());
+                    _ = Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken)));
                 }
                 catch (Exception ex)
                 {
