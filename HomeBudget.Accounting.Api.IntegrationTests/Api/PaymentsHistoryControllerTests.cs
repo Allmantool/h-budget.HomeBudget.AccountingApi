@@ -28,7 +28,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private readonly OperationsTestWebApp _sut = new();
+        private OperationsTestWebApp _sut;
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new OperationsTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
@@ -80,7 +87,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
 
                 balanceAfter.Should().Be(expectedBalance);
-                historyRecordBalance.Should().BeEquivalentTo(new[] { 22.2m, 34.2m, 47.2m });
+                historyRecordBalance.Should().BeEquivalentTo([22.2m, 34.2m, 47.2m]);
             });
         }
 
@@ -144,7 +151,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
-            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 19.2m, 28.2m, 38.2m });
+            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([19.2m, 28.2m, 38.2m]);
         }
 
         [Test]
@@ -198,7 +205,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo(new[] { 7, 7, 9120 });
+                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo([7, 7, 9120]);
 
                 historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 18.2m, 25.2m, -9094.8m });
             });
@@ -338,7 +345,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
         }
@@ -348,7 +355,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+                .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
 
             return getResponse.Data.Payload;
         }

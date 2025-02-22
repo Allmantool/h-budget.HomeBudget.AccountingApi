@@ -16,11 +16,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class ContractorsControllerTests : IAsyncDisposable
+    public class ContractorsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";
 
-        private readonly ContractorsTestWebApp _sut = new();
+        private ContractorsTestWebApp _sut;
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new ContractorsTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
@@ -99,14 +106,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var secondResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
 
             secondResponse.Data.IsSucceeded.Should().BeFalse();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_sut != null)
-            {
-                await _sut.DisposeAsync();
-            }
         }
     }
 }

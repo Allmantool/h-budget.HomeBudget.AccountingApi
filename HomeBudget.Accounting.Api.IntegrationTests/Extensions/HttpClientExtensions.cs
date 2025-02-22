@@ -7,7 +7,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
     internal static class HttpClientExtensions
     {
-        private const int BaseDelayUntilEventSourceReachASyncStateMs = 800;
+        private const int BaseDelayUntilEventSourceReachASyncStateMs = 10000;
 
         public static async Task<RestResponse<T>> ExecuteWithDelayAsync<T>(
             this IRestClient client,

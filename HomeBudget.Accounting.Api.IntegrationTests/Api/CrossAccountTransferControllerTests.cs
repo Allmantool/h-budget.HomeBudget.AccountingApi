@@ -21,15 +21,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class CrossAccountTransferControllerTests : IAsyncDisposable
+    public class CrossAccountTransferControllerTests
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private readonly CrossAccountsTransferWebApp _sut = new();
+        private CrossAccountsTransferWebApp _sut;
 
-        [OneTimeTearDown]
-        public async Task StopAsync() => await _sut.StopAsync();
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new CrossAccountsTransferWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
@@ -155,17 +159,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             });
         }
 
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
-        }
-
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryByPaymentAccountIdAsync(Guid accountId)
         {
             var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{accountId}");
 
             var recipientHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayInMs: 2000);
 
             return recipientHistoryResponse.Data.Payload;
         }
