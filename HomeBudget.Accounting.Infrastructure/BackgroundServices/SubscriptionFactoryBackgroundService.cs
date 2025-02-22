@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
     : BackgroundService
     {
         private readonly ConcurrentDictionary<string, IKafkaConsumer> _consumers = new();
-        private const int MaxDegreeOfConcurrency = 50;
+        private const int MaxDegreeOfConcurrency = 5;
         private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
