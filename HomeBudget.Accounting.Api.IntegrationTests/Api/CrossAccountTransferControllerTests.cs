@@ -21,15 +21,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class CrossAccountTransferControllerTests : IAsyncDisposable
+    public class CrossAccountTransferControllerTests
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private readonly CrossAccountsTransferWebApp _sut = new();
+        private CrossAccountsTransferWebApp _sut;
 
-        [OneTimeTearDown]
-        public async Task StopAsync() => await _sut.StopAsync();
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new CrossAccountsTransferWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
@@ -153,11 +157,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 senderHistoryResponsePayload.First().Balance.Should().Be(-100m);
                 recipientHistoryResponsePayload.First().Balance.Should().Be(1350m);
             });
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryByPaymentAccountIdAsync(Guid accountId)

@@ -17,11 +17,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class CategoriesControllerTests : IAsyncDisposable
+    public class CategoriesControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Categories}";
 
-        private readonly CategoriesTestWebApp _sut = new();
+        private CategoriesTestWebApp _sut;
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new CategoriesTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task GetCategories_WhenTryToGetAllCategories_ThenIsSuccessStatusCode()
@@ -116,14 +123,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_sut != null)
-            {
-                await _sut.DisposeAsync();
-            }
         }
     }
 }

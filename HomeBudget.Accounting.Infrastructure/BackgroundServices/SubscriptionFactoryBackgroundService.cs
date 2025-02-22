@@ -28,8 +28,6 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
     : BackgroundService
     {
         private readonly ConcurrentDictionary<string, IKafkaConsumer> _consumers = new();
-        private const int MaxDegreeOfConcurrency = 5;
-        private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -49,7 +47,6 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     {
                         logger.LogInformation("Received new topic: {Title}", topic.Title);
 
-                        await _semaphore.WaitAsync(stoppingToken);
                         _ = Task.Run(() => ProcessTopicAsync(topic, stoppingToken), stoppingToken);
                     }
                 }
@@ -75,6 +72,11 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
         private async Task ConsumeKafkaMessagesLoopAsync(CancellationToken stoppingToken)
         {
+            if (stoppingToken.IsCancellationRequested)
+            {
+                logger.LogInformation("Consume loop has been stopped");
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -82,25 +84,24 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     if (_consumers.Count == 0)
                     {
                         logger.LogInformation("No active consumers. Waiting for new topics...");
-                        await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInSeconds), stoppingToken);
+                        await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                         continue;
                     }
 
-                    logger.LogInformation("Consuming messages for {Count} active topics...", _consumers.Count);
-                    var consumersWithSubscriptions = _consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty());
-                    _ = Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken)));
+                    var consumersWithSubscriptions = _consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty()).ToList();
+                    logger.LogInformation("Consuming messages for {Count} active topics...", consumersWithSubscriptions.Count);
+                    _ = Task.Run(() => _ = Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken))), stoppingToken);
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error while consuming Kafka messages.");
-                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInSeconds), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                 }
             }
         }
 
         private async Task ProcessTopicAsync(SubscriptionTopic topic, CancellationToken stoppingToken)
         {
-            using var semaphoreGuard = new SemaphoreGuard(_semaphore);
             try
             {
                 using var scope = serviceScopeFactory.CreateScope();
@@ -159,14 +160,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 }
             }
 
-            _semaphore.Dispose();
             await base.StopAsync(cancellationToken);
-        }
-
-        public override void Dispose()
-        {
-            _semaphore.Dispose();
-            base.Dispose();
         }
     }
 }

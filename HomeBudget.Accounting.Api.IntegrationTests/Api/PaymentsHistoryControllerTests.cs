@@ -28,7 +28,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private readonly OperationsTestWebApp _sut = new();
+        private OperationsTestWebApp _sut;
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new OperationsTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
@@ -80,7 +87,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
 
                 balanceAfter.Should().Be(expectedBalance);
-                historyRecordBalance.Should().BeEquivalentTo(new[] { 22.2m, 34.2m, 47.2m });
+                historyRecordBalance.Should().BeEquivalentTo([22.2m, 34.2m, 47.2m]);
             });
         }
 
@@ -198,7 +205,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo(new[] { 7, 7, 9120 });
+                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo([7, 7, 9120]);
 
                 historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 18.2m, 25.2m, -9094.8m });
             });

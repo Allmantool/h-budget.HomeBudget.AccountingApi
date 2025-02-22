@@ -23,14 +23,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class PaymentOperationsControllerTests : IAsyncDisposable
+    public class PaymentOperationsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
-        private readonly OperationsTestWebApp _sut = new();
+        private OperationsTestWebApp _sut;
 
-        [OneTimeTearDown]
-        public async Task StopAsync() => await _sut.StopAsync();
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new OperationsTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
@@ -306,11 +310,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsAsync(Guid paymentAccountId)

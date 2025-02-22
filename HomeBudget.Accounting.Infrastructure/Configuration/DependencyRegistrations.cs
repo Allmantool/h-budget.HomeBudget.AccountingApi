@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.BackgroundServices;
@@ -19,7 +20,7 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
         public static IServiceCollection RegisterInfrastructureDependencies(this IServiceCollection services, IConfiguration configuration)
         {
             return services
-                .AddScoped<IAdminKafkaService>(sp =>
+                .AddSingleton<IAdminKafkaService>(sp =>
                 {
                     var kafkaOptions = sp.GetRequiredService<IOptions<KafkaOptions>>();
                     var adminSettings = kafkaOptions.Value.AdminSettings;
@@ -39,10 +40,15 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                     {
                         BootstrapServers = adminSettings.BootstrapServers,
                         SocketTimeoutMs = adminSettings.SocketTimeoutMs,
-                        Debug = adminSettings.Debug
+                        Debug = adminSettings.Debug,
+                        CancellationDelayMaxMs = 1000
                     };
 
                     return new AdminClientBuilder(config).Build();
+                })
+                .Configure<HostOptions>(options =>
+                {
+                    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
                 })
                 .AddHostedService<SubscriptionFactoryBackgroundService>()
                 .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>();

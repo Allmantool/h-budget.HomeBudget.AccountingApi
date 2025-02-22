@@ -16,7 +16,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public Guid ConsumerId { get; }
 
-        private const int MaxDegreeOfConcurrency = 1;
+        private readonly object _lock = new();
+        private const int MaxDegreeOfConcurrency = 10;
         private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
@@ -58,7 +59,27 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 .Build();
         }
 
-        public IReadOnlyCollection<string> Subscriptions => _consumer.Subscription.AsReadOnly();
+        public IReadOnlyCollection<string> Subscriptions
+        {
+            get
+            {
+                if (_disposed || _consumer == null)
+                {
+                    _logger.LogWarning("Attempted to access Subscriptions on a disposed consumer.");
+                    return Array.Empty<string>();
+                }
+
+                try
+                {
+                    return _consumer.Subscription.AsReadOnly();
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    _logger.LogError(ex, "Attempted to access Subscriptions on a disposed Kafka consumer.");
+                    return Array.Empty<string>();
+                }
+            }
+        }
 
         public void Subscribe(string topic)
         {
@@ -67,11 +88,22 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(topic));
             }
 
+            if (_disposed || _consumer == null)
+            {
+                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
+                return;
+            }
+
             _consumer.Subscribe(topic.ToLower());
             _logger.LogInformation($"Subscribed to topic: {topic.ToLower()}");
         }
 
         public abstract Task ConsumeAsync(CancellationToken cancellationToken);
+
+        public void Unsubscribe()
+        {
+            _consumer.Unsubscribe();
+        }
 
         protected virtual async Task ConsumeAsync(
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
@@ -92,6 +124,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     {
                         if (_disposed || _consumer == null)
                         {
+                            _logger.LogWarning("Kafka consumer was disposed during message consumption.");
                             return;
                         }
 
@@ -101,8 +134,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         }
 
                         await _semaphore.WaitAsync(cancellationToken);
-                        var messagePayload = _consumer.Consume(TimeSpan.FromMilliseconds(500));
 
+                        var messagePayload = _consumer.Consume();
                         if (messagePayload == null)
                         {
                             continue;
@@ -110,7 +143,15 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                         await processMessageAsync(messagePayload);
 
-                        await Task.Run(() => _consumer.Commit(messagePayload), cancellationToken);
+                        if (!_disposed)
+                        {
+                            _consumer.Commit(messagePayload);
+                        }
+                    }
+                    catch (ObjectDisposedException ex)
+                    {
+                        _logger.LogError(ex, "Kafka consumer was accessed after being disposed.");
+                        return;
                     }
                     catch (ConsumeException ex)
                     {
@@ -118,7 +159,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Consume error: {ex.Message}");
+                        _logger.LogError($"Unexpected error in Kafka consumer: {ex.Message}");
                     }
                 }
             }
@@ -138,13 +179,24 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         private void CloseConsumer()
         {
+            if (_disposed || _consumer == null)
+            {
+                _logger.LogWarning("Attempted to close an already disposed consumer.");
+                return;
+            }
+
             try
             {
                 _consumer.Close();
+                _consumer.Dispose();
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error while closing consumer: {ex.Message}");
+            }
+            finally
+            {
+                _disposed = true;
             }
         }
 
@@ -155,24 +207,27 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 return;
             }
 
-            if (disposing)
+            lock (_lock)
             {
-                _semaphore?.Dispose();
-                _consumer?.Dispose();
-            }
+                if (_disposed)
+                {
+                    return;
+                }
 
-            _disposed = true;
+                if (disposing)
+                {
+                    _semaphore?.Dispose();
+                    _consumer?.Dispose();
+                }
+
+                _disposed = true;
+            }
         }
 
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
-        }
-
-        public void Unsubscribe()
-        {
-            _consumer.Unsubscribe();
         }
     }
 }
