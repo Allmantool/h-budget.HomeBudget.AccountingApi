@@ -139,7 +139,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest);
+                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 1000);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
@@ -338,7 +338,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
         }
