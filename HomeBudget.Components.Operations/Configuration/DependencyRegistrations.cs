@@ -54,8 +54,8 @@ namespace HomeBudget.Components.Operations.Configuration
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
-                .AddTransient<IKafkaConsumer, PaymentOperationsConsumer>()
-                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
+                .AddTransient<IKafkaConsumer, PaymentOperationsConsumer>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
