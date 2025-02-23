@@ -23,5 +23,9 @@ namespace HomeBudget.Components.Operations.Clients.Interfaces
         Task RemoveAsync(string financialPeriodIdentifier);
 
         Task<IEnumerable<PaymentHistoryDocument>> GetAllPeriodBalancesForAccountAsync(Guid accountId);
+
+        Task ReplaceOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord document);
+
+        Task BulkWriteAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> documents);
     }
 }

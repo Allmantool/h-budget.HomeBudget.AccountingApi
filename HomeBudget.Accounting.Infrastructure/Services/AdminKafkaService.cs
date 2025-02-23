@@ -19,23 +19,23 @@ internal class AdminKafkaService(
 {
     public async Task CreateTopicAsync(string topicName, CancellationToken stoppingToken)
     {
-        var topicSpecification = new TopicSpecification
-        {
-            Name = topicName,
-            NumPartitions = adminSettings.NumPartitions,
-            ReplicationFactor = adminSettings.ReplicationFactor
-        };
-
-        var createTopicOptions = new CreateTopicsOptions
-        {
-            OperationTimeout = TimeSpan.FromSeconds(adminSettings.OperationTimeoutInSeconds),
-            RequestTimeout = TimeSpan.FromSeconds(adminSettings.RequestTimeoutInSeconds)
-        };
-
-        var topics = new List<TopicSpecification> { topicSpecification };
-
         try
         {
+            var topicSpecification = new TopicSpecification
+            {
+                Name = topicName.ToLower(),
+                NumPartitions = adminSettings.NumPartitions,
+                ReplicationFactor = adminSettings.ReplicationFactor
+            };
+
+            var createTopicOptions = new CreateTopicsOptions
+            {
+                OperationTimeout = TimeSpan.FromSeconds(adminSettings.OperationTimeoutInSeconds),
+                RequestTimeout = TimeSpan.FromSeconds(adminSettings.RequestTimeoutInSeconds)
+            };
+
+            var topics = new List<TopicSpecification> { topicSpecification };
+
             await adminClient.CreateTopicsAsync(topics, createTopicOptions);
             logger.LogInformation($"Topic '{topicName}' created successfully.");
         }

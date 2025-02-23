@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace HomeBudget.Accounting.Infrastructure
 {
-    internal sealed class SemaphoreGuard(SemaphoreSlim semaphore) : IDisposable
+    public sealed class SemaphoreGuard(SemaphoreSlim semaphore) : IDisposable
     {
         private bool _disposed;
 

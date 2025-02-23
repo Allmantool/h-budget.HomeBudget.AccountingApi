@@ -159,7 +159,7 @@ namespace HomeBudget.Components.Operations.Clients
                 // Process the latest events for all accounts
                 foreach (var (monthFinancialPeriodKey, latestEvent) in _latestEventsPerAccount)
                 {
-                    await HandlePaymentOperationEventAsync(latestEvent.Payload);
+                    _ = Task.Run(() => HandlePaymentOperationEventAsync(latestEvent.Payload));
                     _latestEventsPerAccount.Remove(monthFinancialPeriodKey, out _);
                 }
             }
@@ -183,16 +183,18 @@ namespace HomeBudget.Components.Operations.Clients
                 operationEvent.ProcessedAt = processedAt;
             }
 
-            await BenchmarkService.WithBenchmarkAsync(
-                async () =>
-                {
-                    await using var scope = _serviceScopeFactory.CreateAsyncScope();
-                    var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-                    await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events));
-                },
-                $"Sending SyncOperationsHistoryCommand for '{events.Count}' events",
-                _logger,
-                new { paymentPeriodEdIdentifier = paymentPeriodAggregationId });
+            _ = Task.Run(() =>
+                    BenchmarkService.WithBenchmarkAsync(
+                        async () =>
+                        {
+                            await using var scope = _serviceScopeFactory.CreateAsyncScope();
+                            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+                            await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events));
+                        },
+                        $"Sending SyncOperationsHistoryCommand for '{events.Count}' events",
+                        _logger,
+                        new { paymentPeriodEdIdentifier = paymentPeriodAggregationId })
+                    );
         }
     }
 }

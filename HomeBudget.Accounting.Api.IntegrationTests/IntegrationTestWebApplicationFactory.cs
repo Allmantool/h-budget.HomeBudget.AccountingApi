@@ -41,7 +41,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer
+                        BootstrapServers = _containersConnections.KafkaContainer,
                     },
                     ConsumerSettings = new ConsumerSettings
                     {
