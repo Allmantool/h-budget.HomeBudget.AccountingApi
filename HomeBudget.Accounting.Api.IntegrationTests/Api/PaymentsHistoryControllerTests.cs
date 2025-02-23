@@ -73,7 +73,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, 3000);
+                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, 2000);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
@@ -176,7 +176,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 1000);
+                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 2000);
                 var operationGuid = Guid.Parse(saveResponse.Data.Payload.PaymentOperationId);
 
                 operationsGuids.Add(operationGuid);
@@ -196,7 +196,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var updateCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{operationForUpdateKey}", Method.Patch)
                 .AddJsonBody(updateRequest);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(updateCreateRequest, executionDelayAfterInMs: 3000);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(updateCreateRequest, executionDelayAfterInMs: 2000);
 
             var historyRecords = (await GetHistoryRecordsAsync(paymentAccountId))
                 .OrderBy(r => r.Record.OperationDay)

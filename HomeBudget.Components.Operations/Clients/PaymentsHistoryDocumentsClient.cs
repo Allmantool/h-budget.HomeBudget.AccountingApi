@@ -9,6 +9,7 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
@@ -58,6 +59,7 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
             var payload = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(d => d.Payload.Record.Key == operationId));
+
             return payload.SingleOrDefault();
         }
 
@@ -90,18 +92,33 @@ namespace HomeBudget.Components.Operations.Clients
         public async Task BulkWriteAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> payload)
         {
             var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-            var bulkOps = payload
-                .Select(record => new ReplaceOneModel<PaymentHistoryDocument>(
-                        Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, record.Record.Key),
-                        new PaymentHistoryDocument
-                        {
-                            Payload = record
-                        })
+
+            var bulkOps = new List<WriteModel<PaymentHistoryDocument>>();
+
+            foreach (var record in payload)
+            {
+                var existingDocument = await targetCollection
+                    .Find(Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, record.Record.Key))
+                    .FirstOrDefaultAsync();
+
+                var newDocument = new PaymentHistoryDocument
+                {
+                    Id = existingDocument?.Id ?? record.Record.Key.ToObjectId(),
+                    Payload = record
+                };
+
+                bulkOps.Add(new ReplaceOneModel<PaymentHistoryDocument>(
+                    Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, record.Record.Key),
+                    newDocument)
                 {
                     IsUpsert = true
                 });
+            }
 
-            await targetCollection.BulkWriteAsync(bulkOps);
+            if (bulkOps.Count > 0)
+            {
+                await targetCollection.BulkWriteAsync(bulkOps);
+            }
         }
 
         public async Task RemoveAsync(string financialPeriodIdentifier)
