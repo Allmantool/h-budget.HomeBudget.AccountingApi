@@ -157,7 +157,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{accountId}");
 
             var recipientHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayAfterInMs: 3000);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayBeforeInMs: 4000);
 
             return recipientHistoryResponse.Data.Payload;
         }
@@ -177,7 +177,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 2000);
 
             return paymentsHistoryResponse.Data;
         }
