@@ -66,7 +66,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest);
+                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, 2000);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
@@ -80,7 +80,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
 
                 balanceAfter.Should().Be(expectedBalance);
-                historyRecordBalance.Should().BeEquivalentTo(new[] { 22.2m, 34.2m, 47.2m });
+                historyRecordBalance.Should().BeEquivalentTo([22.2m, 34.2m, 47.2m]);
             });
         }
 
@@ -139,12 +139,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest);
+                await _sut.RestHttpClient.ExecuteWithDelayAsync(postCreateRequest, 3000);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 
-            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 19.2m, 28.2m, 38.2m });
+            historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([19.2m, 28.2m, 38.2m]);
         }
 
         [Test]
@@ -169,7 +169,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 2000);
                 var operationGuid = Guid.Parse(saveResponse.Data.Payload.PaymentOperationId);
 
                 operationsGuids.Add(operationGuid);
@@ -189,7 +189,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var updateCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{operationForUpdateKey}", Method.Patch)
                 .AddJsonBody(updateRequest);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(updateCreateRequest);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(updateCreateRequest, executionDelayAfterInMs: 2000);
 
             var historyRecords = (await GetHistoryRecordsAsync(paymentAccountId))
                 .OrderBy(r => r.Record.OperationDay)
@@ -198,9 +198,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
-                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo(new[] { 7, 7, 9120 });
+                historyRecords.Select(r => r.Record.Amount).Should().BeEquivalentTo([7, 7, 9120]);
 
-                historyRecords.Select(r => r.Balance).Should().BeEquivalentTo(new[] { 18.2m, 25.2m, -9094.8m });
+                historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([18.2m, 25.2m, -9094.8m]);
             });
         }
 
@@ -263,13 +263,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayInMs: 6000);
+            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 6000);
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
 
-            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest, executionDelayInMs: 6000);
+            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest, executionDelayAfterInMs: 6000);
 
             var result = getResponse.Data;
             var payload = result.Payload;
@@ -297,7 +297,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayInMs: 5000);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayAfterInMs: 5000);
 
             return paymentsHistoryResponse.Data.Payload;
         }
@@ -338,7 +338,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
         }
@@ -348,7 +348,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+                .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
 
             return getResponse.Data.Payload;
         }
