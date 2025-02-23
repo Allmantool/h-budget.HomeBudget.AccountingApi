@@ -58,11 +58,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         public async Task StartAsync()
         {
+            if (TestContainersService == null)
+            {
+                return;
+            }
+
             await TestContainersService.UpAndRunningContainersAsync();
         }
 
         public async Task StopAsync()
         {
+            if (TestContainersService == null)
+            {
+                return;
+            }
+
             await TestContainersService.StopAsync();
         }
 
@@ -70,6 +80,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
         {
             if (TestContainersService != null)
             {
+                await TestContainersService.StopAsync();
                 await TestContainersService.DisposeAsync();
             }
 

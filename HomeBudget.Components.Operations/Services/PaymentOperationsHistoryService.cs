@@ -15,9 +15,9 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
-        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
-        ICategoryDocumentsClient categoryDocumentsClient)
-        : IPaymentOperationsHistoryService
+    IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
+    ICategoryDocumentsClient categoryDocumentsClient)
+    : IPaymentOperationsHistoryService
     {
         public async Task<Result<decimal>> SyncHistoryAsync(
             string financialPeriodIdentifier,
@@ -43,15 +43,23 @@ namespace HomeBudget.Components.Operations.Services
             {
                 var paymentOperation = validAndMostUpToDateOperations.Single().Payload;
 
+                var categoryDocumentsResult = await categoryDocumentsClient.GetByIdAsync(paymentOperation.CategoryId);
+                var categoryDocument = categoryDocumentsResult.Payload;
+
+                var categoryMap = categoryDocument == null
+                    ? new Dictionary<Guid, Category>()
+                    : new Dictionary<Guid, Category>
+                    {
+                        { categoryDocument.Payload.Key, categoryDocument.Payload }
+                    };
+
                 var record = new PaymentOperationHistoryRecord
                 {
                     Record = paymentOperation,
-                    Balance = await CalculateIncrementAsync(paymentOperation)
+                    Balance = CalculateIncrement(paymentOperation, categoryMap)
                 };
 
-                await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
-                await paymentsHistoryDocumentsClient.InsertOneAsync(financialPeriodIdentifier, record);
-
+                await paymentsHistoryDocumentsClient.ReplaceOneAsync(financialPeriodIdentifier, record);
                 return Result<decimal>.Succeeded(record.Balance);
             }
 
@@ -67,43 +75,44 @@ namespace HomeBudget.Components.Operations.Services
             string financialPeriodIdentifier,
             IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
         {
-            var operationsHistory = new List<PaymentOperationHistoryRecord>();
+            var categoryIds = validAndMostUpToDateOperations
+                .Select(op => op.Payload.CategoryId)
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
 
-            await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
+            var categoryDocumentsResult = await categoryDocumentsClient.GetByIdsAsync(categoryIds);
+            var categoryMap = categoryDocumentsResult.Payload.ToDictionary(doc => doc.Payload.Key, doc => doc.Payload);
+
+            var operationsHistory = new List<PaymentOperationHistoryRecord>();
+            decimal previousBalance = 0;
 
             foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
             {
-                var previousRecordBalance = operationsHistory.Any()
-                    ? operationsHistory[^1].Balance
-                    : 0;
+                var increment = CalculateIncrement(operationEvent, categoryMap);
+                previousBalance += increment;
 
-                operationsHistory.Add(
-                    new PaymentOperationHistoryRecord
-                    {
-                        Record = operationEvent,
-                        Balance = previousRecordBalance + await CalculateIncrementAsync(operationEvent)
-                    });
+                operationsHistory.Add(new PaymentOperationHistoryRecord
+                {
+                    Record = operationEvent,
+                    Balance = previousBalance
+                });
             }
 
-            await paymentsHistoryDocumentsClient.RewriteAllAsync(financialPeriodIdentifier, operationsHistory);
+            await paymentsHistoryDocumentsClient.BulkWriteAsync(financialPeriodIdentifier, operationsHistory);
         }
 
-        private async Task<decimal> CalculateIncrementAsync(FinancialTransaction operation)
+        private static decimal CalculateIncrement(FinancialTransaction operation, Dictionary<Guid, Category> categoryMap)
         {
-            var categoryId = operation.CategoryId;
-
-            if (operation.CategoryId.Equals(Guid.Empty))
+            if (operation.CategoryId == Guid.Empty)
             {
                 return operation.Amount;
             }
 
-            var documentResult = await categoryDocumentsClient.GetByIdAsync(categoryId);
-            var documentPayload = documentResult.Payload;
-
-            // TODO: should be verified (case when category is null)
-            var category = documentPayload == null
-                ? new Category(CategoryTypes.Expense, new[] { "with empty category" })
-                : documentPayload.Payload;
+            if (!categoryMap.TryGetValue(operation.CategoryId, out var category))
+            {
+                category = new Category(CategoryTypes.Expense, ["with empty category"]);
+            }
 
             return category.CategoryType == CategoryTypes.Income
                 ? Math.Abs(operation.Amount)

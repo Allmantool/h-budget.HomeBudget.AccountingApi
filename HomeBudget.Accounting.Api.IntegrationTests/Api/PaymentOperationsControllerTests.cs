@@ -23,14 +23,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class PaymentOperationsControllerTests : IAsyncDisposable
+    public class PaymentOperationsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
-        private readonly OperationsTestWebApp _sut = new();
+        private OperationsTestWebApp _sut;
 
-        [OneTimeTearDown]
-        public async Task StopAsync() => await _sut.StopAsync();
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new OperationsTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
@@ -52,7 +56,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
 
             response.IsSuccessful.Should().Be(true);
 
@@ -123,7 +127,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
 
             var operationAmountAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
@@ -133,6 +137,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task DeleteById_WithValidOperationRef_ThenSuccessful()
         {
+            const decimal initialBalance = 11.2m;
             var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(DeleteById_WithValidOperationRef_ThenSuccessful));
@@ -149,19 +154,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var createOperationResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayInMs: 2000);
+            var createOperationResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 15000);
 
             var newOperationId = createOperationResult.Data.Payload.PaymentOperationId;
 
-            var balanceBefore = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var addOperationBalance = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest, executionDelayInMs: 2000);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest, executionDelayAfterInMs: 15000);
 
-            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var deleteOperationBalance = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
 
-            balanceBefore.Should().BeGreaterThan(balanceAfter);
+            Assert.Multiple(() =>
+            {
+                addOperationBalance.Should().Be(requestBody.Amount + initialBalance);
+                deleteOperationBalance.Should().Be(initialBalance);
+            });
         }
 
         [Test]
@@ -185,7 +194,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
@@ -285,7 +294,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestCreateBody);
 
-            var saveResponseResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var saveResponseResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
             var justCreatedOperationId = saveResponseResult.Data?.Payload.PaymentOperationId;
 
             var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
@@ -301,16 +310,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{justCreatedOperationId}", Method.Patch)
                 .AddJsonBody(requestUpdateBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation, executionDelayAfterInMs: 5000);
 
             var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsAsync(Guid paymentAccountId)
@@ -328,7 +332,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+                .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest, executionDelayBeforeInMs: 5000);
 
             return getResponse.Data.Payload;
         }
@@ -349,7 +353,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<string>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<string>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
 
             return paymentsHistoryResponse.Data;
         }
@@ -369,7 +373,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 2000);
 
             return paymentsHistoryResponse.Data;
         }

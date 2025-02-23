@@ -19,11 +19,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [Category(TestTypes.Integration)]
     [TestFixture]
-    public class AccountingControllerTests : IAsyncDisposable
+    public class AccountingControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
-        private readonly AccountingTestWebApp _sut = new();
+        private AccountingTestWebApp _sut;
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new AccountingTestWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
@@ -211,14 +218,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var result = response.Data;
 
             result.IsSucceeded.Should().BeTrue();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_sut != null)
-            {
-                await _sut.DisposeAsync();
-            }
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync()

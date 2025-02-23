@@ -21,15 +21,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category("Integration")]
-    public class CrossAccountTransferControllerTests : IAsyncDisposable
+    public class CrossAccountTransferControllerTests
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private readonly CrossAccountsTransferWebApp _sut = new();
+        private CrossAccountsTransferWebApp _sut;
 
-        [OneTimeTearDown]
-        public async Task StopAsync() => await _sut.StopAsync();
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            _sut = new CrossAccountsTransferWebApp();
+            await _sut.StartAsync();
+        }
 
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
@@ -49,7 +53,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 8000);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
             var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
@@ -84,7 +88,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(createTransferRequestBody);
 
-            var transferOperationResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayInMs: 2000);
+            var transferOperationResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 2000);
 
             var removeTransferRequestBody = new RemoveTransferRequest
             {
@@ -95,7 +99,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var removeRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Delete)
                  .AddJsonBody(removeTransferRequestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest, executionDelayInMs: 2500);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest, executionDelayAfterInMs: 2500);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
 
@@ -155,17 +159,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             });
         }
 
-        public ValueTask DisposeAsync()
-        {
-            return _sut?.DisposeAsync() ?? ValueTask.CompletedTask;
-        }
-
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryByPaymentAccountIdAsync(Guid accountId)
         {
             var getRecipientOperationsRequest = new RestRequest($"{PaymentHistoryApiHost}/{accountId}");
 
             var recipientHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayAfterInMs: 2000);
 
             return recipientHistoryResponse.Data.Payload;
         }
@@ -185,7 +184,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
 
             return paymentsHistoryResponse.Data;
         }
