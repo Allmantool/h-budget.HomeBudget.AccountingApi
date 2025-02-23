@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
@@ -59,6 +60,17 @@ namespace HomeBudget.Components.Categories.Clients
             var payload = await targetCollection.FindAsync(filter);
 
             return await payload.AnyAsync();
+        }
+
+        public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetByIdsAsync(IEnumerable<Guid> operationIds)
+        {
+            var targetCollection = await GetCategoriesCollectionAsync();
+
+            var payload = await targetCollection.FindAsync(d => operationIds.Contains(d.Payload.Key));
+
+            var categories = await payload.ToListAsync();
+
+            return Result<IReadOnlyCollection<CategoryDocument>>.Succeeded(categories);
         }
 
         private async Task<IMongoCollection<CategoryDocument>> GetCategoriesCollectionAsync()
