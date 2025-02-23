@@ -92,7 +92,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     throw;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(10));
+                await Task.Delay(TimeSpan.FromSeconds(15));
             }
         }
 

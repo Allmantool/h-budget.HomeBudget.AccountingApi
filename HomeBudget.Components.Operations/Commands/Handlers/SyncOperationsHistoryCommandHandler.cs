@@ -40,7 +40,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events),
-                $"Execute SyncHistoryAsync for '{events.Count()}' events",
+                $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events",
                 logger,
                 new { monthPeriodIdentifier });
 
@@ -71,7 +71,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () => await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, finalBalance), cancellationToken),
-                "Sending UpdatePaymentAccountBalanceCommand",
+                "Sending {nameof(UpdatePaymentAccountBalanceCommand)}",
                 logger,
                 new { PaymentAccountId = accountId });
 

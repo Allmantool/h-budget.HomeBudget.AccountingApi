@@ -29,7 +29,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var paymentAccountId = Guid.Parse("db2d514d-f571-4876-936a-784f24fc3060");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
 
-            var categoryId = Guid.NewGuid();
+            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
 
             var events = new List<PaymentOperationEvent>
             {
@@ -70,7 +70,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var paymentAccountId = Guid.Parse("36ab7a9c-66ac-4b6e-8765-469572daa46b");
             var operationId = Guid.Parse("b275b2bc-e159-4eb3-a85a-22728c4cb037");
 
-            var categoryId = Guid.NewGuid();
+            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
 
             var operationDay = new DateOnly(2023, 12, 15);
 
@@ -200,18 +200,27 @@ namespace HomeBudget.Components.Operations.Tests.Services
 
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
 
+            var category = new Category(
+                CategoryTypes.Income,
+                [
+                    "test-category"
+                ])
+            {
+                Key = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2")
+            };
+
             var payload = new CategoryDocument
             {
-                Payload = new Category(
-                    CategoryTypes.Income,
-                    [
-                        "test-category"
-                    ])
+                Payload = category
             };
 
             categoriesClient
                 .Setup(c => c.GetByIdAsync(It.IsAny<Guid>()))
                 .ReturnsAsync(() => Result<CategoryDocument>.Succeeded(payload));
+
+            categoriesClient
+                .Setup(c => c.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+                .ReturnsAsync(() => Result<IReadOnlyCollection<CategoryDocument>>.Succeeded([payload]));
 
             return new PaymentOperationsHistoryService(
                 paymentsHistoryClientMock.Object,

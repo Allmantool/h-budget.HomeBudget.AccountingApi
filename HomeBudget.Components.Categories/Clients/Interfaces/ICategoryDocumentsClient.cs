@@ -18,5 +18,7 @@ namespace HomeBudget.Components.Categories.Clients.Interfaces
         Task<Result<Guid>> InsertOneAsync(Category payload);
 
         Task<bool> CheckIfExistsAsync(string contractorKey);
+
+        Task<Result<IReadOnlyCollection<CategoryDocument>>> GetByIdsAsync(IEnumerable<Guid> operationIds);
     }
 }

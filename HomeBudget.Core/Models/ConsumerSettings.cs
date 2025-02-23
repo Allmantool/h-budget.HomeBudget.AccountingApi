@@ -13,6 +13,6 @@
         public int SessionTimeoutMs { get; set; } = 45000;
         public int HeartbeatIntervalMs { get; set; } = 15000;
         public int ConsumerCircuitBreakerDelayInSeconds { get; set; } = 5;
-        public long ConsumeDelayInMilliseconds { get; set; } = 300;
+        public long ConsumeDelayInMilliseconds { get; set; } = 800;
     }
 }
