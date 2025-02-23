@@ -27,14 +27,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
-        private OperationsTestWebApp _sut;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            _sut = new OperationsTestWebApp();
-            await _sut.StartAsync();
-        }
+        private readonly OperationsTestWebApp _sut = new();
 
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
@@ -322,7 +315,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var getResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayAfterInMs: 2000);
 
             return getResponse.Data.Payload;
         }

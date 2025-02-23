@@ -20,14 +20,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";
 
-        private ContractorsTestWebApp _sut;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            _sut = new ContractorsTestWebApp();
-            await _sut.StartAsync();
-        }
+        private readonly ContractorsTestWebApp _sut = new();
 
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()

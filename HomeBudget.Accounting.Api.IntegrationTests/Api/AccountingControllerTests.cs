@@ -23,14 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
-        private AccountingTestWebApp _sut;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            _sut = new AccountingTestWebApp();
-            await _sut.StartAsync();
-        }
+        private readonly AccountingTestWebApp _sut = new();
 
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()

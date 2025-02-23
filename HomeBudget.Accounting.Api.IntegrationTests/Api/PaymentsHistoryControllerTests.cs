@@ -28,14 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
 
-        private OperationsTestWebApp _sut;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            _sut = new OperationsTestWebApp();
-            await _sut.StartAsync();
-        }
+        private readonly OperationsTestWebApp _sut = new();
 
         [Test]
         public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()

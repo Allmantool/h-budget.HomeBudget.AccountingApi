@@ -21,14 +21,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string ApiHost = $"/{Endpoints.Categories}";
 
-        private CategoriesTestWebApp _sut;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            _sut = new CategoriesTestWebApp();
-            await _sut.StartAsync();
-        }
+        private readonly CategoriesTestWebApp _sut = new();
 
         [Test]
         public async Task GetCategories_WhenTryToGetAllCategories_ThenIsSuccessStatusCode()
