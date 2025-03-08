@@ -46,18 +46,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 9000);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 8000, executionDelayBeforeInMs: 8000);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
             var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
 
             Assert.Multiple(() =>
             {
-                senderHistoryResponsePayload.Single().Balance.Should().Be(-100);
-                recipientHistoryResponsePayload.Single().Balance.Should().Be(12);
+                var senderResponse = senderHistoryResponsePayload.Single();
+                var recipientResponse = recipientHistoryResponsePayload.Single();
 
-                var senderOperationId = senderHistoryResponsePayload.Single().Record.Key;
-                var recipientOperationId = recipientHistoryResponsePayload.Single().Record.Key;
+                senderResponse.Balance.Should().Be(-100);
+                recipientResponse.Balance.Should().Be(12);
+
+                var senderOperationId = senderResponse.Record.Key;
+                var recipientOperationId = recipientResponse.Record.Key;
 
                 recipientOperationId.Should().Be(senderOperationId);
             });
@@ -177,7 +180,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 2000);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 3000);
 
             return paymentsHistoryResponse.Data;
         }
