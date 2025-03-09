@@ -17,7 +17,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
-    [Order(3)]
+    [Order(IntegrationTestOrderIndex.ContractorsControllerTests)]
     public class ContractorsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";

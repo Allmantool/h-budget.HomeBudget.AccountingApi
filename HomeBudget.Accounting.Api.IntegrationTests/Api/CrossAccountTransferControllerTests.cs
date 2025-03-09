@@ -22,7 +22,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
-    [Order(4)]
+    [Order(IntegrationTestOrderIndex.CrossAccountTransferControllerTests)]
     public class CrossAccountTransferControllerTests
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";

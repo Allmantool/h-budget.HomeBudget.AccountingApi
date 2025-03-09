@@ -24,7 +24,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
-    [Order(5)]
+    [Order(IntegrationTestOrderIndex.PaymentOperationsControllerTests)]
     public class PaymentOperationsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
@@ -380,7 +380,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 2000);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 3000);
 
             return paymentsHistoryResponse.Data;
         }

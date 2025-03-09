@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
-    [Order(1)]
+    [Order(IntegrationTestOrderIndex.AccountingControllerTests)]
     public class AccountingControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";

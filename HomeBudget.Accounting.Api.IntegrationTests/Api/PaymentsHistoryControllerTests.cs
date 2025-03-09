@@ -25,7 +25,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
-    [Order(6)]
+    [Order(IntegrationTestOrderIndex.PaymentsHistoryControllerTests)]
     public class PaymentsHistoryControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
@@ -348,11 +348,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Currency = "usd"
             };
 
-            var saveCategoryRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)
+            var saveAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)
                 .AddJsonBody(requestSaveBody);
 
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest);
+            var paymentsHistoryResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<Guid>>(saveAccountRequest, executionDelayAfterInMs: 3000);
 
             return paymentsHistoryResponse.Data;
         }

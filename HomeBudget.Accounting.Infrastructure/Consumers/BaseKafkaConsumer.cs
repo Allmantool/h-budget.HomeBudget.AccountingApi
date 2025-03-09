@@ -152,11 +152,19 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     }
                     catch (ConsumeException ex)
                     {
-                        _logger.LogError($"Consume error: {ex.Error.Reason}");
+                        if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
+                        {
+                            _logger.LogWarning($"Topic/partition not found: {ex.Error.Reason}. Retrying...");
+                            await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                        }
+                        else
+                        {
+                            _logger.LogError(ex, $"Consume error: {ex.Error.Reason}");
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Unexpected error in Kafka consumer: {ex.Message}");
+                        _logger.LogError(ex, $"Unexpected error in Kafka consumer: {ex.Message}");
                     }
                 }
             }
