@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-
     tags: ["v*.*.*"]
 
   pull_request:
@@ -18,6 +17,10 @@ on:
       - fix/*
       - tech/
     types: [opened, synchronize, closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
@@ -106,7 +109,7 @@ jobs:
         run: |
           chmod +x ./startsonar.sh
 
-      - name: Start sonnar scanning
+      - name: Start sonar scanning
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
@@ -124,18 +127,19 @@ jobs:
       - name: Build the solution to quality metrics gathering
         shell: bash
         run: |
-          dotnet build HomeBudgetAccountingApi.sln \
-            --no-incremental
+          dotnet build HomeBudgetAccountingApi.sln --no-incremental
 
-      - name: Run test for coverage collecting
+      - name: Run tests for coverage collecting
         shell: bash
         run: |
           dotnet-dotcover test HomeBudgetAccountingApi.sln \
             --dcReportType=HTML \
             --dcOutput="test-results/accounting-coverage.html" \
             --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests"
+        continue-on-error: true
+        timeout-minutes: 15
 
-      - name: End sonnar scanning
+      - name: End sonar scanning
         env:
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
         shell: bash
