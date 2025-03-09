@@ -7,6 +7,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Contractor;
 using HomeBudget.Accounting.Domain.Models;
@@ -15,12 +16,25 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
-    [Category("Integration")]
+    [Category(TestTypes.Integration)]
+    [Order(3)]
     public class ContractorsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";
 
         private readonly ContractorsTestWebApp _sut = new();
+
+        [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
 
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
