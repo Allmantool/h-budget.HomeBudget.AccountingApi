@@ -35,11 +35,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 IsStarted = true;
 
-                const long ContainerMaxMemoryAllocation = 512 * 1024 * 1024;
+                const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
                 try
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
-                        .WithImage("eventstore/eventstore:23.10.0-jammy")
+                        .WithImage("eventstore/eventstore:24.10.4-jammy")
                         .WithName($"{nameof(TestContainersService)}-event-store-db-container")
                         .WithHostname("test-eventsource-db-host")
                         .WithPortBinding(2117, 2117)
@@ -53,7 +53,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .Build();
 
                     KafkaContainer = new KafkaBuilder()
-                        .WithImage("confluentinc/cp-kafka:7.4.3")
+                        .WithImage("confluentinc/cp-kafka:7.9.0")
                         .WithName($"{nameof(TestContainersService)}-kafka-container")
                         .WithHostname("test-kafka-host")
                         .WithPortBinding(9092, 9092)

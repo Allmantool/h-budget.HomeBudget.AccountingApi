@@ -23,8 +23,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-  SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+  REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
   IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
 
 jobs:
@@ -35,7 +36,7 @@ jobs:
 
   build-api:
     needs: [update-tag-version]
-    name: Build Api
+    name: Build API
     runs-on: ubuntu-latest
     outputs:
       last_tag: ${{ steps.last_tag.outputs.TARGET_TAG }}
@@ -61,10 +62,20 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
+      - name: Setup Reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: "v0.20.3"
+
+      - name: Run StyleCop with Reviewdog
+        run: |
+          dotnet format --severity info | reviewdog -efm="%f(%l,%c): %m" -name="StyleCop" -reporter=github-pr-review
+        continue-on-error: true
+
       - name: Cache SonarCloud packages
         uses: actions/cache@v3
         with:
-          path: ~\sonar\cache
+          path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
@@ -72,24 +83,23 @@ jobs:
         id: cache-sonar-scanner
         uses: actions/cache@v3
         with:
-          path: .\.sonar\scanner
+          path: ./.sonar/scanner
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
 
-      - name: Set up 'Find Current Pull Request'
+      - name: Find Current PR
         uses: jwalton/gh-find-current-pr@v1
         id: findPr
         with:
-          # Can be "open", "closed", or "all".  Defaults to "open".
           state: open
 
-      - name: Get pull request ID
+      - name: Get PR Number
         run: echo "Your PR is ${PR}"
         if: success() && steps.findPr.outputs.number
         env:
           PR: ${{ steps.findPr.outputs.pr }}
 
-      - name: Enquire last git tag
+      - name: Get Last Git Tag
         id: last_tag
         shell: bash
         run: |
@@ -99,7 +109,7 @@ jobs:
           echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
           echo "Last git tag: $tag"
 
-      - name: Install external tools for quality gate verification
+      - name: Install Quality Tools
         shell: bash
         run: |
           dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
@@ -124,12 +134,12 @@ jobs:
         shell: bash
         run: sh ./startsonar.sh
 
-      - name: Build the solution to quality metrics gathering
+      - name: Build Solution for Metrics
         shell: bash
         run: |
           dotnet build HomeBudgetAccountingApi.sln --no-incremental
 
-      - name: Run tests for coverage collecting
+      - name: Run Tests with Coverage
         shell: bash
         run: |
           dotnet-dotcover test HomeBudgetAccountingApi.sln \
@@ -159,7 +169,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build docker image
+      - name: Build Docker Image
         env:
           BUILD_VERSION: ${{ needs.build-api.outputs.last_tag }}
         shell: bash
@@ -175,7 +185,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push docker image
+      - name: Push Docker Image
         shell: bash
         run: |
           docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}"
