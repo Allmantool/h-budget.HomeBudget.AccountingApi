@@ -34,6 +34,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task TearDownAsync()
         {
             await _sut.ResetAsync();
+            await _sut.DisposeAsync();
         }
 
         [OneTimeSetUp]
