@@ -23,6 +23,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CategoriesTestWebApp _sut = new();
 
+        [SetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
         [Test]
         public async Task GetCategories_WhenTryToGetAllCategories_ThenIsSuccessStatusCode()
         {
