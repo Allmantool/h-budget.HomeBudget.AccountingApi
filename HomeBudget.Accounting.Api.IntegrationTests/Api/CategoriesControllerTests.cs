@@ -23,7 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CategoriesTestWebApp _sut = new();
 
-        [OneTimeSetUp]
+        [OneTimeTearDown]
         public async Task SetupAsync()
         {
             await _sut.ResetAsync();
