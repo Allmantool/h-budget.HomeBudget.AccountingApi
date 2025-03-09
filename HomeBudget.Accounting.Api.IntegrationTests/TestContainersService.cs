@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
+using Docker.DotNet.Models;
 using EventStore.Client;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
@@ -33,6 +34,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 }
 
                 IsStarted = true;
+
+                const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
                 try
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
@@ -42,6 +45,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(2117, 2117)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithCreateParameterModifier(config =>
+                        {
+                            config.HostConfig = new HostConfig
+                            {
+                                Memory = ContainerMaxMemoryAllocation,
+                            };
+                        })
                         .Build();
 
                     KafkaContainer = new KafkaBuilder()
@@ -51,6 +61,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(9092, 9092)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithCreateParameterModifier(config =>
+                        {
+                            config.HostConfig = new HostConfig
+                            {
+                                Memory = ContainerMaxMemoryAllocation,
+                            };
+                        })
                         .Build();
 
                     MongoDbContainer = new MongoDbBuilder()
@@ -60,6 +77,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(28117, 28117)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithCreateParameterModifier(config =>
+                        {
+                            config.HostConfig = new HostConfig
+                            {
+                                Memory = ContainerMaxMemoryAllocation,
+                            };
+                        })
                         .Build();
 
                     await Task.WhenAll(
