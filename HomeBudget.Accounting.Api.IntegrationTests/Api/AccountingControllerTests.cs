@@ -25,6 +25,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly AccountingTestWebApp _sut = new();
 
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
         {
