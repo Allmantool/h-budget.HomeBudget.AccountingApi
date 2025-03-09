@@ -30,6 +30,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
+        [SetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
         [Test]
         public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {

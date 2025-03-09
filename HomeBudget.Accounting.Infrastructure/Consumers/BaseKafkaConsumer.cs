@@ -109,10 +109,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
             CancellationToken cancellationToken)
         {
-            if (processMessageAsync == null)
-            {
-                throw new ArgumentNullException(nameof(processMessageAsync));
-            }
+            ArgumentNullException.ThrowIfNull(processMessageAsync);
 
             using var semaphoreGuard = new SemaphoreGuard(_semaphore);
 
@@ -135,7 +132,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                         await _semaphore.WaitAsync(cancellationToken);
 
-                        var messagePayload = _consumer.Consume();
+                        var messagePayload = _consumer.Consume(cancellationToken);
                         if (messagePayload == null)
                         {
                             continue;

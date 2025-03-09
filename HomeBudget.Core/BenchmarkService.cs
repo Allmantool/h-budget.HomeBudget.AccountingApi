@@ -7,6 +7,24 @@ namespace HomeBudget.Core
 {
     public static class BenchmarkService
     {
+        private static readonly Action<ILogger, string, object, Exception> _operationStarted =
+            LoggerMessage.Define<string, object>(
+                LogLevel.Debug,
+                new EventId(1, "OperationStarted"),
+                "Operation '{OperationName}' started with context: {@Context}");
+
+        private static readonly Action<ILogger, string, int, int, int, object, Exception> _operationCompleted =
+            LoggerMessage.Define<string, int, int, int, object>(
+                LogLevel.Information,
+                new EventId(2, "OperationCompleted"),
+                "Operation '{OperationName}' completed in '{Hours}:{Minutes}:{Seconds}' with context: {@Context}");
+
+        private static readonly Action<ILogger, string, int, int, int, object, Exception> _operationFailed =
+            LoggerMessage.Define<string, int, int, int, object>(
+                LogLevel.Error,
+                new EventId(3, "OperationFailed"),
+                "Operation '{OperationName}' failed after '{Hours}:{Minutes}:{Seconds}' with context: {@Context}");
+
         public static async Task<T> WithBenchmarkAsync<T>(
             Func<Task<T>> operation,
             string operationName,
@@ -14,36 +32,67 @@ namespace HomeBudget.Core
             object context)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            logger.LogDebug("{OperationName} started with context: {@Context}", operationName, context);
+            LogOperationStarted(logger, operationName, context);
 
             try
             {
                 var result = await operation();
                 stopwatch.Stop();
-                logger.LogInformation(
-                    "{OperationName} completed in '{Hours}:{Minutes}:{Seconds}' with context: {@Context}",
-                    operationName,
-                    stopwatch.Elapsed.Hours,
-                    stopwatch.Elapsed.Minutes,
-                    stopwatch.Elapsed.Seconds,
-                    context);
-
+                LogOperationCompleted(logger, operationName, stopwatch.Elapsed, context);
                 return result;
             }
             catch (Exception ex)
             {
                 stopwatch.Stop();
-
-                logger.LogError(
-                    ex,
-                    "{OperationName} failed after '{Hours}:{Minutes}:{Seconds}' ms with context: {@Context}",
-                    operationName,
-                    stopwatch.Elapsed.Hours,
-                    stopwatch.Elapsed.Minutes,
-                    stopwatch.Elapsed.Seconds,
-                    context);
-
+                LogOperationFailed(logger, operationName, stopwatch.Elapsed, context, ex);
                 throw;
+            }
+        }
+
+        private static void LogOperationStarted(ILogger logger, string operationName, object context)
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                _operationStarted(logger, operationName, context, null);
+            }
+        }
+
+        private static void LogOperationCompleted(
+            ILogger logger,
+            string operationName,
+            TimeSpan elapsed,
+            object context)
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                _operationCompleted(
+                    logger,
+                    operationName,
+                    elapsed.Hours,
+                    elapsed.Minutes,
+                    elapsed.Seconds,
+                    context,
+                    null);
+            }
+        }
+
+        private static void LogOperationFailed(
+            ILogger logger,
+            string operationName,
+            TimeSpan elapsed,
+            object context,
+            Exception ex)
+        {
+            if (logger.IsEnabled(LogLevel.Error))
+            {
+                _operationFailed(
+                    logger,
+                    operationName,
+                    elapsed.Hours,
+                    elapsed.Minutes,
+                    elapsed.Seconds,
+                    context,
+                    ex);
             }
         }
 

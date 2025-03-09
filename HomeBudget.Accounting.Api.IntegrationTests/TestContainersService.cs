@@ -2,7 +2,10 @@
 using System.Threading;
 using System.Threading.Tasks;
 
+using Confluent.Kafka;
+using EventStore.Client;
 using Microsoft.Extensions.Configuration;
+using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
@@ -24,18 +27,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             using (_semaphoreGuard)
             {
-                if (configuration == null)
-                {
-                    return;
-                }
-
-                if (IsStarted)
+                if (configuration == null || IsStarted)
                 {
                     return;
                 }
 
                 IsStarted = true;
-
                 try
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
@@ -65,21 +62,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithCleanUp(true)
                         .Build();
 
-                    if (EventSourceDbContainer == null)
-                    {
-                        return;
-                    }
-
-                    if (KafkaContainer == null)
-                    {
-                        return;
-                    }
-
-                    if (MongoDbContainer == null)
-                    {
-                        return;
-                    }
-
                     await Task.WhenAll(
                         EventSourceDbContainer.StartAsync(),
                         KafkaContainer.StartAsync(),
@@ -96,7 +78,54 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
         }
 
-        public async Task StopAsync()
+        public static async Task ResetContainersAsync()
+        {
+            try
+            {
+                using var mongoClient = new MongoClient(MongoDbContainer.GetConnectionString());
+                var databases = await mongoClient.ListDatabaseNamesAsync();
+                foreach (var dbName in databases.ToList())
+                {
+                    if (dbName != "admin" && dbName != "local" && dbName != "config")
+                    {
+                        await mongoClient.DropDatabaseAsync(dbName);
+                    }
+                }
+
+                var config = new AdminClientConfig
+                {
+                    BootstrapServers = KafkaContainer.GetBootstrapAddress()
+                };
+                using var adminClient = new AdminClientBuilder(config).Build();
+                var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
+                foreach (var topic in metadata.Topics)
+                {
+                    if (!topic.Topic.StartsWith('_'))
+                    {
+                        await adminClient.DeleteTopicsAsync([topic.Topic]);
+                    }
+                }
+
+                var settings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
+                using var eventStoreClient = new EventStoreClient(settings);
+                await foreach (var stream in eventStoreClient.ReadAllAsync(Direction.Forwards, Position.Start))
+                {
+                    var streamId = stream.Event.EventStreamId;
+
+                    if (!streamId.StartsWith('$'))
+                    {
+                        await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                throw;
+            }
+        }
+
+        public static async Task StopAsync()
         {
             try
             {
@@ -111,7 +140,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1));
-
             IsStarted = false;
         }
 

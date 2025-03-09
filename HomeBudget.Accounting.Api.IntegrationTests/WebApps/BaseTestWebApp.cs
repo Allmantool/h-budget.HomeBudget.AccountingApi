@@ -66,6 +66,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.UpAndRunningContainersAsync();
         }
 
+        public async Task ResetAsync()
+        {
+            if (TestContainersService == null)
+            {
+                return;
+            }
+
+            await TestContainersService.ResetContainersAsync();
+        }
+
         public async Task StopAsync()
         {
             if (TestContainersService == null)
