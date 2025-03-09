@@ -1,6 +1,4 @@
-﻿using System;
-
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+﻿using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
