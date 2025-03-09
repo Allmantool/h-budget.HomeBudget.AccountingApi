@@ -35,7 +35,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 IsStarted = true;
 
-                const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
+                const long ContainerMaxMemoryAllocation = 512 * 1024 * 1024;
                 try
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
