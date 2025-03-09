@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CrossAccountsTransferWebApp _sut = new();
 
-        [SetUp]
+        [OneTimeSetUp]
         public async Task SetupAsync()
         {
             await _sut.ResetAsync();

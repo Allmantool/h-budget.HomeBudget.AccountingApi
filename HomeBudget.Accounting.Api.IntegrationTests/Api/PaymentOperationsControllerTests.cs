@@ -29,7 +29,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
-        [SetUp]
+        [OneTimeSetUp]
         public async Task SetupAsync()
         {
             await _sut.ResetAsync();
