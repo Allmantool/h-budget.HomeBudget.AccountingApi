@@ -114,7 +114,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     if (!streamId.StartsWith('$'))
                     {
-                        await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
+                        try
+                        {
+                            await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
+                        }
+                        catch (StreamDeletedException)
+                        {
+                            Console.WriteLine($"Stream {streamId} is already deleted.");
+                        }
                     }
                 }
             }
