@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
-using Docker.DotNet.Models;
+using DotNet.Testcontainers.Builders;
 using EventStore.Client;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
@@ -45,12 +45,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(2117, 2117)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithCreateParameterModifier(config =>
                         {
-                            config.HostConfig = new HostConfig
-                            {
-                                Memory = ContainerMaxMemoryAllocation,
-                            };
+                            config.HostConfig.Memory = ContainerMaxMemoryAllocation;
                         })
                         .Build();
 
@@ -61,12 +59,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(9092, 9092)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithCreateParameterModifier(config =>
                         {
-                            config.HostConfig = new HostConfig
-                            {
-                                Memory = ContainerMaxMemoryAllocation,
-                            };
+                            config.HostConfig.Memory = ContainerMaxMemoryAllocation;
                         })
                         .Build();
 
@@ -77,12 +73,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(28117, 28117)
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
+                        .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithCreateParameterModifier(config =>
                         {
-                            config.HostConfig = new HostConfig
-                            {
-                                Memory = ContainerMaxMemoryAllocation,
-                            };
+                            config.HostConfig.Memory = ContainerMaxMemoryAllocation;
                         })
                         .Build();
 
