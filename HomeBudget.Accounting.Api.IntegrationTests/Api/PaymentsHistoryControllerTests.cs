@@ -9,6 +9,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
@@ -23,7 +24,8 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
-    [Category("Integration")]
+    [Category(TestTypes.Integration)]
+    [Order(6)]
     public class PaymentsHistoryControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
@@ -31,6 +33,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private readonly OperationsTestWebApp _sut = new();
 
         [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
+        [OneTimeSetUp]
         public async Task SetupAsync()
         {
             await _sut.ResetAsync();
@@ -269,13 +277,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 6000);
+            var postResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newOperationId}");
 
-            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest, executionDelayAfterInMs: 6000);
+            var getResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(getOperationByIdRequest, executionDelayBeforeInMs: 2000);
 
             var result = getResponse.Data;
             var payload = result.Payload;
@@ -303,7 +311,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayAfterInMs: 5000);
+                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayBeforeInMs: 2000);
 
             return paymentsHistoryResponse.Data.Payload;
         }

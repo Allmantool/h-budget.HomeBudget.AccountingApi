@@ -7,6 +7,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
@@ -16,7 +17,8 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
-    [Category("Integration")]
+    [Category(TestTypes.Integration)]
+    [Order(2)]
     public class CategoriesControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Categories}";
@@ -24,6 +26,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private readonly CategoriesTestWebApp _sut = new();
 
         [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
+        [OneTimeSetUp]
         public async Task SetupAsync()
         {
             await _sut.ResetAsync();
