@@ -17,13 +17,26 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
-    [Category(TestTypes.Integration)]
     [TestFixture]
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.AccountingControllerTests)]
     public class AccountingControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
         private readonly AccountingTestWebApp _sut = new();
+
+        [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
 
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()

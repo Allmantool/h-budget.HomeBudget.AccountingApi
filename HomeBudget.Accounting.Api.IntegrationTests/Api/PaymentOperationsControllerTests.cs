@@ -8,6 +8,7 @@ using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
@@ -22,12 +23,25 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
-    [Category("Integration")]
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.PaymentOperationsControllerTests)]
     public class PaymentOperationsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
         private readonly OperationsTestWebApp _sut = new();
+
+        [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
 
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
@@ -366,7 +380,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 2000);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 3000);
 
             return paymentsHistoryResponse.Data;
         }
