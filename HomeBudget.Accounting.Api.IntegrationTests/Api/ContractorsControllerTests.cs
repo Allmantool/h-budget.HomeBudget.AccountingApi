@@ -22,6 +22,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly ContractorsTestWebApp _sut = new();
 
+        [OneTimeTearDown]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
         {

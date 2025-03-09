@@ -30,6 +30,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
+        [OneTimeTearDown]
+        public async Task SetupAsync()
+        {
+            await _sut.ResetAsync();
+        }
+
         [Test]
         public void GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {
@@ -169,7 +175,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 2000);
+                var saveResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
                 var operationGuid = Guid.Parse(saveResponse.Data.Payload.PaymentOperationId);
 
                 operationsGuids.Add(operationGuid);
@@ -221,7 +227,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var addResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            var addResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 2000);
 
             var newOperationId = Guid.Parse(addResponse.Data.Payload.PaymentOperationId);
 
