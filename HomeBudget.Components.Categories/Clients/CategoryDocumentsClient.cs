@@ -16,7 +16,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Categories.Clients
 {
     internal class CategoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
-        : BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.HandBooksDatabaseName),
+        : BaseDocumentClient(dbOptions?.Value),
         ICategoryDocumentsClient
     {
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync()

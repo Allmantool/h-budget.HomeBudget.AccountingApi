@@ -2,6 +2,8 @@
 
 using MongoDB.Driver;
 
+using HomeBudget.Core.Options;
+
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
     public abstract class BaseDocumentClient : IDisposable
@@ -11,10 +13,26 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         private bool _disposed;
 
-        protected BaseDocumentClient(string connectionString, string databaseName)
+        protected BaseDocumentClient(MongoDbOptions options)
         {
-            _client = new MongoClient(connectionString);
-            MongoDatabase = _client.GetDatabase(databaseName);
+            if (options == null)
+            {
+                return;
+            }
+
+            var settings = MongoClientSettings.FromConnectionString(options.ConnectionString);
+            settings.MaxConnectionPoolSize = options.MaxConnectionPoolSize;
+            settings.MinConnectionPoolSize = options.MinConnectionPoolSize;
+            settings.ConnectTimeout = TimeSpan.FromMinutes(options.ConnectTimeoutInMinutes);
+            settings.HeartbeatTimeout = TimeSpan.FromSeconds(options.HeartbeatTimeoutInSeconds);
+            settings.MaxConnectionIdleTime = TimeSpan.FromMinutes(options.MaxConnectionIdleTimeInMinutes);
+            settings.MaxConnectionLifeTime = TimeSpan.FromMinutes(options.MaxConnectionLifeTimeInMinutes);
+            settings.ServerSelectionTimeout = TimeSpan.FromSeconds(options.ServerSelectionTimeoutInSeconds);
+            settings.SocketTimeout = TimeSpan.FromSeconds(options.SocketTimeoutInSeconds);
+            settings.WaitQueueTimeout = TimeSpan.FromSeconds(options.WaitQueueTimeoutInSeconds);
+
+            _client = new MongoClient(settings);
+            MongoDatabase = _client.GetDatabase(options.PaymentAccountsDatabaseName);
         }
 
         protected virtual void Dispose(bool disposing)

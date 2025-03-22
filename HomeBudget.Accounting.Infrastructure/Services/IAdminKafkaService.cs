@@ -6,5 +6,7 @@ namespace HomeBudget.Accounting.Infrastructure.Services
     public interface IAdminKafkaService
     {
         Task CreateTopicAsync(string topicName, CancellationToken stoppingToken);
+
+        Task DeleteTopicAsync(string topicName);
     }
 }

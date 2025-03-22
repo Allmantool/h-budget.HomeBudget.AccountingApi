@@ -112,7 +112,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
                 if (_consumers.ContainsKey(topic.Title))
                 {
-                    logger.LogWarning("Topic {Title} is already being processed.", topic.Title);
+                    logger.LogWarning($"Topic {topic.Title} is already being processed.");
                     return;
                 }
 

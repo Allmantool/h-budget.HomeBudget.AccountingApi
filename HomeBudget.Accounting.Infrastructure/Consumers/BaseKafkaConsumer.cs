@@ -41,8 +41,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 ClientId = ConsumerId.ToString(),
                 BootstrapServers = consumerSettings.BootstrapServers,
-                GroupId = $"{consumerSettings.GroupId}-{ConsumerId}",
-                AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
+                GroupId = $"{consumerSettings.GroupId}",
+                AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
                 MaxPollIntervalMs = consumerSettings.MaxPollIntervalMs,
