@@ -34,7 +34,7 @@ namespace HomeBudget.Components.Operations.Handlers
             }
             catch (Exception ex)
             {
-                logger.LogError("{Handler} with error: {ExceptionMessage}", nameof(PaymentOperationsDeliveryHandler), ex.Message);
+                logger.LogError(ex, "{Handler} with error: {ExceptionMessage}", nameof(PaymentOperationsDeliveryHandler), ex.Message);
             }
         }
     }

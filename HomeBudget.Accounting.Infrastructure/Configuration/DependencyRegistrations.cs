@@ -40,8 +40,11 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                     {
                         BootstrapServers = adminSettings.BootstrapServers,
                         SocketTimeoutMs = adminSettings.SocketTimeoutMs,
+                        MetadataMaxAgeMs = adminSettings.MetadataMaxAgeMs,
                         Debug = adminSettings.Debug,
-                        CancellationDelayMaxMs = 1000
+                        SocketConnectionSetupTimeoutMs = adminSettings.SocketConnectionSetupTimeoutMs,
+                        RetryBackoffMs = adminSettings.RetryBackoffMs,
+                        CancellationDelayMaxMs = adminSettings.CancellationDelayMaxMs,
                     };
 
                     return new AdminClientBuilder(config).Build();

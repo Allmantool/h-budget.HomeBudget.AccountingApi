@@ -15,7 +15,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Accounts.Clients
 {
     internal class PaymentAccountDocumentClient(IOptions<MongoDbOptions> dbOptions)
-        : BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.PaymentAccountsDatabaseName),
+        : BaseDocumentClient(dbOptions?.Value),
         IPaymentAccountDocumentClient
     {
         public async Task<Result<IReadOnlyCollection<PaymentAccountDocument>>> GetAsync()

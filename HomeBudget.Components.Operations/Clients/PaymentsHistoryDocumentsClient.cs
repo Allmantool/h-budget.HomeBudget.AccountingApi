@@ -17,7 +17,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
-    : BaseDocumentClient(dbOptions.Value.ConnectionString, dbOptions.Value.PaymentsHistoryDatabaseName),
+    : BaseDocumentClient(dbOptions?.Value),
         IPaymentsHistoryDocumentsClient
     {
         public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null)
