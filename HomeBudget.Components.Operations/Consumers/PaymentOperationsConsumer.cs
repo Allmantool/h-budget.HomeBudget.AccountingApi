@@ -10,11 +10,10 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
-using HomeBudget.Core.Options;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
-
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Consumers
 {
@@ -34,7 +33,7 @@ namespace HomeBudget.Components.Operations.Consumers
             }
 
             consumerSettings.ClientId = ConsumerTypes.PaymentOperations;
-            consumerSettings.GroupId = "payment-account-operations";
+            consumerSettings.GroupId = "payment-account-consumers";
             consumerSettings.EnableAutoCommit = false;
 
             return options;
@@ -66,11 +65,11 @@ namespace HomeBudget.Components.Operations.Consumers
                     }
                     catch (JsonException ex)
                     {
-                        logger.LogError("Failed to deserialize message: {Message}. Error: {Error}", payload.Message.Value, ex.Message);
+                        logger.LogError(ex, "Failed to deserialize message: {Message}. Error: {Error}", payload.Message.Value, ex.Message);
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError("{PaymentOperationsConsumer} failed to consume with error: {Exception}", nameof(PaymentOperationsConsumer), ex.Message);
+                        logger.LogError(ex, "{PaymentOperationsConsumer} failed to consume with error: {Exception}", nameof(PaymentOperationsConsumer), ex.Message);
                     }
                 },
                 cancellationToken);

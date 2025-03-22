@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using EventStore.Client;
+using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Core;
@@ -16,13 +17,13 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
-    public abstract class BaseEventStoreClient<T>(EventStoreClient client, EventStoreDbOptions options)
+    public abstract class BaseEventStoreClient<T>(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
         : IEventStoreDbClient<T>, IDisposable
         where T : new()
     {
         private bool _disposed;
         private static readonly ConcurrentDictionary<string, bool> AlreadySubscribedStreams = new();
-        private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
+        private readonly SemaphoreSlim _subscriptionLock = new(1, 150);
 
         public virtual async Task<IWriteResult> SendAsync(
             T eventForSending,
@@ -30,6 +31,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             string eventType = default,
             CancellationToken token = default)
         {
+            await _subscriptionLock.WaitAsync(token);
             var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
 
             var eventData = new EventData(
@@ -44,7 +46,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     writeStreamName,
                     StreamState.Any,
                     [eventData],
-                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds),
                     cancellationToken: token);
 
             await EnsureSubscriptionAsync(writeStreamName, token);
@@ -164,6 +165,10 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, cancellationToken: token);
                     AlreadySubscribedStreams[streamName] = true;
                 }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, $"BaseEventStoreClient: {ex.Message}");
             }
             finally
             {

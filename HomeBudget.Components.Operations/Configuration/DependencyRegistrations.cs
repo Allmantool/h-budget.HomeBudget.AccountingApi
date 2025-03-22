@@ -68,13 +68,25 @@ namespace HomeBudget.Components.Operations.Configuration
             services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
 
             var serviceProvider = services.BuildServiceProvider();
-            var databaseOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
+            var eventStoreDbOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
+            var eventStoreUrl = eventStoreDbOptions.Url.ToString();
 
             return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
                 ? services
                 : services.AddEventStoreClient(
-                    databaseOptions.Url.ToString(),
-                    _ => EventStoreClientSettings.Create(databaseOptions.Url.ToString()));
+                    eventStoreUrl,
+                    settings =>
+                    {
+                        settings = EventStoreClientSettings.Create(eventStoreUrl);
+                        settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+                        settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                        {
+                            KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                            GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                            DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                            MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                        };
+                    });
         }
     }
 }

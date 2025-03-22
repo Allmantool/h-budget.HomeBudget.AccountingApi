@@ -41,7 +41,7 @@ namespace HomeBudget.Components.Operations.Clients
             IServiceScopeFactory serviceScopeFactory,
             EventStoreClient client,
             IOptions<EventStoreDbOptions> options)
-            : base(client, options.Value)
+            : base(client, options.Value, logger)
         {
             _eventStoreDbOptions = options.Value;
             _logger = logger;
