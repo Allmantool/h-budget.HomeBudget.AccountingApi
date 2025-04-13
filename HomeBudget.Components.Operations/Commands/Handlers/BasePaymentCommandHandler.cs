@@ -40,11 +40,12 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 try
                 {
                     var message = paymentMessageResult.Payload;
-                    await producer.ProduceAsync(topic.Title.ToLower(), message, cancellationToken);
+                    var topicTitle = topic.Title?.ToLower(System.Globalization.CultureInfo.CurrentCulture);
+                    await producer.ProduceAsync(topicTitle, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError("Error during producing message event. The error: {Message}", ex.Message);
+                    logger.LogError(ex, "Error during producing message event. The error: {Message}", ex.Message);
                 }
             });
 

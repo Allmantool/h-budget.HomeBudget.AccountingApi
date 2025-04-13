@@ -14,7 +14,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
     public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
-        public Guid ConsumerId { get; }
+        public string ConsumerId { get; }
 
         private readonly object _lock = new();
         private const int MaxDegreeOfConcurrency = 10;
@@ -35,7 +35,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerSettings = kafkaOptions.ConsumerSettings;
 
-            ConsumerId = Guid.NewGuid();
+            ConsumerId = $"{consumerSettings.GroupId}-{Guid.NewGuid()}";
 
             var consumerConfig = new ConsumerConfig
             {
@@ -98,7 +98,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _logger.LogInformation($"Subscribed to topic: {topic.ToLower()}");
         }
 
-        public abstract Task ConsumeAsync(CancellationToken cancellationToken);
+        public abstract Task ConsumeAsync(CancellationToken stoppingToken);
 
         public void Unsubscribe()
         {

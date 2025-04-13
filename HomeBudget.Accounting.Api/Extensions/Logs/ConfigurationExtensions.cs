@@ -1,5 +1,6 @@
-﻿using HomeBudget.Accounting.Api.Constants;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
+
+using HomeBudget.Accounting.Api.Constants;
 
 namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
@@ -7,7 +8,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
     {
         public static string GetHealthCheckEndpoint(this IConfiguration configuration, string hostUrls)
         {
-            var hostFromConfiguration = configuration.GetRequiredSection("HealthCheckOptions:Host").Value;
+            var hostFromConfiguration = configuration.GetRequiredSection("HealthCheckOptions:Host")?.Value;
 
             var healthCheckHost = string.IsNullOrWhiteSpace(hostFromConfiguration) ? hostUrls : hostFromConfiguration;
 
