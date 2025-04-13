@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Channels;
-
 using Elastic.Apm.SerilogEnricher;
 using Elastic.Channels;
 using Elastic.Ingest.Elasticsearch;
@@ -13,12 +13,14 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Logs;
 using Serilog;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Exceptions;
+using Serilog.Formatting.Compact;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Constants;
@@ -37,13 +39,17 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
         {
             var logger = new LoggerConfiguration()
                 .Enrich.FromLogContext()
+                .Enrich.WithEnvironmentName()
                 .Enrich.WithMachineName()
                 .Enrich.WithExceptionDetails()
-                .Enrich.WithProperty(LoggerTags.Environment, environment)
+                .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
                 .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.Name)
+                .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
+                .Enrich.WithProperty(LoggerTags.TraceId, () => Activity.Current?.TraceId.ToString())
+                .Enrich.WithProperty(LoggerTags.SpanId, () => Activity.Current?.SpanId.ToString())
                 .Enrich.WithSpan()
                 .WriteTo.Debug()
-                .WriteTo.Console()
+                .WriteTo.Console(new RenderedCompactJsonFormatter(), restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
                 .Enrich.WithElasticApmCorrelationInfo()
                 .TryAddSeqSupport(configuration)
@@ -53,12 +59,29 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
 
             loggingBuilder.ClearProviders();
             loggingBuilder.AddSerilog(logger);
+            loggingBuilder.AddOpenTelemetry(options =>
+            {
+                options.IncludeScopes = true;
+                options.ParseStateValues = true;
+                options.IncludeFormattedMessage = true;
+                options.AddOtlpExporter();
+            });
 
             host.UseSerilog(logger);
 
             Log.Logger = logger;
 
             return logger;
+        }
+
+        public static WebApplication SetupHttpLogging(this WebApplication app)
+        {
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.EnrichDiagnosticContext = LogEnricher.HttpRequestEnricher;
+            });
+
+            return app;
         }
 
         private static LoggerConfiguration TryAddSeqSupport(this LoggerConfiguration loggerConfiguration, IConfiguration configuration)
@@ -74,7 +97,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
 
                 var seqUrl = seqOptions.Uri?.ToString() ?? Environment.GetEnvironmentVariable("SEQ_URL");
 
-                loggerConfiguration.WriteTo.Seq(seqUrl);
+                loggerConfiguration.WriteTo.Seq(seqUrl, restrictedToMinimumLevel: LogEventLevel.Information);
             }
             catch (Exception ex)
             {

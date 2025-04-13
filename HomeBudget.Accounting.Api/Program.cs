@@ -5,13 +5,12 @@ using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
 
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
+using HomeBudget.Accounting.Api.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
@@ -56,22 +55,7 @@ services.AddAutoMapper(new List<Assembly>
     PaymentOperationsComponentMappingProfile.GetExecutingAssembly(),
 });
 
-services
-    .AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(serviceName: environment.ApplicationName))
-    .WithMetrics(metrics => metrics
-            .AddAspNetCoreInstrumentation()
-            .AddHttpClientInstrumentation()
-            .AddRuntimeInstrumentation()
-            .AddMeter("Microsoft.AspNetCore.Hosting")
-            .AddMeter("Microsoft.AspNetCore.Routing")
-            .AddMeter("Microsoft.AspNetCore.Diagnostics")
-            .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
-            .AddMeter("Microsoft.AspNetCore.Http.Connections")
-            .AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks")
-            .SetMaxMetricStreams(OpenTelemetryOptions.MaxMetricStreams)
-            .AddPrometheusExporter()
-    );
+services.InitializeOpenTelemetry(environment);
 
 services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
 
@@ -79,7 +63,9 @@ webHost.AddAndConfigureSentry();
 
 var webApp = webAppBuilder.Build();
 
-webApp.UseOpenTelemetryPrometheusScrapingEndpoint();
+webApp.SetupHttpLogging();
+
+webApp.SetupOpenTelemetry();
 
 webApp.SetUpBaseApplication(services, environment, configuration);
 webApp.UseAuthorization();
