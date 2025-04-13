@@ -15,7 +15,7 @@ namespace HomeBudget.Components.Operations.Handlers
         {
             Task.Run(async () =>
             {
-                await using var scope = serviceScopeFactory.CreateAsyncScope();
+                using var scope = serviceScopeFactory.CreateAsyncScope();
                 var kafkaProducer = scope.ServiceProvider.GetRequiredService<IKafkaProducer<string, string>>();
 
                 await callback.Invoke(kafkaProducer);
