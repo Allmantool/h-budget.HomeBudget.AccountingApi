@@ -18,7 +18,7 @@ namespace HomeBudget.Accounting.Api.Configuration
             services
                 .AddHealthChecks()
                 .AddCheck("heartbeat", () => HealthCheckResult.Healthy())
-                .AddCheck<CustomLogicHealthCheck>(nameof(CustomLogicHealthCheck), tags: new[] { "custom" });
+                .AddCheck<CustomLogicHealthCheck>(nameof(CustomLogicHealthCheck), tags: ["custom"]);
 
             services.AddHealthChecksUI(setupSettings: setup =>
             {
