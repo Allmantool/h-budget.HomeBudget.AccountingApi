@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
@@ -15,7 +16,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Accounts.Clients
 {
     internal class PaymentAccountDocumentClient(IOptions<MongoDbOptions> dbOptions)
-        : BaseDocumentClient(dbOptions?.Value),
+        : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.LedgerDatabase),
         IPaymentAccountDocumentClient
     {
         public async Task<Result<IReadOnlyCollection<PaymentAccountDocument>>> GetAsync()
@@ -88,7 +89,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
         private async Task<IMongoCollection<PaymentAccountDocument>> GetPaymentAccountsCollectionAsync()
         {
-            var collection = MongoDatabase.GetCollection<PaymentAccountDocument>("payment-accounts");
+            var collection = MongoDatabase.GetCollection<PaymentAccountDocument>(LedgerDbCollections.PaymentAccounts);
 
             var collectionIndexes = await collection.Indexes.ListAsync();
 

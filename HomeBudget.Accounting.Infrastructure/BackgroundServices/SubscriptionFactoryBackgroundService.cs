@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using System.Threading.Channels;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -81,16 +81,28 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             {
                 try
                 {
-                    if (_consumers.Count == 0)
+                    if (_consumers.IsEmpty)
                     {
-                        logger.LogInformation("No active consumers. Waiting for new topics...");
+                        logger.LogTrace("No active consumers. Waiting for new topics...");
                         await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                         continue;
                     }
 
                     var consumersWithSubscriptions = _consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty()).ToList();
                     logger.LogInformation("Consuming messages for {Count} active topics...", consumersWithSubscriptions.Count);
-                    _ = Task.Run(() => _ = Task.WhenAll(consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken))), stoppingToken);
+                    var consumeTasks = consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken));
+                    _ = Task.Run(
+                        async () =>
+                        {
+                            try
+                            {
+                                await Task.WhenAll(consumeTasks);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "One or more consumer tasks failed inside Task.Run.");
+                            }
+                        }, stoppingToken);
                 }
                 catch (Exception ex)
                 {

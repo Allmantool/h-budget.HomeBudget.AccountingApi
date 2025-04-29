@@ -67,9 +67,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 services.AddOptions<MongoDbOptions>().Configure(options =>
                 {
                     options.ConnectionString = mongoDbOptions.ConnectionString;
-                    options.PaymentsHistoryDatabaseName = "payments-history-test";
-                    options.HandBooksDatabaseName = "handbooks-test";
-                    options.PaymentAccountsDatabaseName = "payment-accounts-test";
+                    options.PaymentsHistory = "payments-history-test";
+                    options.HandBooks = "handbooks-test";
+                    options.PaymentAccounts = "payment-accounts-test";
                 });
 
                 services.AddEventStoreClient(

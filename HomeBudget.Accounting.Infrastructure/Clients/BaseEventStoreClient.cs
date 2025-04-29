@@ -23,7 +23,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
     {
         private bool _disposed;
         private static readonly ConcurrentDictionary<string, bool> AlreadySubscribedStreams = new();
-        private readonly SemaphoreSlim _subscriptionLock = new(1, 150);
 
         public virtual async Task<IWriteResult> SendAsync(
             T eventForSending,
@@ -31,7 +30,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             string eventType = default,
             CancellationToken token = default)
         {
-            await _subscriptionLock.WaitAsync(token);
             var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
 
             var eventData = new EventData(
@@ -144,7 +142,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 return;
             }
 
-            await _subscriptionLock.WaitAsync(token);
             try
             {
                 if (AlreadySubscribedStreams.ContainsKey(streamName))
@@ -170,10 +167,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 logger.LogError(ex, $"BaseEventStoreClient: {ex.Message}");
             }
-            finally
-            {
-                _subscriptionLock.Release();
-            }
         }
 
         protected virtual Task OnEventAppearedAsync(T eventData)
@@ -193,8 +186,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 return;
             }
-
-            _subscriptionLock.Dispose();
 
             _disposed = true;
         }

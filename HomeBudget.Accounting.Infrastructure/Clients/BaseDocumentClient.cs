@@ -13,7 +13,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         private bool _disposed;
 
-        protected BaseDocumentClient(MongoDbOptions options)
+        protected BaseDocumentClient(MongoDbOptions options, string database)
         {
             if (options == null)
             {
@@ -32,7 +32,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             settings.WaitQueueTimeout = TimeSpan.FromSeconds(options.WaitQueueTimeoutInSeconds);
 
             _client = new MongoClient(settings);
-            MongoDatabase = _client.GetDatabase(options.PaymentAccountsDatabaseName);
+            MongoDatabase = _client.GetDatabase(string.IsNullOrWhiteSpace(database) ? options.LedgerDatabase : database);
         }
 
         protected virtual void Dispose(bool disposing)

@@ -2,10 +2,11 @@
 {
     public record MongoDbOptions
     {
+        public string LedgerDatabase { get; set; }
         public string ConnectionString { get; set; }
-        public string PaymentsHistoryDatabaseName { get; set; }
-        public string HandBooksDatabaseName { get; set; }
-        public string PaymentAccountsDatabaseName { get; set; }
+        public string PaymentsHistory { get; set; }
+        public string HandBooks { get; set; }
+        public string PaymentAccounts { get; set; }
         public int MaxConnectionPoolSize { get; set; } = 300;
         public int MinConnectionPoolSize { get; set; } = 50;
         public long ConnectTimeoutInMinutes { get; set; } = 5;
