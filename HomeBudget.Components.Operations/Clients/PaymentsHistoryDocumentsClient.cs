@@ -17,7 +17,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
-    : BaseDocumentClient(dbOptions?.Value),
+    : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory),
         IPaymentsHistoryDocumentsClient
     {
         public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null)
@@ -135,7 +135,8 @@ namespace HomeBudget.Components.Operations.Clients
 
         private async Task<IEnumerable<IMongoCollection<PaymentHistoryDocument>>> GetPaymentAccountCollectionsAsync(Guid accountId)
         {
-            var dbCollections = await (await MongoDatabase.ListCollectionNamesAsync()).ToListAsync();
+            var databaseCollectionNames = await MongoDatabase.ListCollectionNamesAsync();
+            var dbCollections = await databaseCollectionNames.ToListAsync();
             var paymentAccountCollections = dbCollections.Where(name => name.StartsWith(accountId.ToString()));
 
             return paymentAccountCollections.Select(collectionName => MongoDatabase.GetCollection<PaymentHistoryDocument>(collectionName));

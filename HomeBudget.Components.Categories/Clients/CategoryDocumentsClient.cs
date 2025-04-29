@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Categories.Clients.Interfaces;
@@ -16,7 +17,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Categories.Clients
 {
     internal class CategoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
-        : BaseDocumentClient(dbOptions?.Value),
+        : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.HandBooks),
         ICategoryDocumentsClient
     {
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync()
@@ -75,7 +76,7 @@ namespace HomeBudget.Components.Categories.Clients
 
         private async Task<IMongoCollection<CategoryDocument>> GetCategoriesCollectionAsync()
         {
-            var collection = MongoDatabase.GetCollection<CategoryDocument>("categories");
+            var collection = MongoDatabase.GetCollection<CategoryDocument>(LedgerDbCollections.Categories);
 
             var collectionIndexes = await collection.Indexes.ListAsync();
 
