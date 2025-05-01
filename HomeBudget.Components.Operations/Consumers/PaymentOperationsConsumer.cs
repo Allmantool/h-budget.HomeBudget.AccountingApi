@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Components.Operations.Handlers;
@@ -32,8 +31,9 @@ namespace HomeBudget.Components.Operations.Consumers
                 return options;
             }
 
-            consumerSettings.ClientId = ConsumerTypes.PaymentOperations;
-            consumerSettings.GroupId = "payment-account-consumers";
+            consumerSettings.GroupId = "payment_account_consumers";
+            consumerSettings.ClientId = $"{consumerSettings.GroupId}_{Guid.NewGuid()}";
+
             consumerSettings.EnableAutoCommit = false;
 
             return options;

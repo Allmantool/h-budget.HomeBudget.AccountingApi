@@ -39,21 +39,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerSettings = kafkaOptions.ConsumerSettings;
 
-            ConsumerId = $"{consumerSettings.GroupId}-{Guid.NewGuid()}";
+            ConsumerId = consumerSettings.ClientId;
 
             var consumerConfig = new ConsumerConfig
             {
-                ClientId = ConsumerId.ToString(),
+                ClientId = consumerSettings.ClientId,
                 BootstrapServers = consumerSettings.BootstrapServers,
                 GroupId = $"{consumerSettings.GroupId}",
-                AutoOffsetReset = AutoOffsetReset.Earliest,
+                GroupInstanceId = ConsumerId,
+                AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
                 MaxPollIntervalMs = consumerSettings.MaxPollIntervalMs,
                 SessionTimeoutMs = consumerSettings.SessionTimeoutMs,
                 HeartbeatIntervalMs = consumerSettings.HeartbeatIntervalMs,
-                Debug = "all",
-                FetchMaxBytes = 1048576,
+                Debug = consumerSettings.Debug,
+                FetchMaxBytes = consumerSettings.FetchMaxBytes,
+                PartitionAssignmentStrategy = (PartitionAssignmentStrategy)consumerSettings.PartitionAssignmentStrategy
             };
 
             _logger = logger;
@@ -86,7 +88,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
         }
 
-        public void Subscribe(string topic)
+        public void Assign(string topic)
         {
             if (string.IsNullOrEmpty(topic))
             {
@@ -109,7 +111,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public abstract Task ConsumeAsync(CancellationToken stoppingToken);
 
-        public void Unsubscribe()
+        public void Unassign()
         {
             _consumer.Unsubscribe();
             _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
@@ -267,6 +269,33 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             Dispose(true);
             GC.SuppressFinalize(this);
+        }
+
+        public void Subscribe(string topic)
+        {
+            if (string.IsNullOrEmpty(topic))
+            {
+                throw new ArgumentNullException(nameof(topic));
+            }
+
+            if (_disposed || _consumer == null)
+            {
+                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
+                return;
+            }
+
+            var topicName = topic.ToLower();
+
+            _consumer.Subscribe(topicName);
+            _subscribedTopics.Add(topicName);
+
+            _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
+        }
+
+        public void UnSubscribe()
+        {
+            _consumer.Unsubscribe();
+            _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
         }
     }
 }
