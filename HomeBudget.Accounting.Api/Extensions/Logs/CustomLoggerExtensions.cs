@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-using Elastic.Apm.SerilogEnricher;
+﻿using Elastic.Apm.SerilogEnricher;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -26,27 +24,32 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
             ConfigureHostBuilder host)
         {
             var logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration)
                 .Enrich.FromLogContext()
                 .Enrich.WithEnvironmentName()
                 .Enrich.WithMachineName()
+                .Enrich.WithProcessId()
+                .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
                 .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.Name)
                 .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
-                .Enrich.WithProperty(LoggerTags.TraceId, () => Activity.Current?.TraceId.ToString())
-                .Enrich.WithProperty(LoggerTags.SpanId, () => Activity.Current?.SpanId.ToString())
                 .Enrich.WithSpan()
+                .Enrich.WithActivityId()
+                .Enrich.WithActivityTags()
                 .WriteTo.Debug()
-                .WriteTo.Console(new RenderedCompactJsonFormatter(), restrictedToMinimumLevel: LogEventLevel.Information)
+                .WriteTo.Console(
+                    new RenderedCompactJsonFormatter(),
+                    restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
                 .Enrich.WithElasticApmCorrelationInfo()
                 .TryAddSeqSupport(configuration)
                 .TryAddElasticSearchSupport(configuration, environment)
-                .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
             loggingBuilder.ClearProviders();
             loggingBuilder.AddSerilog(logger);
+
             loggingBuilder.AddOpenTelemetry(options =>
             {
                 options.IncludeScopes = true;
