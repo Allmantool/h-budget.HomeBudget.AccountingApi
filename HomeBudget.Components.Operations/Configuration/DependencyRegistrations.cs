@@ -78,6 +78,10 @@ namespace HomeBudget.Components.Operations.Configuration
                     settings =>
                     {
                         settings = EventStoreClientSettings.Create(eventStoreUrl);
+                        settings.OperationOptions = new EventStoreClientOperationOptions
+                        {
+                            ThrowOnAppendFailure = true,
+                        };
                         settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
                         settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
                         {
