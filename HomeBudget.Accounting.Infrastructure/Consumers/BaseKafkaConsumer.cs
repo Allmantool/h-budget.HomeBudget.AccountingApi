@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -103,8 +103,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var topicName = topic.ToLower();
 
-            var topicPartition = new TopicPartition(topicName, 0);
-            _consumer.Assign(topicPartition);
+            _consumer.Subscribe(topicName);
             _subscribedTopics.Add(topicName);
 
             _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
@@ -114,7 +113,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public void Unassign()
         {
-            _consumer.Unassign();
+            _consumer.Unsubscribe();
             _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
         }
 
