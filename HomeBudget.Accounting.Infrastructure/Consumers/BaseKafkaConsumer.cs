@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
@@ -18,10 +19,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public string ConsumerId { get; }
 
+        private static readonly Channel<ConsumeResult<TKey, TValue>> _bufferChannel = Channel.CreateBounded<ConsumeResult<TKey, TValue>>(100);
         private static readonly ActivitySource ActivitySource = new("HomeBudget.KafkaConsumer");
         private readonly Lock _lock = new();
         private ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
-        private const int MaxDegreeOfConcurrency = 150;
+        private const int MaxDegreeOfConcurrency = 30;
         private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
@@ -55,6 +57,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 HeartbeatIntervalMs = consumerSettings.HeartbeatIntervalMs,
                 Debug = consumerSettings.Debug,
                 FetchMaxBytes = consumerSettings.FetchMaxBytes,
+                FetchWaitMaxMs = consumerSettings.FetchWaitMaxMs,
                 PartitionAssignmentStrategy = (PartitionAssignmentStrategy)consumerSettings.PartitionAssignmentStrategy
             };
 
@@ -125,6 +128,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             try
             {
+                _ = Task.Run(async () =>
+                {
+                    await foreach (var messagePayload in _bufferChannel.Reader.ReadAllAsync(cancellationToken))
+                    {
+                        if (messagePayload != null)
+                        {
+                            await processMessageAsync(messagePayload);
+                            if (!_disposed)
+                            {
+                                _consumer.Commit(messagePayload);
+                            }
+                        }
+
+                        await Task.Delay(300);
+                    }
+                });
+
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     try
@@ -140,7 +160,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             continue;
                         }
 
-                        _logger.LogDebug("Semaphore current count: {Count}", _semaphore.CurrentCount);
+                        _logger.LogTrace("Semaphore current count: {Count}", _semaphore.CurrentCount);
 
                         await _semaphore.WaitAsync(cancellationToken);
 
@@ -163,11 +183,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                                     if (messagePayload != null)
                                     {
-                                        await processMessageAsync(messagePayload);
-                                        if (!_disposed)
-                                        {
-                                            _consumer.Commit(messagePayload);
-                                        }
+                                        _bufferChannel.Writer.TryWrite(messagePayload);
                                     }
 
                                     activity?.SetStatus(ActivityStatusCode.Ok);
