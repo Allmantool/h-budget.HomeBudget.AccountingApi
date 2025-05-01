@@ -134,6 +134,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
                 if (_consumers.TryAdd(topic.Title, consumer))
                 {
+                    // consumer.Assign(topic.Title);
                     consumer.Subscribe(topic.Title);
                     logger.LogInformation("Subscribed to topic {Title}, consumer type {ConsumerType}", topic.Title, topic.ConsumerType);
                 }
@@ -163,7 +164,9 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 try
                 {
                     logger.LogInformation("Unsubscribing from topic {Topic}", topic);
-                    consumer.Unsubscribe();
+
+                    // consumer.Unassign();
+                    consumer.UnSubscribe();
                     consumer.Dispose();
                 }
                 catch (Exception ex)
