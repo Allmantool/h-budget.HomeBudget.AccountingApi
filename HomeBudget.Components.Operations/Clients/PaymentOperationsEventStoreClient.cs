@@ -3,15 +3,15 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 using EventStore.Client;
 using Grpc.Core;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MediatR;
 using Polly;
 using Polly.Retry;
 
@@ -20,8 +20,8 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Core.Options;
 using HomeBudget.Core;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
 {

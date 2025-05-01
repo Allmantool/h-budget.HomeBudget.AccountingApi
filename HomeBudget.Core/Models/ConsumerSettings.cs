@@ -7,6 +7,7 @@
         public string GroupId { get; set; }
         public bool EnableAutoCommit { get; set; }
         public int? FetchMaxBytes { get; set; } = 1048576;
+        public int FetchWaitMaxMs { get; set; } = 5;
         public int AutoOffsetReset { get; set; } = 1;
         public bool AllowAutoCreateTopics { get; set; }
         public int MaxPollIntervalMs { get; set; } = 600000;
