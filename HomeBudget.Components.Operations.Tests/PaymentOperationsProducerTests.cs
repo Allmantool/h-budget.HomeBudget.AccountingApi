@@ -55,7 +55,7 @@ namespace HomeBudget.Components.Operations.Tests
                         }
                     });
 
-                var handler = new PaymentOperationsClientHandler(kafkaOptions);
+                using var handler = new PaymentOperationsClientHandler(kafkaOptions);
 
                 _sut = new PaymentOperationsProducer(handler);
 

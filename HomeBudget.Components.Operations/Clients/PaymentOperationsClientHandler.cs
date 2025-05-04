@@ -32,8 +32,11 @@ namespace HomeBudget.Components.Operations.Clients
 
         public void Dispose()
         {
-            KafkaProducer.Flush();
-            KafkaProducer.Dispose();
+            if (KafkaProducer != null)
+            {
+                KafkaProducer.Flush();
+                KafkaProducer.Dispose();
+            }
         }
     }
 }
