@@ -1,15 +1,16 @@
 ﻿using System.Threading.Channels;
 
 using Confluent.Kafka;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Hosting;
 
-using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.BackgroundServices;
+using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services;
+using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -20,16 +21,30 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
         public static IServiceCollection RegisterInfrastructureDependencies(this IServiceCollection services, IConfiguration configuration)
         {
             return services
-                .AddSingleton<IAdminKafkaService>(sp =>
+                .AddSingleton<ITopicManager>(sp =>
                 {
-                    var kafkaOptions = sp.GetRequiredService<IOptions<KafkaOptions>>();
-                    var adminSettings = kafkaOptions.Value.AdminSettings;
+                    var pptions = sp.GetRequiredService<IOptions<KafkaOptions>>();
+                    var kafkaOptions = pptions.Value;
+                    var adminSettings = kafkaOptions.AdminSettings;
+                    var consumerSettings = kafkaOptions.ConsumerSettings;
 
-                    return new AdminKafkaService(
+                    var consumerConfig = new ConsumerConfig
+                    {
+                        BootstrapServers = adminSettings.BootstrapServers,
+                        GroupId = consumerSettings.GroupId,
+                        EnableAutoCommit = false
+                    };
+
+                    var offsetConsumer = new ConsumerBuilder<Ignore, Ignore>(consumerConfig).Build();
+
+                    return new KafkaTopicManager(
                         adminSettings,
                         sp.GetRequiredService<IAdminClient>(),
-                        sp.GetRequiredService<ILogger<AdminKafkaService>>());
+                        offsetConsumer,
+                        sp.GetRequiredService<ILogger<KafkaTopicManager>>());
                 })
+                .AddSingleton<ITopicProcessor, KafkaTopicProcessor>()
+                .AddSingleton<IConsumerService, KafkaConsumerService>()
                 .AddSingleton(Channel.CreateUnbounded<SubscriptionTopic>())
                 .AddSingleton(sp =>
                 {
@@ -53,8 +68,16 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 {
                     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
                 })
-                .AddHostedService<SubscriptionFactoryBackgroundService>()
-                .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>();
+                .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
+                .RegisterBackgrondServices();
+        }
+
+        internal static IServiceCollection RegisterBackgrondServices(this IServiceCollection services)
+        {
+            return services
+                .AddHostedService<KafkaConsumerHealthMonitorBackgroundService>()
+                .AddHostedService<KafkaTopicCreationListenerBackgroundService>()
+                .AddHostedService<KafkaMessageConsumerBackgroundService>();
         }
     }
 }

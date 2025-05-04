@@ -19,10 +19,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public string ConsumerId { get; }
 
-        private static readonly Channel<ConsumeResult<TKey, TValue>> _bufferChannel = Channel.CreateBounded<ConsumeResult<TKey, TValue>>(100);
+        private static readonly Channel<ConsumeResult<TKey, TValue>> _bufferChannel = Channel.CreateBounded<ConsumeResult<TKey, TValue>>(30);
         private static readonly ActivitySource ActivitySource = new("HomeBudget.KafkaConsumer");
         private readonly Lock _lock = new();
-        private ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
+        private static ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
         private const int MaxDegreeOfConcurrency = 30;
         private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
 
@@ -91,34 +91,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
         }
 
-        public void Assign(string topic)
-        {
-            if (string.IsNullOrEmpty(topic))
-            {
-                throw new ArgumentNullException(nameof(topic));
-            }
-
-            if (_disposed || _consumer == null)
-            {
-                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
-                return;
-            }
-
-            var topicName = topic.ToLower();
-
-            _consumer.Subscribe(topicName);
-            _subscribedTopics.Add(topicName);
-
-            _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
-        }
-
         public abstract Task ConsumeAsync(CancellationToken stoppingToken);
-
-        public void Unassign()
-        {
-            _consumer.Unsubscribe();
-            _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
-        }
 
         protected virtual async Task ConsumeAsync(
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
@@ -128,22 +101,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             try
             {
-                _ = Task.Run(async () =>
-                {
-                    await foreach (var messagePayload in _bufferChannel.Reader.ReadAllAsync(cancellationToken))
+                _ = Task.Run(
+                    async () =>
                     {
-                        if (messagePayload != null)
+                        await foreach (var messagePayload in _bufferChannel.Reader.ReadAllAsync(cancellationToken))
                         {
-                            await processMessageAsync(messagePayload);
-                            if (!_disposed)
+                            if (messagePayload is not null)
                             {
-                                _consumer.Commit(messagePayload);
+                                await processMessageAsync(messagePayload);
+                                if (!_disposed)
+                                {
+                                    _consumer.Commit(messagePayload);
+                                }
                             }
-                        }
 
-                        await Task.Delay(300);
-                    }
-                });
+                            await Task.Delay(300);
+                        }
+                    }, cancellationToken);
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -162,10 +136,15 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                         _logger.LogTrace("Semaphore current count: {Count}", _semaphore.CurrentCount);
 
+                        if (_disposed)
+                        {
+                            return;
+                        }
+
                         await _semaphore.WaitAsync(cancellationToken);
 
                         _ = Task.Run(
-                            async () =>
+                            () =>
                             {
                                 using var semaphoreGuard = new SemaphoreGuard(_semaphore);
 
@@ -232,6 +211,33 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
         }
 
+        public void Assign(string topic)
+        {
+            if (string.IsNullOrEmpty(topic))
+            {
+                throw new ArgumentNullException(nameof(topic));
+            }
+
+            if (_disposed || _consumer == null)
+            {
+                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
+                return;
+            }
+
+            var topicName = topic.ToLower();
+
+            _consumer.Subscribe(topicName);
+            _subscribedTopics.Add(topicName);
+
+            _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
+        }
+
+        public void Unassign()
+        {
+            _consumer.Unsubscribe();
+            _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
+        }
+
         private void CloseConsumer()
         {
             if (_disposed || _consumer == null)
@@ -253,38 +259,6 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 _disposed = true;
             }
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            lock (_lock)
-            {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                if (disposing)
-                {
-                    _semaphore?.Dispose();
-                    _consumer?.Dispose();
-                }
-
-                _disposed = true;
-
-                _logger.LogInformation($"The consumer {ConsumerId} has been disposed. Related topics {string.Join(",", _subscribedTopics)}");
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
         }
 
         public void Subscribe(string topic)
@@ -312,6 +286,38 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             _consumer.Unsubscribe();
             _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                if (disposing)
+                {
+                    _semaphore?.Dispose();
+                    _consumer?.Dispose();
+                }
+
+                _disposed = true;
+
+                _logger.LogInformation($"The consumer {ConsumerId} has been disposed. Related topics {string.Join(",", _subscribedTopics)}");
+            }
         }
     }
 }

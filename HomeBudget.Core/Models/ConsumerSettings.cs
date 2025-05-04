@@ -4,7 +4,7 @@
     {
         public string BootstrapServers { get; set; }
         public string ClientId { get; set; }
-        public string GroupId { get; set; }
+        public string GroupId { get; set; } = "payment_account_consumers";
         public bool EnableAutoCommit { get; set; }
         public int? FetchMaxBytes { get; set; } = 1048576;
         public int FetchWaitMaxMs { get; set; } = 5;
@@ -17,5 +17,6 @@
         public long ConsumeDelayInMilliseconds { get; set; } = 800;
         public string Debug { get; set; } = "all";
         public int PartitionAssignmentStrategy { get; set; } = 2;
+        public int ConsumerHealthCheckIntervalSeconds { get; set; } = 90;
     }
 }
