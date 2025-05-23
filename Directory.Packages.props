@@ -9,8 +9,8 @@
     <PackageVersion Include="AutoMapper" Version="14.0.0" />
     <PackageVersion Include="Confluent.Kafka" Version="2.10.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="8.12.3" />
-    <PackageVersion Include="Elastic.Serilog.Sinks" Version="8.12.3" />
+    <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="8.18.0" />
+    <PackageVersion Include="Elastic.Serilog.Sinks" Version="8.18.0" />
     <PackageVersion Include="EventStore.Client.Grpc.Streams" Version="23.3.9" />
     <PackageVersion Include="FluentAssertions" Version="8.2.0" />
     <PackageVersion Include="MediatR" Version="12.5.0" />
