@@ -30,7 +30,9 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 {
                     logger.LogInformation("Running Kafka consumer health check...");
 
-                    foreach (var topic in topicProcessor.GetTopicsWithLag(stoppingToken))
+                    var topicsWithLag = topicProcessor.GetTopicsWithLag(stoppingToken);
+
+                    foreach (var topic in topicsWithLag)
                     {
                         var hasActiveConsumer = await topicManager.HasActiveConsumerAsync(topic.Title, consumerSettings.GroupId);
 

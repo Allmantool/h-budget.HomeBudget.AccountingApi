@@ -71,10 +71,15 @@ internal sealed class KafkaTopicManager(
 
     public long GetTopicLag(string topic)
     {
-        var metadata = adminClient.GetMetadata(topic, TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds));
-        var topicMetadata = metadata.Topics.FirstOrDefault(t => t.Topic == topic);
+        if (topic.StartsWith("__"))
+        {
+            return 0;
+        }
 
-        if (topicMetadata == null)
+        var metadata = adminClient.GetMetadata(topic, TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds));
+        var topicMetadata = metadata.Topics.FirstOrDefault(t => string.Equals(t.Topic, topic, StringComparison.OrdinalIgnoreCase));
+
+        if (topicMetadata == null || topicMetadata.Partitions.IsNullOrEmpty())
         {
             return 0;
         }
@@ -83,23 +88,23 @@ internal sealed class KafkaTopicManager(
             .Select(p => new TopicPartition(topic, new Partition(p.PartitionId)))
             .ToList();
 
-        if (partitions.IsNullOrEmpty())
-        {
-            return 0;
-        }
-
         var committed = offsetConsumer.Committed(partitions, TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds));
         long totalLag = 0;
 
-        foreach (var p in committed)
+        foreach (var partition in partitions)
         {
-            if (p.Offset == Offset.Unset)
-            {
-                continue;
-            }
+            var committedOffset = committed.FirstOrDefault(c => c.TopicPartition == partition);
 
-            var watermark = offsetConsumer.QueryWatermarkOffsets(p.TopicPartition, TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds));
-            totalLag += watermark.High.Value - p.Offset.Value;
+            var watermark = offsetConsumer.QueryWatermarkOffsets(partition, TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds));
+
+            if (committedOffset != null && committedOffset.Offset != Offset.Unset)
+            {
+                totalLag += watermark.High.Value - committedOffset.Offset.Value;
+            }
+            else
+            {
+                totalLag += watermark.High.Value - watermark.Low.Value;
+            }
         }
 
         return totalLag;
