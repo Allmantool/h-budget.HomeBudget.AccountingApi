@@ -3,15 +3,19 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Testcontainers.Kafka;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -20,20 +24,70 @@ namespace HomeBudget.Components.Operations.Tests
     [TestFixture]
     public class PaymentOperationsProducerTests
     {
+        private IContainer _zookeperKafkaContainer;
         private KafkaContainer _kafkaContainer;
         private PaymentOperationsProducer _sut;
 
         [OneTimeSetUp]
-        public void Setup()
+        public async Task SetupAsync()
         {
+            var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync("test-kafka-net");
+
+            _zookeperKafkaContainer = await DockerContainerFactory.GetOrCreateDockerContainerAsync(
+                    $"test-zookeper",
+                    cb => cb
+                    .WithImage("confluentinc/cp-zookeeper:7.9.0")
+                    .WithName($"test-zookeper")
+                    .WithHostname("test-zookeper")
+                    .WithEnvironment("ZOOKEEPER_CLIENT_PORT", "2181")
+                    .WithEnvironment("ZOOKEEPER_TICK_TIME", "2000")
+                    .WithWaitStrategy(Wait.ForUnixContainer())
+                    .WithNetwork(testKafkaNetwork)
+                    .WithAutoRemove(true)
+                    .WithCleanUp(true)
+                    .Build());
+
             _kafkaContainer = new KafkaBuilder()
-                .WithImage("confluentinc/cp-kafka:7.4.3")
-                .WithName($"{nameof(PaymentOperationsProducerTests)}-container")
-                .WithHostname("test-kafka-host")
-                .WithAutoRemove(true)
-                .WithCleanUp(true)
-                .WithPortBinding(9192, 9192)
-                .Build();
+                    .WithImage("confluentinc/cp-kafka:7.9.0")
+                    .WithName("test-kafka")
+                    .WithHostname("test-kafka")
+                    .WithNetwork(testKafkaNetwork)
+                    .WithPortBinding(19092, 9092)
+                    .WithEnvironment("KAFKA_BROKER_ID", "1")
+                    .WithEnvironment(
+                        "KAFKA_ZOOKEEPER_CONNECT",
+                        $"test-zookeper:2181")
+                    .WithEnvironment(
+                        "KAFKA_LISTENERS",
+                        "PLAINTEXT://0.0.0.0:9092,BROKER://0.0.0.0:9093")
+                    .WithEnvironment(
+                        "KAFKA_ADVERTISED_LISTENERS",
+                        "PLAINTEXT://localhost:9092,BROKER://test-kafka:9093")
+                    .WithEnvironment(
+                        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
+                        "PLAINTEXT:PLAINTEXT,BROKER:PLAINTEXT")
+                    .WithEnvironment(
+                        "KAFKA_INTER_BROKER_LISTENER_NAME",
+                        "BROKER")
+                    .WithEnvironment("KAFKA_LOG_RETENTION_BYTES", "1073741824")
+                    .WithEnvironment("KAFKA_LOG_CLEANUP_POLICY", "delete")
+                    .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
+                    .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
+                    .WithEnvironment("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "30")
+                    .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")
+                    .WithEnvironment("KAFKA_LOG_SEGMENT_BYTES", "1073741824")
+                    .WithEnvironment("KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS", "300000")
+                    .WithEnvironment("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
+                    .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                    .WithWaitStrategy(Wait.ForUnixContainer())
+                    .WithCreateParameterModifier(config =>
+                    {
+                        config.HostConfig.NanoCPUs = 1500000000;
+                    })
+
+                    .WithAutoRemove(true)
+                    .WithCleanUp(true)
+                    .Build();
         }
 
         [Test]
@@ -43,8 +97,21 @@ namespace HomeBudget.Components.Operations.Tests
             {
                 if (_kafkaContainer.State != TestcontainersStates.Running)
                 {
+                    await _zookeperKafkaContainer.StartAsync();
                     await _kafkaContainer.StartAsync();
+
+                    await Task.Delay(TimeSpan.FromSeconds(60));
                 }
+
+                var config = new AdminClientConfig { BootstrapServers = _kafkaContainer.GetBootstrapAddress() };
+
+                using var admin = new AdminClientBuilder(config).Build();
+
+                await admin.CreateTopicsAsync(
+                [
+                    new TopicSpecification { Name = BaseTopics.AccountingAccounts, NumPartitions = 1, ReplicationFactor = 1 },
+                    new TopicSpecification { Name = BaseTopics.AccountingPayments, NumPartitions = 1, ReplicationFactor = 1 }
+                ]);
 
                 var kafkaOptions = Options.Create(
                     new KafkaOptions
@@ -76,7 +143,7 @@ namespace HomeBudget.Components.Operations.Tests
 
                 var messagePayloadResult = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-                var deliveryResult = await _sut.ProduceAsync("test-topic", messagePayloadResult.Payload, CancellationToken.None);
+                var deliveryResult = await _sut.ProduceAsync(BaseTopics.AccountingAccounts, messagePayloadResult.Payload, CancellationToken.None);
 
                 deliveryResult.Status.Should().Be(PersistenceStatus.Persisted);
             }

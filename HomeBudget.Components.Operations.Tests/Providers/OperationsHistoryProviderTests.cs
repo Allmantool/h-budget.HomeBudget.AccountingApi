@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using DotNet.Testcontainers.Containers;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
 using Testcontainers.MongoDb;
@@ -47,11 +47,12 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             if (_mongoDbContainer.State != TestcontainersStates.Running)
             {
                 await _mongoDbContainer.StartAsync();
+                await Task.Delay(TimeSpan.FromSeconds(60));
             }
 
             var dbConnection = _mongoDbContainer.GetConnectionString();
 
-            var client = new MongoClient(dbConnection);
+            using var client = new MongoClient(dbConnection);
 
             var database = client.GetDatabase("Test-Db");
             var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
@@ -91,11 +92,12 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             if (_mongoDbContainer.State != TestcontainersStates.Running)
             {
                 await _mongoDbContainer.StartAsync();
+                await Task.Delay(TimeSpan.FromSeconds(60));
             }
 
             var dbConnection = _mongoDbContainer.GetConnectionString();
 
-            var client = new MongoClient(dbConnection);
+            using var client = new MongoClient(dbConnection);
 
             var database = client.GetDatabase("Test-Db");
             var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
