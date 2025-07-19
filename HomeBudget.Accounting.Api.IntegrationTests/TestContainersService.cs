@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
-using Docker.DotNet;
-using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using EventStore.Client;
@@ -281,7 +279,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 throw;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromSeconds(10));
             IsStarted = false;
         }
 
@@ -313,22 +311,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             _semaphoreGuard?.Dispose();
-        }
-
-        private async Task<bool> DockerNetworkExistsAsync(string networkName)
-        {
-            using var client = new DockerClientConfiguration().CreateClient();
-
-            var networks = await client.Networks.ListNetworksAsync();
-            return networks.Any(n => n.Name == networkName);
-        }
-
-        private async Task<bool> DockerContainerExistsAsync(string containerName)
-        {
-            using var client = new DockerClientConfiguration().CreateClient();
-
-            var containers = await client.Containers.ListContainersAsync(new ContainersListParameters { All = true });
-            return containers.Any(c => c.Names.Any(n => n.TrimStart('/') == containerName));
         }
     }
 }

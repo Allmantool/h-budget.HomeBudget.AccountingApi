@@ -38,12 +38,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await _sut.DisposeAsync();
         }
 
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            await _sut.ResetAsync();
-        }
-
         [Test]
         public async Task GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {
