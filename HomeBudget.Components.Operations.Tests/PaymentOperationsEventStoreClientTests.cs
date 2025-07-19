@@ -166,7 +166,7 @@ namespace HomeBudget.Components.Operations.Tests
 
                 readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
 
-                await _eventSourceDbContainer.StopAsync();
+                await _eventSourceDbContainer?.StopAsync();
             }
         }
 

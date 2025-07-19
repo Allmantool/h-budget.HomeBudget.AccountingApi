@@ -269,11 +269,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             try
             {
-                await EventSourceDbContainer.StopAsync();
-                await KafkaContainer.StopAsync();
-                await KafkaUIContainer.StopAsync();
-                await ZookeperKafkaContainer.StopAsync();
-                await MongoDbContainer.StopAsync();
+                await EventSourceDbContainer?.StopAsync();
+                await KafkaContainer?.StopAsync();
+                await KafkaUIContainer?.StopAsync();
+                await ZookeperKafkaContainer?.StopAsync();
+                await MongoDbContainer?.StopAsync();
             }
             catch (Exception ex)
             {
