@@ -37,12 +37,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await _sut.DisposeAsync();
         }
 
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            await _sut.ResetAsync();
-        }
-
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
         {
@@ -61,7 +55,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 8000, executionDelayBeforeInMs: 8000);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 2000, executionDelayBeforeInMs: 2000);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
             var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
