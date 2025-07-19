@@ -52,8 +52,7 @@ namespace HomeBudget.Components.Operations.Tests
                     .WithName("test-kafka")
                     .WithHostname("test-kafka")
                     .WithNetwork(testKafkaNetwork)
-                    .WithPortBinding(9092, 9092)
-                    .WithPortBinding(29092, 29092)
+                    .WithPortBinding(19092, 9092)
                     .WithEnvironment("KAFKA_BROKER_ID", "1")
                     .WithEnvironment(
                         "KAFKA_ZOOKEEPER_CONNECT",
