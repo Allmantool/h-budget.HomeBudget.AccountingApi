@@ -5,11 +5,10 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 
-using HomeBudget.Accounting.Infrastructure.Factories;
-using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
@@ -31,17 +30,10 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             fireAndForgetHandler.Execute(async producer =>
             {
-                var topic = new SubscriptionTopic
-                {
-                    Title = KafkaTopicTitleFactory.GetPaymentAccountTopic(paymentAccountId),
-                    ConsumerType = ConsumerTypes.PaymentOperations
-                };
-
                 try
                 {
                     var message = paymentMessageResult.Payload;
-                    var topicTitle = topic.Title?.ToLower(System.Globalization.CultureInfo.CurrentCulture);
-                    await producer.ProduceAsync(topicTitle, message, cancellationToken);
+                    var deliveryResult = await producer.ProduceAsync(BaseTopics.AccountingPayments, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {

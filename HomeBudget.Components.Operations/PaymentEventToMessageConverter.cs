@@ -23,7 +23,7 @@ namespace HomeBudget.Components.Operations
                 return Result<Message<string, string>>.Failure($"'{nameof(PaymentOperationEvent)}' can not be null");
             }
 
-            var processedAt = DateTime.UtcNow;
+            var enquiredAt = DateTime.UtcNow;
             var messageId = eventPayload.GetIdentifier();
             var messagePayload = JsonSerializer.Serialize(paymentEvent);
 
@@ -33,14 +33,14 @@ namespace HomeBudget.Components.Operations
                 new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
                 new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(BasePaymentCommandHandler))),
                 new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(processedAt.ToString("O"))),
+                new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),
             };
 
             var message = new Message<string, string>
             {
                 Key = messageId,
                 Value = messagePayload,
-                Timestamp = new Timestamp(processedAt),
+                Timestamp = new Timestamp(enquiredAt),
                 Headers = headers
             };
 

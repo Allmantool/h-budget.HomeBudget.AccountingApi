@@ -9,6 +9,8 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.BackgroundServices;
 using HomeBudget.Accounting.Infrastructure.Factories;
+using HomeBudget.Accounting.Infrastructure.Providers;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Services;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Models;
@@ -45,7 +47,8 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 })
                 .AddSingleton<ITopicProcessor, KafkaTopicProcessor>()
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
-                .AddSingleton(Channel.CreateUnbounded<SubscriptionTopic>())
+                .AddSingleton<IDateTimeProvider, DateTimeProvider>()
+                .AddSingleton(Channel.CreateUnbounded<AccountRecord>())
                 .AddSingleton(sp =>
                 {
                     var kafkaOptions = sp.GetRequiredService<IOptions<KafkaOptions>>();
@@ -69,15 +72,16 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
                 })
                 .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
-                .RegisterBackgrondServices();
+                .RegisterBackgroundServices();
         }
 
-        internal static IServiceCollection RegisterBackgrondServices(this IServiceCollection services)
+        internal static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
             return services
                 .AddHostedService<KafkaConsumerHealthMonitorBackgroundService>()
-                .AddHostedService<KafkaTopicCreationListenerBackgroundService>()
-                .AddHostedService<KafkaMessageConsumerBackgroundService>();
+                .AddHostedService<KafkaAccountsConsumerBackgroundService>()
+                .AddHostedService<KafkaMessageConsumerBackgroundService>()
+                .AddHostedService<KafkaPaymentsConsumerBackgroundService>();
         }
     }
 }
