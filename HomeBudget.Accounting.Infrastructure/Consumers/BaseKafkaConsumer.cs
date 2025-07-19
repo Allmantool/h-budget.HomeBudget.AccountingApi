@@ -2,15 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
@@ -19,13 +18,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public string ConsumerId { get; }
 
-        private static readonly Channel<ConsumeResult<TKey, TValue>> _bufferChannel = Channel.CreateBounded<ConsumeResult<TKey, TValue>>(30);
         private static readonly ActivitySource ActivitySource = new("HomeBudget.KafkaConsumer");
-        private readonly Lock _lock = new();
-        private static ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
-        private const int MaxDegreeOfConcurrency = 30;
-        private readonly SemaphoreSlim _semaphore = new(MaxDegreeOfConcurrency);
+        private static readonly ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
 
+        private readonly Lock _lock = new();
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
         private bool _disposed;
@@ -45,10 +41,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerConfig = new ConsumerConfig
             {
+                GroupInstanceId = ConsumerId,
                 ClientId = consumerSettings.ClientId,
                 BootstrapServers = consumerSettings.BootstrapServers,
                 GroupId = $"{consumerSettings.GroupId}",
-                GroupInstanceId = ConsumerId,
                 AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
@@ -64,8 +60,22 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _logger = logger;
 
             _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
-                .SetErrorHandler((_, error) => _logger.LogError($"Error: {error.Reason}"))
-                .SetLogHandler((_, logMessage) => _logger.LogInformation($"Log: {logMessage.Message}"))
+                .SetErrorHandler((_, error) =>
+                {
+                    _logger.LogError($"Error: {error.Reason}");
+                })
+                .SetLogHandler((_, logMessage) =>
+                {
+                    _logger.LogInformation($"Log: {logMessage.Message}");
+                })
+                .SetPartitionsRevokedHandler((c, partitions) =>
+                {
+                    _logger.LogInformation($"Log: {$"Partitions revoked: [{string.Join(", ", partitions)}]"}");
+                })
+                .SetPartitionsAssignedHandler((c, partitions) =>
+                {
+                    _logger.LogInformation($"Partitions assigned: [{string.Join(", ", partitions)}]");
+                })
                 .Build();
         }
 
@@ -101,141 +111,68 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             try
             {
-                _ = Task.Run(
-                    async () =>
-                    {
-                        await foreach (var messagePayload in _bufferChannel.Reader.ReadAllAsync(cancellationToken))
-                        {
-                            if (messagePayload is not null)
-                            {
-                                await processMessageAsync(messagePayload);
-                                if (!_disposed)
-                                {
-                                    _consumer.Commit(messagePayload);
-                                }
-                            }
-
-                            await Task.Delay(300);
-                        }
-                    }, cancellationToken);
-
                 while (!cancellationToken.IsCancellationRequested)
                 {
+                    if (_disposed || _consumer == null)
+                    {
+                        _logger.LogWarning("Kafka consumer is disposed.");
+                        break;
+                    }
+
                     try
                     {
-                        if (_disposed || _consumer == null)
-                        {
-                            _logger.LogWarning("Kafka consumer was disposed during message consumption.");
-                            return;
-                        }
+                        var consumeResult = _consumer.Consume(TimeSpan.FromMilliseconds(500));
 
-                        if (_consumer.Subscription.IsNullOrEmpty())
+                        if (consumeResult == null)
                         {
+                            await Task.Delay(300, cancellationToken); // prevent busy loop
                             continue;
                         }
 
-                        _logger.LogTrace("Semaphore current count: {Count}", _semaphore.CurrentCount);
+                        using var activity = ActivitySource.StartActivity("KafkaMessage.Consume");
 
-                        if (_disposed)
+                        activity?.SetTag("messaging.system", "kafka");
+                        activity?.SetTag("messaging.destination", consumeResult.Topic);
+                        activity?.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
+                        activity?.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
+                        activity?.SetTag("messaging.message_id", consumeResult.Message?.Key?.ToString());
+
+                        await processMessageAsync(consumeResult);
+
+                        if (!_disposed)
                         {
-                            return;
+                            _consumer.Commit(consumeResult);
                         }
 
-                        await _semaphore.WaitAsync(cancellationToken);
-
-                        _ = Task.Run(
-                            () =>
-                            {
-                                using var semaphoreGuard = new SemaphoreGuard(_semaphore);
-
-                                using var activity = ActivitySource.StartActivity("KafkaMessage.Consume");
-
-                                try
-                                {
-                                    var messagePayload = _consumer.Consume(cancellationToken);
-
-                                    activity?.SetTag("messaging.system", "kafka");
-                                    activity?.SetTag("messaging.destination", messagePayload?.Topic);
-                                    activity?.SetTag("messaging.kafka.partition", messagePayload?.Partition.Value);
-                                    activity?.SetTag("messaging.kafka.offset", messagePayload?.Offset.Value);
-                                    activity?.SetTag("messaging.message_id", messagePayload?.Message?.Key?.ToString());
-
-                                    if (messagePayload != null)
-                                    {
-                                        _bufferChannel.Writer.TryWrite(messagePayload);
-                                    }
-
-                                    activity?.SetStatus(ActivityStatusCode.Ok);
-                                }
-                                catch (Exception ex)
-                                {
-                                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                                    _logger.LogError(ex, $"Unexpected error in Kafka consumer: {ex.Message}");
-                                }
-                            }, cancellationToken);
-                    }
-                    catch (ObjectDisposedException ex)
-                    {
-                        _logger.LogError(ex, "Kafka consumer was accessed after being disposed.");
-                        return;
+                        activity?.SetStatus(ActivityStatusCode.Ok);
                     }
                     catch (ConsumeException ex)
                     {
                         if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
                         {
-                            _logger.LogWarning($"Topic/partition not found: {ex.Error.Reason}. Retrying...");
-                            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                            _logger.LogWarning("Topic/partition not found: {Reason}. Retrying...", ex.Error.Reason);
+                            await Task.Delay(5000, cancellationToken);
                         }
                         else
                         {
-                            _logger.LogError(ex, $"Consume error: {ex.Error.Reason}");
+                            _logger.LogError(ex, "Consume error: {Reason}", ex.Error.Reason);
                         }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Consumer loop canceled.");
+                        break;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Unexpected error in Kafka consumer: {ex.Message}");
+                        _logger.LogError(ex, "Unhandled error in Kafka consumer loop: {Message}", ex.Message);
                     }
                 }
-            }
-            catch (OperationCanceledException ex)
-            {
-                _logger.LogInformation("Consumer loop canceled. '{Exception}' error: {ExceptionDetails}", nameof(OperationCanceledException), ex.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogInformation("Consumer loop canceled. Error: {ExceptionDetails}", ex.Message);
             }
             finally
             {
                 CloseConsumer();
             }
-        }
-
-        public void Assign(string topic)
-        {
-            if (string.IsNullOrEmpty(topic))
-            {
-                throw new ArgumentNullException(nameof(topic));
-            }
-
-            if (_disposed || _consumer == null)
-            {
-                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
-                return;
-            }
-
-            var topicName = topic.ToLower();
-
-            _consumer.Subscribe(topicName);
-            _subscribedTopics.Add(topicName);
-
-            _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
-        }
-
-        public void Unassign()
-        {
-            _consumer.Unsubscribe();
-            _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
         }
 
         private void CloseConsumer()
@@ -284,7 +221,16 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public void UnSubscribe()
         {
-            _consumer.Unsubscribe();
+            try
+            {
+                // _consumer?.Unsubscribe();
+                CloseConsumer();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error while closing Kafka consumer.");
+            }
+
             _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
         }
 
@@ -310,13 +256,39 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                 if (disposing)
                 {
-                    _semaphore?.Dispose();
-                    _consumer?.Dispose();
+                    if (_consumer != null)
+                    {
+                        try
+                        {
+                            _consumer.Close();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            _logger.LogWarning("Kafka consumer already disposed. Skipping Close().");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error while closing Kafka consumer.");
+                        }
+
+                        try
+                        {
+                            _consumer.Dispose();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            _logger.LogWarning("Kafka consumer already disposed. Skipping Dispose().");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error while disposing Kafka consumer.");
+                        }
+                    }
                 }
 
                 _disposed = true;
 
-                _logger.LogInformation($"The consumer {ConsumerId} has been disposed. Related topics {string.Join(",", _subscribedTopics)}");
+                _logger.LogInformation($"The consumer {ConsumerId} has been disposed. Related topics: {string.Join(",", _subscribedTopics ?? Enumerable.Empty<string>())}");
             }
         }
     }
