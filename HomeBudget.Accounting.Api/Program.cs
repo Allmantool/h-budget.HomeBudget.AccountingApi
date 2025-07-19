@@ -49,7 +49,7 @@ services.AddHeaderPropagation(options =>
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 
-services.AddAutoMapper(new List<Assembly>
+services.AddAutoMapper((_) => new List<Assembly>
 {
     typeof(Program).Assembly,
     PaymentOperationsComponentMappingProfile.GetExecutingAssembly(),
