@@ -49,10 +49,10 @@ services.AddHeaderPropagation(options =>
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 
-services.AddAutoMapper(new List<Assembly>
+services.AddAutoMapper(cfg =>
 {
-    typeof(Program).Assembly,
-    PaymentOperationsComponentMappingProfile.GetExecutingAssembly(),
+    cfg.AddMaps(typeof(Program).Assembly);
+    cfg.AddMaps(PaymentOperationsComponentMappingProfile.GetExecutingAssembly());
 });
 
 services.InitializeOpenTelemetry(environment);

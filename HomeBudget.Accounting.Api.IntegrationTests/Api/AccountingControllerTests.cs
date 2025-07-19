@@ -20,7 +20,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [TestFixture]
     [Category(TestTypes.Integration)]
     [Order(IntegrationTestOrderIndex.AccountingControllerTests)]
-    public class AccountingControllerTests
+    public class AccountingControllerTests : IAsyncDisposable
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
@@ -245,6 +245,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _sut.ResetAsync();
+            await _sut.DisposeAsync();
         }
     }
 }

@@ -6,11 +6,10 @@ using System.Threading.Tasks;
 using DotNet.Testcontainers.Containers;
 using EventStore.Client;
 using FluentAssertions;
-using Moq;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 using NUnit.Framework;
 using Testcontainers.EventStoreDb;
 
@@ -24,13 +23,12 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Operations.Tests
 {
     [TestFixture]
-    public class PaymentOperationsEventStoreClientTests
+    public class PaymentOperationsEventStoreClientTests : IAsyncDisposable
     {
         private readonly Mock<IServiceScope> _serviceScopeMock = new();
         private readonly Mock<IServiceScopeFactory> _serviceScopeFactoryMock = new();
         private readonly Mock<IServiceProvider> _serviceProviderMock = new();
         private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
-        private readonly Mock<ISender> _senderMock = new();
 
         private EventStoreDbContainer _eventSourceDbContainer;
         private PaymentOperationsEventStoreClient _sut;
@@ -87,7 +85,7 @@ namespace HomeBudget.Components.Operations.Tests
 
                 _sut = new PaymentOperationsEventStoreClient(
                     Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                    Mock.Of<IServiceScopeFactory>(),
+                    _serviceScopeFactoryMock.Object,
                     client,
                     Options.Create(
                     new EventStoreDbOptions
@@ -170,6 +168,11 @@ namespace HomeBudget.Components.Operations.Tests
 
                 await _eventSourceDbContainer.StopAsync();
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _eventSourceDbContainer?.DisposeAsync();
         }
     }
 }
