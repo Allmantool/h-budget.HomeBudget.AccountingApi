@@ -9,8 +9,6 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers.Interfaces
     {
         string ConsumerId { get; }
         IReadOnlyCollection<string> Subscriptions { get; }
-        void Assign(string topic);
-        void Unassign();
         void Subscribe(string topic);
         void UnSubscribe();
         Task ConsumeAsync(CancellationToken stoppingToken);
