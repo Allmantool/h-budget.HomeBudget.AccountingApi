@@ -55,7 +55,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
@@ -109,47 +109,68 @@ jobs:
           echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
           echo "Last git tag: $tag"
 
-      - name: Install Quality Tools
+      - name: Build Solution
+        shell: bash
+        run: dotnet build HomeBudgetAccountingApi.sln --no-incremental
+
+  test-coverage:
+    name: Run Tests with Coverage & Sonar
+    needs: build-api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install dotCover and SonarScanner
         shell: bash
         run: |
           dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
           dotnet tool install --global dotnet-sonarscanner --version 5.14.0
 
       - name: Make the scanner script file executable
-        run: |
-          chmod +x ./startsonar.sh
+        run: chmod +x ./startsonar.sh
 
-      - name: Start sonar scanning
+      - name: Start Sonar Scanner
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          PULL_REQUEST_ID: ${{ steps.findPr.outputs.pr }}
+          PULL_REQUEST_ID: ${{ needs.build-api.outputs.pr_number }}
           PULL_REQUEST_SOURCE_BRANCH: ${{ github.ref }}
           PULL_REQUEST_TARGET_BRANCH: refs/heads/master
           ACTION: ${{ github.action }}
           EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: sh ./startsonar.sh
+        run: ./startsonar.sh
 
-      - name: Build Solution for Metrics
-        shell: bash
-        run: |
-          dotnet build HomeBudgetAccountingApi.sln --no-incremental
-
-      - name: Run Tests with Coverage
+      - name: Run Tests with dotCover
         shell: bash
         run: |
           dotnet-dotcover test HomeBudgetAccountingApi.sln \
             --dcReportType=HTML \
             --dcOutput="test-results/accounting-coverage.html" \
             --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests"
-        continue-on-error: true
         timeout-minutes: 15
 
-      - name: End sonar scanning
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotcover-report
+          path: test-results/accounting-coverage.html
+
+      - name: End Sonar Scanner
         env:
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
         shell: bash
@@ -157,7 +178,7 @@ jobs:
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api]
+    needs: [test-coverage]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -176,8 +197,7 @@ jobs:
         run: |
           docker build \
             --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}" \
-            .
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}" .
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2

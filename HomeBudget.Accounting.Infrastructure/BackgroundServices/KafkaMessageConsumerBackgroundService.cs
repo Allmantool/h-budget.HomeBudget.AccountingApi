@@ -16,7 +16,14 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.Run(() => kafkaConsumerService.ConsumeKafkaMessagesLoopAsync(stoppingToken), stoppingToken);
+            try
+            {
+                await kafkaConsumerService.ConsumeKafkaMessagesLoopAsync(stoppingToken);
+            }
+            catch (Exception _)
+            {
+                throw;
+            }
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
@@ -25,7 +32,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
             foreach (var topic in ConsumersStore.Consumers.Keys)
             {
-                if (!ConsumersStore.Consumers.TryRemove(topic, out var consumer))
+                if (!ConsumersStore.Consumers.TryRemove(topic, out var consumersForRemove))
                 {
                     continue;
                 }
@@ -34,9 +41,11 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 {
                     logger.LogInformation("Unsubscribing from topic {Topic}", topic);
 
-                    // consumer.Unassign();
-                    consumer.UnSubscribe();
-                    consumer.Dispose();
+                    foreach (var consumer in consumersForRemove)
+                    {
+                        consumer.UnSubscribe();
+                        consumer.Dispose();
+                    }
                 }
                 catch (Exception ex)
                 {
