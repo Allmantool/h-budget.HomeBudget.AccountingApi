@@ -43,7 +43,10 @@ jobs:
       last_tag: ${{ steps.extract_tag.outputs.TARGET_TAG }}
       pr: ${{ steps.find-pr.outputs.pr }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v3
@@ -198,7 +201,7 @@ jobs:
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api]
+    needs: [build-api, test-coverage]
     runs-on: ubuntu-latest
     defaults:
       run:
