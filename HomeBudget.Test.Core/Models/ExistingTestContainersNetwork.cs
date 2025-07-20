@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 using DotNet.Testcontainers.Networks;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Factories.Models
+namespace HomeBudget.Test.Core.Models
 {
     internal class ExistingTestContainersNetwork : INetwork
     {

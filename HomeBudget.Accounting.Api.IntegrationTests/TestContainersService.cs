@@ -195,7 +195,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await admin.CreateTopicsAsync(
                     [
                         new TopicSpecification { Name = BaseTopics.AccountingAccounts, NumPartitions = 1, ReplicationFactor = 1 },
-                        new TopicSpecification { Name = BaseTopics.AccountingPayments, NumPartitions = 3, ReplicationFactor = 1 }
+                        new TopicSpecification { Name = BaseTopics.AccountingPayments, NumPartitions = 1, ReplicationFactor = 1 }
                     ]);
                 }
                 catch (Exception ex)

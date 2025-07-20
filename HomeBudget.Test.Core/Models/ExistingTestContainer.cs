@@ -9,14 +9,14 @@ using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
 using Microsoft.Extensions.Logging;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Factories.Models
+namespace HomeBudget.Test.Core.Models
 {
-    internal class ExistingTestContainersContainer : IContainer
+    internal class ExistingTestContainer : IContainer
     {
         public string Id { get; }
         public string Name { get; }
 
-        public ExistingTestContainersContainer(string id, string name)
+        public ExistingTestContainer(string id, string name)
         {
             Id = id;
             Name = name;

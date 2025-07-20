@@ -31,13 +31,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
-        [OneTimeTearDown]
-        public async Task TearDownAsync()
-        {
-            await _sut.ResetAsync();
-            await _sut.DisposeAsync();
-        }
-
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()
         {

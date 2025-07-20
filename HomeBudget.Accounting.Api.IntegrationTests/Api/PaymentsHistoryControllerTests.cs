@@ -32,12 +32,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
 
-        [OneTimeTearDown]
-        public async Task TearDownAsync()
-        {
-            await _sut.DisposeAsync();
-        }
-
         [Test]
         public async Task GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
         {

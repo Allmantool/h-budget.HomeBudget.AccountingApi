@@ -30,13 +30,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CrossAccountsTransferWebApp _sut = new();
 
-        [OneTimeTearDown]
-        public async Task TearDownAsync()
-        {
-            await _sut.ResetAsync();
-            await _sut.DisposeAsync();
-        }
-
         [Test]
         public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
         {

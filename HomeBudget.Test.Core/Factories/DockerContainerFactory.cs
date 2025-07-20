@@ -7,7 +7,7 @@ using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 
-using HomeBudget.Accounting.Api.IntegrationTests.Factories.Models;
+using HomeBudget.Test.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
@@ -27,7 +27,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
             if (existingContainer is not null)
             {
                 Console.WriteLine($"[Docker] Reusing existing container: {containerName} ({existingContainer.ID})");
-                return new ExistingTestContainersContainer(existingContainer.ID, containerName);
+                return new ExistingTestContainer(existingContainer.ID, containerName);
             }
 
             var builder = new ContainerBuilder()

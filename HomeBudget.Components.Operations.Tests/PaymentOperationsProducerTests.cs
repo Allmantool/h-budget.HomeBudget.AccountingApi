@@ -100,7 +100,7 @@ namespace HomeBudget.Components.Operations.Tests
                     await _zookeperKafkaContainer.StartAsync();
                     await _kafkaContainer.StartAsync();
 
-                    await Task.Delay(TimeSpan.FromSeconds(60));
+                    await Task.Delay(TimeSpan.FromSeconds(90));
                 }
 
                 var config = new AdminClientConfig { BootstrapServers = _kafkaContainer.GetBootstrapAddress() };

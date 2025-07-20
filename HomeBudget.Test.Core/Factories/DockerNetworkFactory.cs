@@ -5,7 +5,7 @@ using Docker.DotNet;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Networks;
 
-using HomeBudget.Accounting.Api.IntegrationTests.Factories.Models;
+using HomeBudget.Test.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
