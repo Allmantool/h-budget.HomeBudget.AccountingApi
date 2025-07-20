@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
@@ -41,17 +42,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                             continue;
                         }
 
-                        logger.LogWarning("No active consumer for topic '{Topic}'. Attempting to (re)create one.", topic);
-
-                        if (ConsumersStore.Consumers.TryRemove(topic.Title, out var removedConsumer))
-                        {
-                            removedConsumer.UnSubscribe();
-                            removedConsumer.Unassign();
-
-                            // removedConsumer.Dispose();
-                        }
-
-                        consumerService.CreateAndSubscribe(topic);
+                        // Resubscribe(topic);
                     }
                 }
                 catch (Exception ex)
@@ -61,6 +52,23 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
                 await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerHealthCheckIntervalSeconds), stoppingToken);
             }
+        }
+
+        public void Resubscribe(SubscriptionTopic topic)
+        {
+            var topicTitle = topic.Title;
+
+            logger.LogWarning("No active consumer for topic '{Topic}'. Attempting to (re)create one.", topicTitle);
+
+            if (ConsumersStore.Consumers.TryRemove(topicTitle, out var consumersForRemove))
+            {
+                foreach (var consumer in consumersForRemove)
+                {
+                    consumer.UnSubscribe();
+                }
+            }
+
+            consumerService.CreateAndSubscribe(topic);
         }
     }
 }
