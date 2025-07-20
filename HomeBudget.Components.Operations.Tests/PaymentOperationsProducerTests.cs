@@ -23,7 +23,6 @@ using HomeBudget.Test.Core.WaitStrategies;
 namespace HomeBudget.Components.Operations.Tests
 {
     [TestFixture]
-    [Ignore("temproraly disabled")]
     public class PaymentOperationsProducerTests
     {
         private IContainer _zookeperKafkaContainer;
@@ -81,10 +80,6 @@ namespace HomeBudget.Components.Operations.Tests
                     .WithEnvironment("KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS", "300000")
                     .WithEnvironment("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
                     .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
-                        .WithWaitStrategy(Wait
-                        .ForUnixContainer()
-                        .UntilMessageIsLogged("started (kafka.server.KafkaServer)"))
-                    .WithStartupCallback((kc, ct) => KafkaReadyStrategy.WaitUntilKafkaReadyAsync(kc, ct))
                     .WithCreateParameterModifier(config =>
                     {
                         config.HostConfig.NanoCPUs = 1500000000;

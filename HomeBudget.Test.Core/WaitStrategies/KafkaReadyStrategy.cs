@@ -32,7 +32,7 @@ namespace HomeBudget.Test.Core.WaitStrategies
                         return;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     // Ignore failures — Kafka may not be up yet
                 }
