@@ -145,7 +145,8 @@ jobs:
           dotnet-dotcover test HomeBudgetAccountingApi.sln \
             --dcReportType=HTML \
             --dcOutput="test-results/accounting-coverage.html" \
-            --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests"
+            --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests;-:type=*.Tests" \
+            --verbosity detailed
         continue-on-error: true
         timeout-minutes: 15
 
