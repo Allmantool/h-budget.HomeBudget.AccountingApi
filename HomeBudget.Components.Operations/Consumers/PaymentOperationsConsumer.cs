@@ -31,7 +31,7 @@ namespace HomeBudget.Components.Operations.Consumers
                 return options;
             }
 
-            consumerSettings.GroupId = "payment_account_consumers";
+            consumerSettings.GroupId = "accounting.payments.group";
             consumerSettings.ClientId = $"{consumerSettings.GroupId}_{Guid.NewGuid()}";
 
             consumerSettings.EnableAutoCommit = false;
@@ -39,9 +39,9 @@ namespace HomeBudget.Components.Operations.Consumers
             return options;
         }
 
-        public override async Task ConsumeAsync(CancellationToken cancellationToken)
+        public override Task ConsumeAsync(CancellationToken cancellationToken)
         {
-            await ConsumeAsync(
+            return ConsumeAsync(
                 async payload =>
                 {
                     try
