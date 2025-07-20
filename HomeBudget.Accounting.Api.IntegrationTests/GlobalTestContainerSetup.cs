@@ -23,7 +23,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             if (_sut != null)
             {
-                await _sut.StopAsync();
                 await _sut.DisposeAsync();
             }
         }
