@@ -29,6 +29,14 @@
   <ItemGroup>
     <ProjectReference Include="..\HomeBudget.Accounting.Api\HomeBudget.Accounting.Api.csproj" />
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
+    <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
+    <ProjectReference Include="..\HomeBudget.Test.Core\HomeBudget.Test.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Scripts\testcontainers.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

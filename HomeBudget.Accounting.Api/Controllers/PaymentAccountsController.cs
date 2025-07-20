@@ -10,11 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
-using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Core.Models;
 
@@ -23,7 +21,7 @@ namespace HomeBudget.Accounting.Api.Controllers
     [ApiController]
     [Route(Endpoints.PaymentAccounts, Name = Endpoints.PaymentAccounts)]
     public class PaymentAccountsController(
-        Channel<SubscriptionTopic> topicsChannel,
+        Channel<AccountRecord> paymentAccountsChannel,
         IMapper mapper,
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IPaymentAccountFactory paymentAccountFactory) : ControllerBase
@@ -83,15 +81,16 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 
-            var topic = new SubscriptionTopic
+            if (!saveResult.IsSucceeded)
             {
-                Title = KafkaTopicTitleFactory.GetPaymentAccountTopic(newPaymentAccount.Key),
-                ConsumerType = ConsumerTypes.PaymentOperations
-            };
+                return Result<Guid>.Failure(saveResult.StatusMessage);
+            }
 
-            await topicsChannel.Writer.WriteAsync(topic, cancellationToken);
+            var accountId = saveResult.Payload;
 
-            return Result<Guid>.Succeeded(saveResult.Payload);
+            await paymentAccountsChannel.Writer.WriteAsync(new AccountRecord(accountId), cancellationToken);
+
+            return Result<Guid>.Succeeded(accountId);
         }
 
         [HttpDelete("{paymentAccountId}")]
