@@ -18,7 +18,6 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Test.Core.WaitStrategies;
 
 namespace HomeBudget.Components.Operations.Tests
 {

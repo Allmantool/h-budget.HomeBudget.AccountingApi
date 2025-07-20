@@ -116,6 +116,7 @@ jobs:
 
   test-coverage:
     needs: build-api
+    name: Test coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +135,7 @@ jobs:
           dotnet-dotcover test \
             --dcReportType=HTML \
             --dcOutput="test-results/coverage.html" \
-            --dcFilters="+:HomeBudget.*;-:type=*.IntegrationTests"
+            --dcFilters="+:HomeBudget.*;"
         continue-on-error: true
         timeout-minutes: 15
 
@@ -147,6 +148,7 @@ jobs:
 
   sonar-analysis:
     needs: [test-coverage, build-api]
+    name: Sonar scanning
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
