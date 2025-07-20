@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,10 +30,12 @@ namespace HomeBudget.Accounting.Infrastructure.Services
                 return;
             }
 
-            while (!stoppingToken.IsCancellationRequested)
+            while (true)
             {
                 try
                 {
+                    stoppingToken.ThrowIfCancellationRequested();
+
                     if (ConsumersStore.Consumers.IsEmpty)
                     {
                         logger.LogTrace("No active consumers. Waiting for new topics...");
@@ -40,21 +43,35 @@ namespace HomeBudget.Accounting.Infrastructure.Services
                         continue;
                     }
 
-                    var consumersWithSubscriptions = ConsumersStore.Consumers.Values.Where(c => !c.Subscriptions.IsNullOrEmpty());
+                    var consumersWithSubscriptions = ConsumersStore.Consumers.Values
+                        .Where(c => !c.Any(s => s.Subscriptions.IsNullOrEmpty()))
+                        .ToList();
 
-                    var consumeTasks = consumersWithSubscriptions.Select(c => c.ConsumeAsync(stoppingToken));
-                    _ = Task.Run(
-                        async () =>
+                    List<Task> consumeTasks = [];
+                    foreach (var consumers in consumersWithSubscriptions)
+                    {
+                        if (consumers.IsNullOrEmpty())
                         {
-                            try
-                            {
-                                await Task.WhenAll(consumeTasks);
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogError(ex, "One or more consumer tasks failed inside Task.Run.");
-                            }
-                        }, stoppingToken);
+                            continue;
+                        }
+
+                        var tasks = consumers.Select(c => c.ConsumeAsync(stoppingToken)).ToList();
+
+                        consumeTasks.AddRange(consumers.Select(c => c.ConsumeAsync(stoppingToken)));
+                    }
+
+                    if (consumeTasks.IsNullOrEmpty())
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
+                        continue;
+                    }
+
+                    await Task.WhenAll(consumeTasks);
+                }
+                catch (OperationCanceledException)
+                {
+                    logger.LogInformation("Consume loop has been cancelled.");
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -66,14 +83,25 @@ namespace HomeBudget.Accounting.Infrastructure.Services
 
         public IKafkaConsumer CreateAndSubscribe(SubscriptionTopic topic)
         {
+            var topicTitle = topic.Title;
+
             var consumer = kafkaConsumersFactory
-                .WithTopic(topic.Title)
+                .WithTopic(topicTitle)
                 .Build(topic.ConsumerType);
 
-            if (ConsumersStore.Consumers.TryAdd(topic.Title, consumer))
+            if (consumer != null)
             {
-                consumer.Subscribe(topic.Title);
-                logger.LogInformation("Subscribed to topic {Title}, consumer type {ConsumerType}", topic.Title, topic.ConsumerType);
+                ConsumersStore.Consumers.TryGetValue(topicTitle, out var topicConsumers);
+
+                var consumers = topicConsumers.IsNullOrEmpty()
+                        ? [consumer]
+                        : topicConsumers.Append(consumer);
+
+                ConsumersStore.Consumers.Remove(topicTitle, out var _);
+                ConsumersStore.Consumers.TryAdd(topicTitle, consumers);
+
+                consumer.Subscribe(topicTitle);
+                logger.LogInformation("Subscribed to topic {Title}, consumer type {ConsumerType}", topicTitle, topic.ConsumerType);
             }
 
             return consumer;

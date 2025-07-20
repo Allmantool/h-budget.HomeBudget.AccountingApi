@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Threading.Tasks;
 
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 using RestSharp;
-
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Bson.Serialization;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
