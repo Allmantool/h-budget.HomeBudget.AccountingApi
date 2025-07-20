@@ -1,5 +1,7 @@
 ﻿using AutoMapper;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using HomeBudget.Accounting.Api.MapperProfileConfigurations;
 
 namespace HomeBudget.Accounting.Api.Tests.Mappers
@@ -11,7 +13,10 @@ namespace HomeBudget.Accounting.Api.Tests.Mappers
         [SetUp]
         public void Setup()
         {
-            _configuration = new MapperConfiguration(pr => pr.AddProfile<OperationRequestMappingProfile>());
+            var configurationExpression = new MapperConfigurationExpression();
+            configurationExpression.AddProfile<OperationRequestMappingProfile>();
+
+            _configuration = new MapperConfiguration(configurationExpression, NullLoggerFactory.Instance);
         }
 
         [Test]

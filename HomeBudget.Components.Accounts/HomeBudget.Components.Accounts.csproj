@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
+    <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
     <ProjectReference Include="..\HomeBudget.Components.Categories\HomeBudget.Components.Categories.csproj" />
   </ItemGroup>
 

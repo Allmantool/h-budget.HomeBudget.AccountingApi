@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Reflection;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -49,10 +47,10 @@ services.AddHeaderPropagation(options =>
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 
-services.AddAutoMapper(new List<Assembly>
+services.AddAutoMapper(cfg =>
 {
-    typeof(Program).Assembly,
-    PaymentOperationsComponentMappingProfile.GetExecutingAssembly(),
+    cfg.AddMaps(typeof(Program).Assembly);
+    cfg.AddMaps(PaymentOperationsComponentMappingProfile.GetExecutingAssembly());
 });
 
 services.InitializeOpenTelemetry(environment);
