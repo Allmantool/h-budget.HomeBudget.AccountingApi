@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.Tests
 
             Assert.Multiple(() =>
             {
-                BaseEnumeration.FromValue<AccountTypes>(deserializeResult.AccountType).Should().Be(AccountTypes.Virtual);
+                BaseEnumeration<AccountTypes, int>.FromValue(deserializeResult.AccountType).Should().Be(AccountTypes.Virtual);
                 serializeResult.Should().Contain("\"AccountType\":1");
             });
         }

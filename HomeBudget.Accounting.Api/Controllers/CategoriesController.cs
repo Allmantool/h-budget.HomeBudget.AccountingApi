@@ -65,7 +65,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateCategoryRequest request)
         {
             var newCategory = categoryFactory.Create(
-                BaseEnumeration.FromValue<CategoryTypes>(request.CategoryType),
+                BaseEnumeration<CategoryTypes, int>.FromValue(request.CategoryType),
                 request.NameNodes);
 
             if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))

@@ -173,7 +173,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 InitialBalance = initialBalance,
                 Description = "test-description",
-                AccountType = accountType.Id,
+                AccountType = accountType.Key,
                 Agent = "test-agent",
                 Currency = currencyType.ToString()
             };

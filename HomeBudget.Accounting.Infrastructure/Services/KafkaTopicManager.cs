@@ -48,6 +48,10 @@ internal sealed class KafkaTopicManager(
                 logger.LogError(ex, "Failed to create topic '{Topic}': {Reason}", result.Topic, result.Error.Reason);
             }
         }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to create topic");
+        }
     }
 
     public async Task DeleteAsync(string topic)

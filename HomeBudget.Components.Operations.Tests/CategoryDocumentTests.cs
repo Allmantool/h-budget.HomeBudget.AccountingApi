@@ -27,7 +27,7 @@ namespace HomeBudget.Components.Operations.Tests
             // Arrange
             var categoryType = CategoryTypes.Expense;
             var nameNodes = new[] { "Node1", "Node2" };
-            var expectedKey = $"{categoryType.Id}-{string.Join(',', nameNodes)}";
+            var expectedKey = $"{categoryType.Key}-{string.Join(',', nameNodes)}";
             var expectedOperationUnixTime = DateTimeOffset.FromUnixTimeSeconds(126).ToUnixTimeMilliseconds();
 
             var bsonDocument = new BsonDocument

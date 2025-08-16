@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +22,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
         IOptions<KafkaOptions> options,
         Channel<AccountRecord> paymentAccountsChannel,
         IConsumerService consumerService,
-        IPaymentAccountProducerService paymentAccountProcessor)
+        IServiceScopeFactory serviceScopeFactory)
         : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -51,6 +52,10 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     await foreach (var paymentAccount in paymentAccountsChannel.Reader.ReadAllAsync(stoppingToken))
                     {
                         logger.LogInformation("Send new account related message. Account id: {AccountId}", paymentAccount.Id);
+
+                        using var scope = serviceScopeFactory.CreateScope();
+
+                        var paymentAccountProcessor = scope.ServiceProvider.GetRequiredService<IPaymentAccountProducerService>();
 
                         _ = Task.Run(
                             () => paymentAccountProcessor.SendAsync(paymentAccount, stoppingToken),
