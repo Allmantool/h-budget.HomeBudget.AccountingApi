@@ -1,7 +1,7 @@
 ﻿namespace HomeBudget.Accounting.Domain.Enumerations
 {
-    public class CurrencyTypes(int id, string name)
-        : BaseEnumeration(id, name)
+    public class CurrencyTypes(int key, string name)
+        : BaseEnumeration<CurrencyTypes, int>(key, name)
     {
         public static readonly CurrencyTypes Byn = new(70, nameof(Byn));
         public static readonly CurrencyTypes Usd = new(10, nameof(Usd));
@@ -11,6 +11,6 @@
         public static readonly CurrencyTypes Uan = new(50, nameof(Uan));
         public static readonly CurrencyTypes Try = new(60, nameof(Try));
 
-        public static implicit operator CurrencyTypes(int currencyId) => FromValue<CurrencyTypes>(currencyId);
+        public static implicit operator CurrencyTypes(int currencyId) => FromValue(currencyId);
     }
 }

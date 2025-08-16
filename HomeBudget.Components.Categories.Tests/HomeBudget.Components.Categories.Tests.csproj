@@ -22,20 +22,17 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Testcontainers" />
-    <PackageReference Include="Testcontainers.EventStoreDb" />
-    <PackageReference Include="Testcontainers.Kafka" />
     <PackageReference Include="Testcontainers.MongoDb" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\HomeBudget.Components.Operations\HomeBudget.Components.Operations.csproj" />
-    <ProjectReference Include="..\HomeBudget.Test.Core\HomeBudget.Test.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>HomeBudget.Accounting.Infrastructure</_Parameter1>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HomeBudget.Components.Categories\HomeBudget.Components.Categories.csproj" />
   </ItemGroup>
 
 </Project>
