@@ -17,7 +17,9 @@ namespace HomeBudget.Accounting.Domain.Models
             NameNodes = nameNodes;
             CategoryType = categoryType;
 
-            CategoryKey = $"{categoryType.Id}-{string.Join(',', NameNodes)}";
+            CategoryKey = categoryType == null
+                ? $"{string.Join(',', NameNodes)}"
+                : $"{categoryType.Key}-{string.Join(',', NameNodes)}";
         }
     }
 }

@@ -77,7 +77,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new CreatePaymentAccountRequest
             {
                 InitialBalance = 100,
-                AccountType = AccountTypes.Cash.Id,
+                AccountType = AccountTypes.Cash.Key,
                 Agent = "Vtb",
                 Currency = "",
                 Description = "Some description"
@@ -118,7 +118,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Assert.Multiple(() =>
             {
                 getAccountById.InitialBalance.Should().Be(100);
-                getAccountById.AccountType.Should().Be(AccountTypes.Virtual.Id);
+                getAccountById.AccountType.Should().Be(AccountTypes.Virtual.Key);
                 getAccountById.Balance.Should().Be(100);
             });
         }
@@ -174,7 +174,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new UpdatePaymentAccountRequest
             {
                 Balance = 100,
-                AccountType = AccountTypes.Cash.Id,
+                AccountType = AccountTypes.Cash.Key,
                 Agent = "Vtb",
                 Currency = "BYN",
                 Description = "Some description"
@@ -198,7 +198,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new UpdatePaymentAccountRequest
             {
                 Balance = 150,
-                AccountType = AccountTypes.Loan.Id,
+                AccountType = AccountTypes.Loan.Key,
                 Agent = "Vtb Updated",
                 Currency = "BYN Updated",
                 Description = "Updated description"
@@ -220,7 +220,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 InitialBalance = 11.2m,
                 Description = "test-account",
-                AccountType = AccountTypes.Deposit.Id,
+                AccountType = AccountTypes.Deposit.Key,
                 Agent = "Personal",
                 Currency = "usd"
             };

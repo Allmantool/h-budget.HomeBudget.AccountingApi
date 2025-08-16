@@ -10,7 +10,7 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
         public PaymentAccountMappingProfiler()
         {
             CreateMap<PaymentAccount, PaymentAccountResponse>()
-                .ForMember(dest => dest.AccountType, opt => opt.MapFrom(src => src.Type.Id));
+                .ForMember(dest => dest.AccountType, opt => opt.MapFrom(src => src.Type.Key));
         }
     }
 }
