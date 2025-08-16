@@ -18,5 +18,7 @@ namespace HomeBudget.Core.Options
 
         public int MaxReconnectAttempts { get; init; } = 5;
         public int ChannelOperationTimeout { get; init; } = 120;
+        public double RetryRiseNumber { get; init; } = 3;
+        public int ChannelCapacity { get; init; } = 5000;
     }
 }
