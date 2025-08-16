@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using DotNet.Testcontainers.Containers;
 using EventStore.Client;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +12,9 @@ using Moq;
 using NUnit.Framework;
 using Testcontainers.EventStoreDb;
 
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -34,10 +35,10 @@ namespace HomeBudget.Components.Operations.Tests
         private PaymentOperationsEventStoreClient _sut;
 
         [OneTimeSetUp]
-        public void Setup()
+        public async Task SetupAsync()
         {
             _eventSourceDbContainer = new EventStoreDbBuilder()
-                .WithImage("eventstore/eventstore:23.10.0-jammy")
+                .WithImage("eventstore/eventstore:24.10.6-jammy")
                 .WithName($"{nameof(PaymentOperationsEventStoreClientTests)}-container")
                 .WithHostname("test-event-store-db-host")
                 .WithAutoRemove(true)
@@ -64,6 +65,8 @@ namespace HomeBudget.Components.Operations.Tests
             _serviceProviderMock
                 .Setup(sp => sp.GetService(typeof(IPaymentOperationsHistoryService)))
                 .Returns(_paymentOperationsHistoryServiceMock.Object);
+
+            await _eventSourceDbContainer.StartAsync();
         }
 
         [Test]
@@ -72,29 +75,23 @@ namespace HomeBudget.Components.Operations.Tests
             var paymentAccountIdA = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43");
             var paymentAccountIdB = Guid.Parse("91c3d1bc-ce45-415a-a97d-2a9d834c7e02");
 
-            await using (_eventSourceDbContainer)
-            {
-                if (_eventSourceDbContainer.State != TestcontainersStates.Running)
+            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+
+            using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
+
+            _sut = new PaymentOperationsEventStoreClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                Options.Create(
+                new EventStoreDbOptions
                 {
-                    await _eventSourceDbContainer.StartAsync();
-                }
+                    RetryAttempts = 3,
+                    TimeoutInSeconds = 10
+                }));
 
-                var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
-
-                var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
-
-                _sut = new PaymentOperationsEventStoreClient(
-                    Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                    _serviceScopeFactoryMock.Object,
-                    client,
-                    Options.Create(
-                    new EventStoreDbOptions
-                    {
-                        RetryAttempts = 3,
-                        TimeoutInSeconds = 10
-                    }));
-
-                var paymentsEvents = new List<PaymentOperationEvent>
+            var paymentsEvents = new List<PaymentOperationEvent>
                 {
                     new()
                     {
@@ -154,24 +151,137 @@ namespace HomeBudget.Components.Operations.Tests
                     },
                 };
 
-                foreach (var paymentEvent in paymentsEvents)
-                {
-                    var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                    var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+            foreach (var paymentEvent in paymentsEvents)
+            {
+                var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
+                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
 
-                    await _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
-                }
-
-                var readResult = await _sut.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
-
-                readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
-
-                await _eventSourceDbContainer?.StopAsync();
+                await _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
             }
+
+            var readResult = await _sut.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
+
+            readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
+        }
+
+        [Test]
+        public async Task SendAsync_WithHighLoad_ThenAllEventsAreStoredAndLatestPerAccountProcessed()
+        {
+            var paymentAccountId = Guid.NewGuid();
+            var totalEvents = 2_000;
+
+            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+            using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
+
+            _sut = new PaymentOperationsEventStoreClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                Options.Create(new EventStoreDbOptions
+                {
+                    RetryAttempts = 3,
+                    TimeoutInSeconds = 10,
+                    EventBatchingDelayInMs = 50
+                }));
+
+            var tasks = new List<Task>();
+            for (int i = 0; i < totalEvents; i++)
+            {
+                var paymentEvent = new PaymentOperationEvent
+                {
+                    EventType = PaymentEventTypes.Added,
+                    Payload = new FinancialTransaction
+                    {
+                        Key = Guid.NewGuid(),
+                        PaymentAccountId = paymentAccountId,
+                        Amount = 100 + i,
+                        CategoryId = Guid.NewGuid(),
+                        ContractorId = Guid.NewGuid(),
+                        Comment = $"Event #{i}",
+                        OperationDay = new DateOnly(2024, 1, (i % 28) + 1)
+                    }
+                };
+
+                var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
+                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+
+                tasks.Add(_sut.SendAsync(paymentEvent, streamName, eventTypeTitle));
+            }
+
+            await Task.WhenAll(tasks);
+
+            var readResult = await _sut.ReadAsync(paymentAccountId.ToString()).ToListAsync();
+
+            readResult.Count.Should().Be(totalEvents);
+
+            var latestEventsByPeriod = readResult
+                .GroupBy(e => e.Payload.GetMonthPeriodIdentifier())
+                .Select(g => g.OrderByDescending(e => e.Payload.OperationDay).Last())
+                .ToList();
+
+            latestEventsByPeriod.Should().NotBeEmpty();
+        }
+
+        [Test]
+        public async Task SendAsync_WithConcurrentHighLoadFromMultipleAccounts_ThenEventsAreStoredCorrectly()
+        {
+            var accountA = Guid.NewGuid();
+            var accountB = Guid.NewGuid();
+            var totalEvents = 1_000;
+
+            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+            using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
+
+            _sut = new PaymentOperationsEventStoreClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                Options.Create(new EventStoreDbOptions
+                {
+                    RetryAttempts = 3,
+                    TimeoutInSeconds = 10
+                }));
+
+            var tasks = Enumerable.Range(0, totalEvents).Select(i =>
+            {
+                var accountId = i % 2 == 0 ? accountA : accountB;
+                var paymentEvent = new PaymentOperationEvent
+                {
+                    EventType = PaymentEventTypes.Added,
+                    Payload = new FinancialTransaction
+                    {
+                        Key = Guid.NewGuid(),
+                        PaymentAccountId = accountId,
+                        Amount = 50 + i,
+                        CategoryId = Guid.NewGuid(),
+                        ContractorId = Guid.NewGuid(),
+                        Comment = $"Event {i}",
+                        OperationDay = new DateOnly(2024, 2, (i % 28) + 1)
+                    }
+                };
+
+                var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
+                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+
+                return _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
+            });
+
+            await Task.WhenAll(tasks);
+
+            var resultA = await _sut.ReadAsync(accountA.ToString()).ToListAsync();
+            resultA.Should().NotBeEmpty();
+            resultA.Count.Should().Be(totalEvents / 2);
+
+            var resultB = await _sut.ReadAsync(accountB.ToString()).ToListAsync();
+            resultB.Should().NotBeEmpty();
+            resultB.Count.Should().Be(totalEvents / 2);
         }
 
         public async ValueTask DisposeAsync()
         {
+            _eventSourceDbContainer?.StopAsync();
             _eventSourceDbContainer?.DisposeAsync();
         }
     }
