@@ -227,6 +227,8 @@ namespace HomeBudget.Components.Operations.Clients
             try
             {
                 _processorTask?.Wait(TimeSpan.FromSeconds(5));
+
+                base.Dispose();
             }
             catch
             {
