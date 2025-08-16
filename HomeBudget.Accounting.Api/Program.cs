@@ -10,6 +10,8 @@ using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Api.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
@@ -58,6 +60,8 @@ services.InitializeOpenTelemetry(environment);
 services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
 
 webHost.AddAndConfigureSentry();
+
+MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(AccountTypes).Assembly);
 
 var webApp = webAppBuilder.Build();
 

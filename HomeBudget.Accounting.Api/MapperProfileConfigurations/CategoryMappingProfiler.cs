@@ -10,7 +10,7 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
         public CategoryMappingProfiler()
         {
             CreateMap<Category, CategoryResponse>()
-                .ForMember(dest => dest.CategoryType, opt => opt.MapFrom(src => src.CategoryType.Id));
+                .ForMember(dest => dest.CategoryType, opt => opt.MapFrom(src => src.CategoryType.Key));
         }
     }
 }

@@ -41,7 +41,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerConfig = new ConsumerConfig
             {
-                GroupInstanceId = ConsumerId,
+                // GroupInstanceId = ConsumerId,
                 ClientId = consumerSettings.ClientId,
                 BootstrapServers = consumerSettings.BootstrapServers,
                 GroupId = $"{consumerSettings.GroupId}",
@@ -60,9 +60,9 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _logger = logger;
 
             _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
-                .SetErrorHandler((_, error) =>
+                .SetErrorHandler((ctx, error) =>
                 {
-                    _logger.LogError($"Error: {error.Reason}");
+                    _logger.LogError($"Error: {error.Reason} {ctx?.Name} {ctx?.MemberId}");
                 })
                 .SetLogHandler((_, logMessage) =>
                 {
