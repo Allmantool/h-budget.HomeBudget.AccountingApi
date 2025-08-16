@@ -133,14 +133,10 @@ jobs:
       - name: Run dotCover tests and generate report
         run: |
           dotnet-dotcover test \
-            --dcReportType=XML \
-            --dcOutput="test-results/accounting-coverage.xml" \
+            --dcReportType=HTML \
+            --dcOutput="test-results/accounting-coverage.html" \
             --dcFilters="+:HomeBudget.*;"
 
-          dotnet-dotcover report \
-          --dcReportType=HTML \
-          --dcOutput="test-results/accounting-coverage.html" \
-          --dcSource="test-results/accounting-coverage.xml"
         continue-on-error: true
         timeout-minutes: 15
 

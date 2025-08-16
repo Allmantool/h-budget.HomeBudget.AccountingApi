@@ -12,7 +12,7 @@ if [ ${PULL_REQUEST_ID} ]; then
         /d:sonar.pullrequest.branch="${PULL_REQUEST_SOURCE_BRANCH}" \
         /d:sonar.pullrequest.base="${PULL_REQUEST_TARGET_BRANCH}" \
         /d:sonar.coverage.exclusions="**/Test[s]/**/*" \
-        /d:sonar.cs.dotcover.reportsPaths="test-results/accounting-coverage.xml" \
+        /d:sonar.cs.dotcover.reportsPaths="test-results/accounting-coverage.html" \
         /d:sonar.pullrequest.provider="github" \
         /d:sonar.pullrequest.github.repository="Allmantool/h-budget.HomeBudget.AccountingApi" \
         /d:sonar.pullrequest.github.endpoint="https://api.github.com/"
@@ -29,6 +29,6 @@ else
         /d:sonar.branch.name="master" \
         /d:sonar.login="${SONAR_TOKEN}" \
         /d:sonar.host.url="https://sonarcloud.io" \
-        /d:sonar.cs.dotcover.reportsPaths="test-results/accounting-coverage.xml" \
+        /d:sonar.cs.dotcover.reportsPaths="test-results/accounting-coverage.html" \
         /d:sonar.coverage.exclusions="**/Test[s]/**/*"
 fi
