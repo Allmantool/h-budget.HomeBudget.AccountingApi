@@ -331,7 +331,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = categoryType.Id,
+                CategoryType = categoryType.Key,
                 NameNodes =
                 [
                     nameof(categoryType),
@@ -354,7 +354,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 InitialBalance = initialBalance,
                 Description = "test-account",
-                AccountType = AccountTypes.Deposit.Id,
+                AccountType = AccountTypes.Deposit.Key,
                 Agent = "Personal",
                 Currency = "usd"
             };
