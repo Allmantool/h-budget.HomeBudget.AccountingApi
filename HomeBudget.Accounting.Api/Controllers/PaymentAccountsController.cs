@@ -77,7 +77,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 request.InitialBalance,
                 request.Currency,
                 request.Description,
-                BaseEnumeration.FromValue<AccountTypes>(request.AccountType));
+                BaseEnumeration<AccountTypes, int>.FromValue(request.AccountType));
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 
@@ -120,7 +120,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 Balance = request.Balance,
                 Currency = request.Currency,
                 Description = request.Description,
-                Type = BaseEnumeration.FromValue<AccountTypes>(request.AccountType)
+                Type = BaseEnumeration<AccountTypes, int>.FromValue(request.AccountType)
             };
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(paymentAccountId, paymentAccountForUpdate);

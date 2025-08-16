@@ -10,7 +10,7 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
         public PaymentHistoryMappingProfiler()
         {
             CreateMap<FinancialTransaction, HistoryOperationRecordResponse>()
-                .ForMember(dest => dest.TransactionType, opt => opt.MapFrom(src => src.TransactionType.Id));
+                .ForMember(dest => dest.TransactionType, opt => opt.MapFrom(src => src.TransactionType.Key));
 
             CreateMap<PaymentOperationHistoryRecord, PaymentOperationHistoryRecordResponse>();
         }

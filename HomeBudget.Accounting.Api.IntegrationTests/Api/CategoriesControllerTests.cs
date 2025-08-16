@@ -96,14 +96,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getByIdPayload = getByIdResponse.Data;
 
-            getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType.Id);
+            getByIdPayload.Payload.CategoryType.Should().Be(outcomeOperationType.Key);
         }
 
         private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string categoryNode)
         {
             var requestSaveBody = new CreateCategoryRequest
             {
-                CategoryType = categoryType.Id,
+                CategoryType = categoryType.Key,
                 NameNodes =
                 [
                     nameof(categoryType),
