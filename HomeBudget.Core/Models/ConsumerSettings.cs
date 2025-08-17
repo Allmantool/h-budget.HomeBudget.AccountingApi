@@ -14,7 +14,7 @@
         public int SessionTimeoutMs { get; set; } = 90000;
         public int HeartbeatIntervalMs { get; set; } = 3000;
         public int ConsumerCircuitBreakerDelayInSeconds { get; set; } = 5;
-        public long ConsumeDelayInMilliseconds { get; set; } = 800;
+        public long ConsumeDelayInMilliseconds { get; set; } = 300;
         public string Debug { get; set; } = "all";
         public int PartitionAssignmentStrategy { get; set; } = 2;
         public int ConsumerHealthCheckIntervalSeconds { get; set; } = 90;

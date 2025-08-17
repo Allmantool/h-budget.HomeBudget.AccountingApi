@@ -7,15 +7,21 @@ using EventStore.Client;
 
 using HomeBudget.Core;
 
-namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
+namespace EventStoreDbClient
 {
     public interface IEventStoreDbClient<T>
     {
         Task<IWriteResult> SendAsync(
             T eventForSending,
-            string streamName = default,
-            string eventType = default,
+            string streamName,
+            string eventType,
             CancellationToken token = default);
+
+        Task<IWriteResult> SendBatchAsync(
+            IEnumerable<T> eventsForSending,
+            string streamName,
+            string eventType = null,
+            CancellationToken ctx = default);
 
         IAsyncEnumerable<T> ReadAsync(
             string streamName,

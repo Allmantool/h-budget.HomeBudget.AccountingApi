@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Threading.Channels;
 
 using EventStore.Client;
+using EventStoreDbClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -8,6 +10,7 @@ using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
+using HomeBudget.Accounting.Infrastructure.BackgroundServices;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Components.Operations.Builders;
@@ -37,6 +40,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
+                .RegisterBackgroundServices()
                 .RegisterMongoDbClient(webHostEnvironment);
         }
 
@@ -61,6 +65,13 @@ namespace HomeBudget.Components.Operations.Configuration
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
         {
             return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
+        }
+
+        private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
+        {
+            return services
+                .AddSingleton(Channel.CreateUnbounded<PaymentOperationEvent>())
+                .AddHostedService<PaymentOperationsBatchProcessorBackgroundService>();
         }
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)

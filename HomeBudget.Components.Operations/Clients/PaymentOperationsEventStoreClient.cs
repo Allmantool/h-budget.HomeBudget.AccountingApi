@@ -7,6 +7,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using EventStore.Client;
+using EventStoreDbClient;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -16,12 +17,11 @@ using Polly.Retry;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 
 namespace HomeBudget.Components.Operations.Clients
 {
@@ -39,6 +39,7 @@ namespace HomeBudget.Components.Operations.Clients
 
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
+        private readonly SemaphoreSlim requestRateLimiter;
 
         public PaymentOperationsEventStoreClient(
             ILogger<PaymentOperationsEventStoreClient> logger,
@@ -46,7 +47,7 @@ namespace HomeBudget.Components.Operations.Clients
             IDateTimeProvider dateTimeProvider,
             EventStoreClient client,
             IOptions<EventStoreDbOptions> options)
-            : base(client, options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+            : base(client, logger)
         {
             _opts = options.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -54,11 +55,41 @@ namespace HomeBudget.Components.Operations.Clients
             _dateTimeProvider = dateTimeProvider;
             _paymentEventChannel = PaymentOperationEventChannelFactory.CreateChannel(_opts);
             _retryPolicy = EventStoreRetryPolicies.BuildRetryPolicy(_opts, _logger);
-
+            requestRateLimiter = new(_opts.RequestRateLimiter);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
-                t => PaymentOperationsEventStoreClientLogs.BatchProcessorCrashed(_logger, t.Exception!),
+                t => PaymentOperationsEventStoreClientLogs.BatchProcessorCrashed(_logger, t.Exception),
                 TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        public override async Task<IWriteResult> SendBatchAsync(
+            IEnumerable<PaymentOperationEvent> eventsForSending,
+            string streamName,
+            string eventType = null,
+            CancellationToken ctx = default)
+        {
+            try
+            {
+                await requestRateLimiter.WaitAsync(ctx);
+
+                return await _retryPolicy.ExecuteAsync(
+                    async retryCtx =>
+                    {
+                        var result = await base.SendBatchAsync(eventsForSending, streamName, eventType, ctx);
+
+                        return result;
+                    },
+                    ctx);
+            }
+            catch (Exception ex)
+            {
+                await SendToDeadLetterQueueAsync(eventsForSending, ex);
+                throw;
+            }
+            finally
+            {
+                requestRateLimiter.Release();
+            }
         }
 
         public override async Task<IWriteResult> SendAsync(
@@ -227,6 +258,7 @@ namespace HomeBudget.Components.Operations.Clients
             try
             {
                 _processorTask?.Wait(TimeSpan.FromSeconds(5));
+                requestRateLimiter.Dispose();
 
                 base.Dispose();
             }
