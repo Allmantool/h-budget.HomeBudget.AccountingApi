@@ -10,6 +10,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
@@ -24,6 +25,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         private readonly Lock _lock = new();
         private readonly ILogger<BaseKafkaConsumer<TKey, TValue>> _logger;
         private readonly IConsumer<TKey, TValue> _consumer;
+        private readonly ConsumerSettings _consumerSettings;
         private bool _disposed;
 
         protected BaseKafkaConsumer(
@@ -35,26 +37,26 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 throw new ArgumentNullException(nameof(KafkaOptions.ConsumerSettings));
             }
 
-            var consumerSettings = kafkaOptions.ConsumerSettings;
+            _consumerSettings = kafkaOptions.ConsumerSettings;
 
-            ConsumerId = consumerSettings.ClientId;
+            ConsumerId = _consumerSettings.ClientId;
 
             var consumerConfig = new ConsumerConfig
             {
                 // GroupInstanceId = ConsumerId,
-                ClientId = consumerSettings.ClientId,
-                BootstrapServers = consumerSettings.BootstrapServers,
-                GroupId = $"{consumerSettings.GroupId}",
-                AutoOffsetReset = (AutoOffsetReset)consumerSettings.AutoOffsetReset,
-                EnableAutoCommit = consumerSettings.EnableAutoCommit,
-                AllowAutoCreateTopics = consumerSettings.AllowAutoCreateTopics,
-                MaxPollIntervalMs = consumerSettings.MaxPollIntervalMs,
-                SessionTimeoutMs = consumerSettings.SessionTimeoutMs,
-                HeartbeatIntervalMs = consumerSettings.HeartbeatIntervalMs,
-                Debug = consumerSettings.Debug,
-                FetchMaxBytes = consumerSettings.FetchMaxBytes,
-                FetchWaitMaxMs = consumerSettings.FetchWaitMaxMs,
-                PartitionAssignmentStrategy = (PartitionAssignmentStrategy)consumerSettings.PartitionAssignmentStrategy
+                ClientId = _consumerSettings.ClientId,
+                BootstrapServers = _consumerSettings.BootstrapServers,
+                GroupId = $"{_consumerSettings.GroupId}",
+                AutoOffsetReset = (AutoOffsetReset)_consumerSettings.AutoOffsetReset,
+                EnableAutoCommit = _consumerSettings.EnableAutoCommit,
+                AllowAutoCreateTopics = _consumerSettings.AllowAutoCreateTopics,
+                MaxPollIntervalMs = _consumerSettings.MaxPollIntervalMs,
+                SessionTimeoutMs = _consumerSettings.SessionTimeoutMs,
+                HeartbeatIntervalMs = _consumerSettings.HeartbeatIntervalMs,
+                Debug = _consumerSettings.Debug,
+                FetchMaxBytes = _consumerSettings.FetchMaxBytes,
+                FetchWaitMaxMs = _consumerSettings.FetchWaitMaxMs,
+                PartitionAssignmentStrategy = (PartitionAssignmentStrategy)_consumerSettings.PartitionAssignmentStrategy
             };
 
             _logger = logger;
@@ -121,11 +123,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                     try
                     {
-                        var consumeResult = _consumer.Consume(TimeSpan.FromMilliseconds(500));
+                        var consumeResult = _consumer.Consume(TimeSpan.FromMilliseconds(_consumerSettings.ConsumeDelayInMilliseconds));
 
                         if (consumeResult == null)
                         {
-                            await Task.Delay(300, cancellationToken); // prevent busy loop
+                            await Task.Delay((int)_consumerSettings.ConsumeDelayInMilliseconds, cancellationToken);
                             continue;
                         }
 
@@ -151,7 +153,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
                         {
                             _logger.LogWarning("Topic/partition not found: {Reason}. Retrying...", ex.Error.Reason);
-                            await Task.Delay(5000, cancellationToken);
+                            await Task.Delay(_consumerSettings.HeartbeatIntervalMs, cancellationToken);
                         }
                         else
                         {

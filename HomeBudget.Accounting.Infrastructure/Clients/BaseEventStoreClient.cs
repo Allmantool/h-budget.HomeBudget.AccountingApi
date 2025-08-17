@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
@@ -10,45 +10,76 @@ using System.Threading.Tasks;
 using EventStore.Client;
 using Microsoft.Extensions.Logging;
 
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Infrastructure.Clients
+namespace EventStoreDbClient
 {
-    public abstract class BaseEventStoreClient<T>(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
-        : IEventStoreDbClient<T>, IDisposable
-        where T : new()
+    public abstract class BaseEventStoreClient<T> : IEventStoreDbClient<T>, IDisposable
+        where T : class, new()
     {
+        private readonly EventStoreClient _client;
+        private readonly ILogger _logger;
         private bool _disposed;
-        private static readonly ConcurrentDictionary<string, bool> AlreadySubscribedStreams = new();
+        private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new();
+
+        protected BaseEventStoreClient(EventStoreClient client, ILogger logger)
+        {
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
 
         public virtual async Task<IWriteResult> SendAsync(
             T eventForSending,
-            string streamName = default,
-            string eventType = default,
+            string streamName,
+            string eventType,
             CancellationToken token = default)
         {
-            var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
+            ArgumentNullException.ThrowIfNull(eventForSending);
 
-            var eventData = new EventData(
-                Uuid.NewUuid(),
-                eventType ?? $"{nameof(T)}_{utf8Bytes.Length}",
-                utf8Bytes.AsMemory());
+            var eventData = CreateEventData(eventForSending, eventType);
 
-            var writeStreamName = streamName ?? nameof(T);
+            var writeStreamName = streamName ?? typeof(T).Name;
 
-            var writeResult = await client
-                .AppendToStreamAsync(
-                    writeStreamName,
-                    StreamState.Any,
-                    [eventData],
-                    cancellationToken: token);
+            var result = await _client.AppendToStreamAsync(
+                writeStreamName,
+                StreamState.Any,
+                [eventData],
+                cancellationToken: token);
 
             await EnsureSubscriptionAsync(writeStreamName, token);
 
-            return writeResult;
+            return result;
+        }
+
+        public virtual async Task<IWriteResult> SendBatchAsync(
+            IEnumerable<T> eventsForSending,
+            string streamName,
+            string eventType = null,
+            CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(eventsForSending);
+
+            var eventsToSend = eventsForSending
+                .Select(e => CreateEventData(e, eventType))
+                .ToList();
+
+            if (eventsToSend.Count == 0)
+            {
+                throw new ArgumentException("Batch is empty", nameof(eventsForSending));
+            }
+
+            var writeStreamName = streamName ?? typeof(T).Name;
+
+            var result = await _client.AppendToStreamAsync(
+                writeStreamName,
+                StreamState.Any,
+                eventsToSend,
+                cancellationToken: token);
+
+            await EnsureSubscriptionAsync(writeStreamName, token);
+
+            return result;
         }
 
         public virtual async IAsyncEnumerable<T> ReadAsync(
@@ -56,40 +87,28 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             int maxEvents = int.MaxValue,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var eventsAsyncStream = client.ReadStreamAsync(
-                Direction.Forwards,
-                streamName,
-                StreamPosition.Start,
-                cancellationToken: cancellationToken
-            );
+            var readState = _client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, cancellationToken: cancellationToken);
 
-            if (await eventsAsyncStream.ReadState == ReadState.StreamNotFound)
+            if (await readState.ReadState == ReadState.StreamNotFound)
             {
-                yield return default;
+                yield break;
             }
 
-            var eventsRead = 0;
+            var count = 0;
 
-            await foreach (var paymentOperationEvent in eventsAsyncStream)
+            await foreach (var resolvedEvent in readState.WithCancellation(cancellationToken))
             {
-                if (eventsRead >= maxEvents)
+                if (count >= maxEvents)
                 {
                     yield break;
                 }
 
-                var eventPayloadAsBytes = paymentOperationEvent.Event.Data.ToArray();
-                using var eventDataStream = new MemoryStream(eventPayloadAsBytes);
-
-                var deserializationResult = await JsonSerializer.DeserializeAsync<T>(eventDataStream, cancellationToken: cancellationToken);
-
-                if (deserializationResult == null)
+                var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
+                if (evt != null)
                 {
-                    continue;
+                    count++;
+                    yield return evt;
                 }
-
-                eventsRead++;
-
-                yield return deserializationResult;
             }
         }
 
@@ -98,80 +117,87 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             Func<T, Task> onEventAppeared,
             CancellationToken cancellationToken = default)
         {
-            await client.SubscribeToStreamAsync(
+            await _client.SubscribeToStreamAsync(
                 streamName,
-                FromStream.Start, // TODO: should be re-thinking what approach to use there
+                FromStream.Start,
                 async (_, resolvedEvent, ct) =>
                 {
-                    var eventPayloadAsBytes = resolvedEvent.Event.Data.ToArray();
-                    using var eventDataStream = new MemoryStream(eventPayloadAsBytes);
-
-                    var deserializedEvent = await JsonSerializer.DeserializeAsync<T>(eventDataStream, cancellationToken: ct);
-
-                    if (deserializedEvent != null)
+                    var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
+                    if (evt != null)
                     {
-                        await onEventAppeared(deserializedEvent);
+                        await onEventAppeared(evt);
                     }
                 },
-                cancellationToken: cancellationToken
-            );
+                cancellationToken: cancellationToken);
         }
 
-        public async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
+        private static EventData CreateEventData(T @event, string eventType)
         {
-            eventForSending.Metadata.Add(EventMetadataKeys.ExceptionDetails, exception.Message);
-
-            var utf8Bytes = JsonSerializer.SerializeToUtf8Bytes(eventForSending);
-
-            var eventData = new EventData(
-                Uuid.NewUuid(),
-                "Dead_letter_event_type",
-                utf8Bytes.AsMemory());
-
-            await client.AppendToStreamAsync(
-                    "Dead_letter_stream",
-                    StreamState.Any,
-                    [eventData],
-                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds));
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(@event);
+            return new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory());
         }
 
         private async Task EnsureSubscriptionAsync(string streamName, CancellationToken token)
         {
-            if (AlreadySubscribedStreams.ContainsKey(streamName))
+            if (SubscribedStreams.ContainsKey(streamName))
             {
                 return;
             }
 
             try
             {
-                if (AlreadySubscribedStreams.ContainsKey(streamName))
+                if (!SubscribedStreams.TryAdd(streamName, true))
                 {
                     return;
                 }
 
-                var eventsAsyncStream = client.ReadStreamAsync(
-                    Direction.Forwards,
-                    streamName,
-                    StreamPosition.Start,
-                    deadline: TimeSpan.FromSeconds(options.TimeoutInSeconds),
-                    cancellationToken: token
-                );
-
-                if (await eventsAsyncStream.ReadState != ReadState.StreamNotFound)
+                var readState = _client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, cancellationToken: token);
+                if (await readState.ReadState != ReadState.StreamNotFound)
                 {
-                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, cancellationToken: token);
-                    AlreadySubscribedStreams[streamName] = true;
+                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"BaseEventStoreClient: {ex.Message}");
+                _logger.LogError(ex, "Error ensuring subscription for stream {StreamName}", streamName);
             }
         }
 
-        protected virtual Task OnEventAppearedAsync(T eventData)
+        protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
+
+        public async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
         {
-            return Task.CompletedTask;
+            ArgumentNullException.ThrowIfNull(eventForSending);
+
+            eventForSending.Metadata ??= [];
+            eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception.Message;
+
+            var data = CreateEventData((T)(object)eventForSending, "DeadLetter");
+
+            await _client.AppendToStreamAsync(
+                "DeadLetterStream",
+                StreamState.Any,
+                [data],
+                cancellationToken: default);
+        }
+
+        public async Task SendToDeadLetterQueueAsync(
+            IEnumerable<BaseEvent> eventsForSending,
+            Exception exception)
+        {
+            foreach (var eventForSending in eventsForSending)
+            {
+                eventForSending.Metadata ??= [];
+                eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception?.Message;
+            }
+
+            var data = eventsForSending.Select(ev => CreateEventData((T)(object)ev, "DeadLetter"));
+
+            await _client.AppendToStreamAsync(
+                "DeadLetterStream",
+                StreamState.Any,
+                data,
+                cancellationToken: default);
         }
 
         public void Dispose()
