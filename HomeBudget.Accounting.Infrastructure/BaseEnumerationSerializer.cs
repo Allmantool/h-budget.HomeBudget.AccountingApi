@@ -19,6 +19,11 @@ namespace HomeBudget.Accounting.Infrastructure
 
         public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, TEnum value)
         {
+            if (value is null || context is null)
+            {
+                return;
+            }
+
             BsonSerializer.Serialize(context.Writer, value.Key);
         }
     }

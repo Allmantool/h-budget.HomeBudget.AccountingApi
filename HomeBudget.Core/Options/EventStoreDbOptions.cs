@@ -20,5 +20,10 @@ namespace HomeBudget.Core.Options
         public int ChannelOperationTimeout { get; init; } = 120;
         public double RetryRiseNumber { get; init; } = 3;
         public int ChannelCapacity { get; init; } = 5000;
+
+        public int EventProcessingBatchSize { get; init; } = 220;
+        public int RequestRateLimiter { get; init; } = 32;
+
+        public int BatchProcessingFlushPeriodInMs { get; init; } = 200;
     }
 }

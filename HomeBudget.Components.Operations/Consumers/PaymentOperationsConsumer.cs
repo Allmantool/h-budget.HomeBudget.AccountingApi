@@ -2,6 +2,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
@@ -18,7 +18,7 @@ namespace HomeBudget.Components.Operations.Consumers
 {
     internal class PaymentOperationsConsumer(
         ILogger<PaymentOperationsConsumer> logger,
-        IPaymentOperationsDeliveryHandler operationsDeliveryHandler,
+        Channel<PaymentOperationEvent> paymentEventsChannel,
         IOptions<KafkaOptions> kafkaOptions)
         : BaseKafkaConsumer<string, string>(EnrichConsumerOptions(kafkaOptions.Value), logger)
     {
@@ -61,7 +61,7 @@ namespace HomeBudget.Components.Operations.Consumers
 
                         paymentEvent.Metadata.Add(EventMetadataKeys.FromMessage, message.Key);
 
-                        await operationsDeliveryHandler.HandleAsync(paymentEvent, cancellationToken);
+                        await paymentEventsChannel.Writer.WriteAsync(paymentEvent);
                     }
                     catch (JsonException ex)
                     {

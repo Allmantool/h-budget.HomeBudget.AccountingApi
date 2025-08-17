@@ -75,7 +75,7 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 .RegisterBackgroundServices();
         }
 
-        internal static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
+        private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
             return services
                 .AddHostedService<KafkaConsumerHealthMonitorBackgroundService>()
