@@ -23,6 +23,7 @@ namespace HomeBudget.Accounting.Api.Configuration
             IWebHostEnvironment webHostEnvironment)
         {
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
             return services
                 .SetUpConfigurationOptions(configuration)

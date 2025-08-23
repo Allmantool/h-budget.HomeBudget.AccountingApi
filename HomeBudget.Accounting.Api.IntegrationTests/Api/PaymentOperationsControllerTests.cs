@@ -46,6 +46,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
+                OperationDate = new DateOnly(2027, 1, 3)
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
@@ -286,12 +287,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
                 ContractorId = Guid.NewGuid().ToString(),
+                OperationDate = new DateOnly(2024, 1, 6),
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestCreateBody);
 
-            var saveResponseResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
+            var saveResponseResult = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 1000);
             var justCreatedOperationId = saveResponseResult.Data?.Payload.PaymentOperationId;
 
             var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
@@ -301,13 +303,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 17.22m,
                 Comment = "Some update description",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString()
+                ContractorId = Guid.NewGuid().ToString(),
+                OperationDate = new DateOnly(2025, 2, 7)
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{justCreatedOperationId}", Method.Patch)
                 .AddJsonBody(requestUpdateBody);
 
-            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation, executionDelayAfterInMs: 5000);
+            await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation, executionDelayAfterInMs: 8_000);
 
             var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
@@ -370,7 +373,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestSaveBody);
 
             var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 3000);
+                .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
 
             return paymentsHistoryResponse.Data;
         }
