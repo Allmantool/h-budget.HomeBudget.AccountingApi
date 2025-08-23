@@ -34,6 +34,7 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
             _mongoContainer = new MongoDbBuilder()
                 .WithImage("mongo:7.0.5-rc0-jammy")

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 using MediatR;
 
+using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
@@ -93,7 +94,8 @@ namespace HomeBudget.Components.Operations.Services
                 Comment = payload.Comment,
                 CategoryId = Guid.Parse(payload.CategoryId),
                 ContractorId = Guid.Parse(payload.ContractorId),
-                OperationDay = payload.OperationDate
+                OperationDay = payload.OperationDate,
+                TransactionType = TransactionTypes.Payment
             };
 
             return await mediator.Send(new UpdatePaymentOperationCommand(operationForUpdate), token);

@@ -96,7 +96,7 @@ namespace HomeBudget.Accounting.Api.Controllers
             var response = new UpdateOperationResponse
             {
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = updateResponseResult.Payload.ToString()
+                PaymentOperationId = updateResponseResult.Payload.ToString(),
             };
 
             return Result<UpdateOperationResponse>.Succeeded(response);

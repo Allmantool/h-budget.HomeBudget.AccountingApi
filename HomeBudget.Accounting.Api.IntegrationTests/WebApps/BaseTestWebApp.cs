@@ -24,6 +24,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
         protected BaseTestWebApp()
         {
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
 
