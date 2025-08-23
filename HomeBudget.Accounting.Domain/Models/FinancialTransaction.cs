@@ -6,13 +6,13 @@ namespace HomeBudget.Accounting.Domain.Models
 {
     public class FinancialTransaction : DomainEntity
     {
-        public TransactionTypes TransactionType { get; init; }
-        public DateOnly OperationDay { get; init; }
+        public TransactionTypes TransactionType { get; set; }
+        public DateOnly OperationDay { get; set; }
         public string Comment { get; set; }
         public Guid ContractorId { get; set; }
-        public Guid CategoryId { get; init; }
-        public Guid PaymentAccountId { get; init; }
-        public decimal Amount { get; init; }
-        public int ScopedOperationId { get; init; }
+        public Guid CategoryId { get; set; }
+        public Guid PaymentAccountId { get; set; }
+        public decimal Amount { get; set; }
+        public int ScopedOperationId { get; set; }
     }
 }

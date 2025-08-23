@@ -19,6 +19,7 @@ namespace HomeBudget.Components.Operations.Tests
         public void Setup()
         {
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
         }
 
         [Test]
@@ -58,13 +59,13 @@ namespace HomeBudget.Components.Operations.Tests
 
             var category = categoryFactory.Create(
                 CategoryTypes.Expense,
-                new[] { "Node1", "Node2" }
+                ["Node1", "Node2"]
             );
 
             var expectedBsonDocument = new BsonDocument
             {
                 { "Key", new BsonBinaryData(category.Key, GuidRepresentation.Standard) },
-                { "NameNodes", new BsonArray(new[] { "Node1", "Node2" }) },
+                { "NameNodes", new BsonArray(["Node1", "Node2"]) },
                 { "CategoryKey", "1-Node1,Node2" },
                 { "OperationUnixTime", category.OperationUnixTime }
             };
