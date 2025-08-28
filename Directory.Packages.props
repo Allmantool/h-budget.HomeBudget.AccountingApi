@@ -60,7 +60,7 @@
     <PackageVersion Include="Serilog.Sinks.Seq" Version="9.0.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.15.0.120848" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.4" />
     <PackageVersion Include="Testcontainers" Version="4.6.0" />
     <PackageVersion Include="Testcontainers.EventStoreDb" Version="4.6.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="4.6.0" />
