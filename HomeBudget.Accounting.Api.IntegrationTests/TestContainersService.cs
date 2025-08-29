@@ -51,6 +51,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithName($"{nameof(TestContainersService)}-event-store-db-container")
                         .WithHostname("test-eventsource-db-host")
                         .WithPortBinding(2117, 2117)
+                        .WithEnvironment("EVENTSTORE_COMMIT_TIMEOUT_MS", "30000")
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
                         .WithWaitStrategy(Wait.ForUnixContainer())
@@ -194,8 +195,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     await admin.CreateTopicsAsync(
                     [
-                        new TopicSpecification { Name = BaseTopics.AccountingAccounts, NumPartitions = 1, ReplicationFactor = 1 },
-                        new TopicSpecification { Name = BaseTopics.AccountingPayments, NumPartitions = 1, ReplicationFactor = 1 }
+                        new TopicSpecification
+                        {
+                            Name = BaseTopics.AccountingAccounts,
+                            NumPartitions = 1,
+                            ReplicationFactor = 1
+                        },
+                        new TopicSpecification
+                        {
+                            Name = BaseTopics.AccountingPayments,
+                            NumPartitions = 5,
+                            ReplicationFactor = 1
+                        },
                     ]);
                 }
                 catch (Exception ex)

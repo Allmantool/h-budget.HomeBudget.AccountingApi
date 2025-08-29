@@ -51,9 +51,20 @@ namespace HomeBudget.Test.Core.Models
         public ushort GetMappedPublicPort(int containerPort) => (ushort)containerPort;
         public ushort GetMappedPublicPort(string containerPort) => ushort.Parse(containerPort);
 
+        // Fixed: Return 0 (invalid port) since no default port mapping exists
+        public ushort GetMappedPublicPort() => 0;
+
+        // Fixed: Return empty dictionary since no port mappings are tracked
+        public IReadOnlyDictionary<ushort, ushort> GetMappedPublicPorts() =>
+            new Dictionary<ushort, ushort>();
+
         public Task<long> GetExitCodeAsync(CancellationToken ct = default) => Task.FromResult(0L);
-        public Task<(string Stdout, string Stderr)> GetLogsAsync(DateTime since = default, DateTime until = default, bool timestampsEnabled = true, CancellationToken ct = default)
-            => Task.FromResult(("", ""));
+
+        public Task<(string Stdout, string Stderr)> GetLogsAsync(
+            DateTime since = default,
+            DateTime until = default,
+            bool timestampsEnabled = true,
+            CancellationToken ct = default) => Task.FromResult(("", ""));
 
         public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -65,10 +76,11 @@ namespace HomeBudget.Test.Core.Models
         public Task CopyAsync(DirectoryInfo source, string target, UnixFileModes fileMode = default, CancellationToken ct = default) => Task.CompletedTask;
         public Task CopyAsync(FileInfo source, string target, UnixFileModes fileMode = default, CancellationToken ct = default) => Task.CompletedTask;
 
-        public Task<byte[]> ReadFileAsync(string filePath, CancellationToken ct = default) => Task.FromResult(Array.Empty<byte>());
+        public Task<byte[]> ReadFileAsync(string filePath, CancellationToken ct = default) =>
+            Task.FromResult(Array.Empty<byte>());
 
-        public Task<ExecResult> ExecAsync(IList<string> command, CancellationToken ct = default)
-            => Task.FromResult(default(ExecResult));
+        public Task<ExecResult> ExecAsync(IList<string> command, CancellationToken ct = default) =>
+            Task.FromResult(default(ExecResult));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
