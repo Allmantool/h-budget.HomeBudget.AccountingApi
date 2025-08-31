@@ -137,7 +137,7 @@ jobs:
             --dcOutput="test-results/accounting-coverage.html" \
             --dcFilters="+:HomeBudget.*;"
 
-        continue-on-error: true
+        # continue-on-error: true
         timeout-minutes: 15
 
       - name: Upload coverage artifact
