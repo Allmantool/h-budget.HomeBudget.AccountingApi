@@ -76,11 +76,9 @@ namespace HomeBudget.Test.Core.Models
         public Task CopyAsync(DirectoryInfo source, string target, UnixFileModes fileMode = default, CancellationToken ct = default) => Task.CompletedTask;
         public Task CopyAsync(FileInfo source, string target, UnixFileModes fileMode = default, CancellationToken ct = default) => Task.CompletedTask;
 
-        public Task<byte[]> ReadFileAsync(string filePath, CancellationToken ct = default) =>
-            Task.FromResult(Array.Empty<byte>());
+        public Task<byte[]> ReadFileAsync(string filePath, CancellationToken ct = default) => Task.FromResult(Array.Empty<byte>());
 
-        public Task<ExecResult> ExecAsync(IList<string> command, CancellationToken ct = default) =>
-            Task.FromResult(default(ExecResult));
+        public Task<ExecResult> ExecAsync(IList<string> command, CancellationToken ct = default) => Task.FromResult(default(ExecResult));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
