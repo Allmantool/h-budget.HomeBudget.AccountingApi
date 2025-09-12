@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,10 +26,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     {
         public async Task<Result<Guid>> Handle(RemoveTransferCommand request, CancellationToken cancellationToken)
         {
-            foreach (var paymentOperation in request.PaymentOperations)
-            {
-                await HandleAsync(new RemovePaymentOperationCommand(paymentOperation), cancellationToken);
-            }
+            var paymentOperations = request.PaymentOperations;
+
+            await Task.WhenAll(paymentOperations.Select(op => HandleAsync(new RemovePaymentOperationCommand(op), cancellationToken)));
 
             return Result<Guid>.Succeeded(request.Key);
         }
