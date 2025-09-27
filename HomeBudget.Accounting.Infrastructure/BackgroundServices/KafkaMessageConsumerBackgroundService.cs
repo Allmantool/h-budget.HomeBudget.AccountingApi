@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Helpers;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
