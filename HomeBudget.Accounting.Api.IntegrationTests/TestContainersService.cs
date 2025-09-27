@@ -48,10 +48,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
                         .WithImage("eventstore/eventstore:24.10.4-jammy")
-                        .WithName($"{nameof(TestContainersService)}-event-store-db-container")
+                        .WithName($"{nameof(TestContainersService)}-event-store-db-container-{Guid.NewGuid()}")
                         .WithHostname("test-eventsource-db-host")
                         .WithPortBinding(2117, 2117)
-                        .WithEnvironment("EVENTSTORE_COMMIT_TIMEOUT_MS", "30000")
+                        .WithEnvironment("EVENTSTORE_INSECURE", "true")
+                        .WithEnvironment("EVENTSTORE_HTTP_PORT", "2117")
+                        .WithEnvironment("EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP", "true")
+                        .WithEnvironment("EVENTSTORE_CLUSTER_SIZE", "1")
+                        .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "System")
+                        .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
+                        .WithEnvironment("EVENTSTORE_COMMIT_TIMEOUT_MS", "60000")
+                        .WithEnvironment("EVENTSTORE_WRITE_TIMEOUT_MS", "60000")
+                        .WithEnvironment("EVENTSTORE_DISABLE_HTTP_CACHING", "true")
+                        .WithEnvironment("EVENTSTORE_MAX_MEM_TABLE_SIZE", "100000")
+                        .WithEnvironment("EVENTSTORE_CACHED_CHUNKS", "512")
+                        .WithEnvironment("EVENTSTORE_MIN_FLUSH_DELAY_MS", "2000")
+                        .WithEnvironment("EVENTSTORE_STATS_PERIOD_SEC", "60")
+                        .WithEnvironment("EVENTSTORE_SKIP_DB_VERIFY", "true")
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
                         .WithWaitStrategy(Wait.ForUnixContainer())
@@ -102,7 +115,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     KafkaContainer = new KafkaBuilder()
                         .WithImage("confluentinc/cp-kafka:7.9.0")
-                        .WithName($"{nameof(TestContainersService)}-kafka-container")
+                        .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                         .WithHostname("test-kafka")
                         .WithPortBinding(9092, 9092)
                         .WithPortBinding(29092, 29092)
@@ -165,7 +178,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     MongoDbContainer = new MongoDbBuilder()
                         .WithImage("mongo:7.0.5-rc0-jammy")
-                        .WithName($"{nameof(TestContainersService)}-mongo-db-container")
+                        .WithName($"{nameof(TestContainersService)}-mongo-db-container-{Guid.NewGuid()}")
                         .WithHostname("test-mongo-db-host")
                         .WithPortBinding(28117, 28117)
                         .WithAutoRemove(true)
@@ -183,8 +196,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         KafkaContainer.StartAsync(),
                         KafkaUIContainer.StartAsync(),
                         MongoDbContainer.StartAsync());
-
-                    await Task.Delay(TimeSpan.FromSeconds(60));
 
                     var config = new AdminClientConfig
                     {
@@ -208,6 +219,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                             ReplicationFactor = 1
                         },
                     ]);
+
+                    await Task.Delay(TimeSpan.FromSeconds(60));
                 }
                 catch (Exception ex)
                 {
@@ -215,8 +228,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     Console.WriteLine(ex);
                     throw;
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(15));
             }
         }
 

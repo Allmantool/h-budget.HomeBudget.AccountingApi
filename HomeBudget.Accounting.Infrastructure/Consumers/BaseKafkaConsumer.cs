@@ -94,29 +94,26 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public abstract Task ConsumeAsync(CancellationToken stoppingToken);
 
-        public bool IsAlive
+        public bool IsAlive()
         {
-            get
+            if (_disposed || _consumer == null)
             {
-                if (_disposed || _consumer == null)
-                {
-                    return false;
-                }
+                return false;
+            }
 
-                try
-                {
-                    var _ = _consumer.Subscription;
-                    return true;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return false;
-                }
-                catch (KafkaException ex) when (ex.Error.IsFatal)
-                {
-                    BaseKafkaConsumerLogs.FatalKafkaError(_logger, ex);
-                    return false;
-                }
+            try
+            {
+                var _ = _consumer.Subscription;
+                return true;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+            catch (KafkaException ex) when (ex.Error.IsFatal)
+            {
+                BaseKafkaConsumerLogs.FatalKafkaError(_logger, ex);
+                return false;
             }
         }
 

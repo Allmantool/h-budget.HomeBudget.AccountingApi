@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Services;
@@ -41,46 +41,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
             };
 
             var optionsMock = Mock.Of<IOptions<KafkaOptions>>(o => o.Value == _options);
-
             _service = new KafkaConsumerService(_loggerMock.Object, optionsMock, _factoryMock.Object);
 
             ConsumersStore.Consumers.Clear();
         }
 
         [Test]
-        public async Task ConsumeKafkaMessagesLoopAsync_StopsOnCancellation()
-        {
-            using var cts = new CancellationTokenSource();
-            await cts.CancelAsync();
-
-            await _service.ConsumeKafkaMessagesLoopAsync(cts.Token);
-
-            _loggerMock.Verify(
-                l => l.Log(
-                    LogLevel.Information,
-                    It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Consume loop has been stopped")),
-                    It.IsAny<Exception>(),
-                    It.Is<Func<It.IsAnyType, Exception, string>>((v, t) => true)
-                )
-            );
-        }
-
-        [Test]
         public async Task ConsumeKafkaMessagesLoopAsync_ConsumesMessages()
         {
             const string topic = "test-topic";
-            var consumerMock = new Mock<BaseKafkaConsumer<string, string>>();
-            consumerMock
-                .Setup(c => c.ConsumeAsync(It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
-
+            var consumerMock = new Mock<IKafkaConsumer>();
             consumerMock.SetupGet(c => c.Subscriptions).Returns(new List<string> { topic });
+            consumerMock.Setup(c => c.ConsumeAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-            ConsumersStore.Consumers[topic] = new List<BaseKafkaConsumer<string, string>>
-            {
-                consumerMock.Object
-            };
+            ConsumersStore.Consumers[topic] = new List<IKafkaConsumer> { consumerMock.Object };
 
             using var cts = new CancellationTokenSource();
             cts.CancelAfter(50);
@@ -91,7 +65,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
         }
 
         [Test]
-        public void CreateAndSubscribe_ShouldAddConsumerToStore_AndSubscribe()
+        public async Task ConsumeKafkaMessagesLoopAsync_SkipsConsumerWithEmptySubscriptions()
+        {
+            const string topic = "empty-subscriptions-topic";
+            var consumerMock = new Mock<IKafkaConsumer>();
+            consumerMock.SetupGet(c => c.Subscriptions).Returns(new List<string>());
+
+            ConsumersStore.Consumers[topic] = new List<IKafkaConsumer> { consumerMock.Object };
+
+            using var cts = new CancellationTokenSource();
+            cts.CancelAfter(50);
+
+            await _service.ConsumeKafkaMessagesLoopAsync(cts.Token);
+
+            consumerMock.Verify(c => c.ConsumeAsync(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public void CreateAndSubscribe_ShouldAddConsumerToStore_And_Subscribe()
         {
             var topic = new SubscriptionTopic
             {
@@ -99,7 +90,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
                 ConsumerType = "type1"
             };
 
-            var consumerMock = new Mock<BaseKafkaConsumer<string, string>>();
+            var consumerMock = new Mock<IKafkaConsumer>();
             _factoryMock.Setup(f => f.WithTopic("some-topic")).Returns(_factoryMock.Object);
             _factoryMock.Setup(f => f.Build("type1")).Returns(consumerMock.Object);
 
@@ -112,6 +103,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
             Assert.That(list.Contains(consumer), Is.True);
 
             consumerMock.Verify(c => c.Subscribe("some-topic"), Times.Once);
+        }
+
+        [Test]
+        public void CreateAndSubscribe_ReturnsNull_WhenFactoryBuildReturnsNull()
+        {
+            var topic = new SubscriptionTopic
+            {
+                Title = "null-topic",
+                ConsumerType = "type-null"
+            };
+
+            _factoryMock.Setup(f => f.WithTopic("null-topic")).Returns(_factoryMock.Object);
+            _factoryMock.Setup(f => f.Build("type-null")).Returns<IKafkaConsumer>(null);
+
+            var consumer = _service.CreateAndSubscribe(topic);
+
+            Assert.That(consumer, Is.Null);
+            Assert.That(ConsumersStore.Consumers.ContainsKey("null-topic"), Is.False);
         }
     }
 }

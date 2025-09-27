@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
@@ -39,7 +40,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                         continue;
                     }
 
-                    while (consumerSettings.MaxAccountingPaymentConsumers > GetAlivePaymentConsumers().Count())
+                    while (consumerSettings.MaxAccountingPaymentConsumers >= GetAlivePaymentConsumers().Count())
                     {
                         consumerService.CreateAndSubscribe(new SubscriptionTopic
                         {
@@ -68,11 +69,11 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             }
         }
 
-        private static IEnumerable<BaseKafkaConsumer<string, string>> GetAlivePaymentConsumers()
+        private static IEnumerable<IKafkaConsumer> GetAlivePaymentConsumers()
         {
             if (ConsumersStore.Consumers.TryGetValue(BaseTopics.AccountingPayments, out var paymentConsumers))
             {
-                return paymentConsumers.Where(p => p.IsAlive);
+                return paymentConsumers.Where(p => p.IsAlive());
             }
 
             return Enumerable.Empty<BaseKafkaConsumer<string, string>>();

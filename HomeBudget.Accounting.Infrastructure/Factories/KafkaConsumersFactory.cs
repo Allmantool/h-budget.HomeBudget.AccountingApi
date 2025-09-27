@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
@@ -19,7 +20,7 @@ namespace HomeBudget.Accounting.Infrastructure.Factories
             return this;
         }
 
-        public BaseKafkaConsumer<string, string> Build(string consumerType)
+        public IKafkaConsumer Build(string consumerType)
         {
             if (serviceProvider == null)
             {

@@ -48,7 +48,7 @@ namespace HomeBudget.Components.Operations.Clients
             IDateTimeProvider dateTimeProvider,
             EventStoreClient client,
             IOptions<EventStoreDbOptions> options)
-            : base(client, logger)
+            : base(client, options.Value, logger)
         {
             _opts = options.Value;
             _logger = logger;
