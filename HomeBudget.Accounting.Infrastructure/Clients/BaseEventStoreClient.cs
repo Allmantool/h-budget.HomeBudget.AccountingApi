@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Options;
 
 namespace EventStoreDbClient
 {
@@ -24,11 +25,13 @@ namespace EventStoreDbClient
         private readonly ILogger _logger;
         private bool _disposed;
         private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new();
+        private readonly EventStoreDbOptions _options;
 
-        protected BaseEventStoreClient(EventStoreClient client, ILogger logger)
+        protected BaseEventStoreClient(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
         {
             _client = client;
             _logger = logger;
+            _options = options;
         }
 
         public virtual async Task<IWriteResult> SendAsync(
@@ -45,11 +48,13 @@ namespace EventStoreDbClient
 
             await EnsureSubscriptionAsync(writeStreamName, token);
 
-            return await _client.AppendToStreamAsync(
+            var appendResult = await _client.AppendToStreamAsync(
                 writeStreamName,
                 StreamState.Any,
                 [eventData],
                 cancellationToken: token);
+
+            return appendResult;
         }
 
         public virtual async Task<IWriteResult> SendBatchAsync(
@@ -61,6 +66,7 @@ namespace EventStoreDbClient
             ArgumentNullException.ThrowIfNull(eventsForSending);
 
             var eventsToSend = eventsForSending
+                .AsParallel()
                 .Select(e => CreateEventData(e, eventType))
                 .ToList();
 
@@ -73,11 +79,13 @@ namespace EventStoreDbClient
 
             await EnsureSubscriptionAsync(writeStreamName, ctx);
 
-            return await _client.AppendToStreamAsync(
+            var appendResult = await _client.AppendToStreamAsync(
                 writeStreamName,
                 StreamState.Any,
                 eventsToSend,
                 cancellationToken: ctx);
+
+            return appendResult;
         }
 
         public virtual async IAsyncEnumerable<T> ReadAsync(
@@ -115,18 +123,27 @@ namespace EventStoreDbClient
             Func<T, Task> onEventAppeared,
             CancellationToken cancellationToken = default)
         {
-            await _client.SubscribeToStreamAsync(
-                streamName,
-                FromStream.Start,
-                async (_, resolvedEvent, ct) =>
-                {
-                    var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
-                    if (evt != null)
+            try
+            {
+                await _client.SubscribeToStreamAsync(
+                    streamName,
+                    FromStream.End,
+                    async (_, resolvedEvent, ct) =>
                     {
-                        await onEventAppeared(evt);
-                    }
-                },
-                cancellationToken: cancellationToken);
+                        var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
+                        if (evt != null)
+                        {
+                            await onEventAppeared(evt);
+                        }
+                    },
+                    cancellationToken: cancellationToken);
+
+                SubscribedStreams.TryAdd(streamName, true);
+            }
+            catch (Exception ex)
+            {
+                BaseEventStoreClientLogs.SubscriptionError(_logger, streamName, ex);
+            }
         }
 
         private static EventData CreateEventData(T @event, string eventType)
@@ -144,23 +161,7 @@ namespace EventStoreDbClient
 
             try
             {
-                var result = _client.ReadStreamAsync(
-                    Direction.Forwards,
-                    streamName,
-                    StreamPosition.Start,
-                    maxCount: 1,
-                    cancellationToken: token);
-
-                await using var enumerator = result.GetAsyncEnumerator(token);
-
-                if (await enumerator.MoveNextAsync())
-                {
-                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
-                }
-                else
-                {
-                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
-                }
+                await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
             {
@@ -168,7 +169,7 @@ namespace EventStoreDbClient
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "gRPC failure while probing stream {StreamName}", streamName);
+                _logger.SubscriptionRpcError(streamName, ex);
             }
             catch (Exception ex)
             {
@@ -198,15 +199,17 @@ namespace EventStoreDbClient
             IEnumerable<BaseEvent> eventsForSending,
             Exception exception)
         {
-            foreach (var eventForSending in eventsForSending)
+            Parallel.ForEach(eventsForSending, eventForSending =>
             {
-                eventForSending.Metadata ??= [];
+                eventForSending.Metadata ??= new Dictionary<string, string>();
                 eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception?.Message;
-            }
+            });
 
-            var data = eventsForSending.Select(ev => CreateEventData((T)(object)ev, "DeadLetter"));
+            var data = eventsForSending
+                .AsParallel()
+                .Select(ev => CreateEventData((T)(object)ev, "DeadLetter"));
 
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutInSeconds));
             await _client.AppendToStreamAsync(
                 "DeadLetterStream",
                 StreamState.Any,

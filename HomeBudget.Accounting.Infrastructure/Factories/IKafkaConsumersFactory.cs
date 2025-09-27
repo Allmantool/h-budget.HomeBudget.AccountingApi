@@ -1,10 +1,10 @@
-﻿using HomeBudget.Accounting.Infrastructure.Consumers;
+﻿using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
     internal interface IKafkaConsumersFactory
     {
-        BaseKafkaConsumer<string, string> Build(string consumerType);
+        IKafkaConsumer Build(string consumerType);
         IKafkaConsumersFactory WithTopic(string topicTitle);
     }
 }

@@ -10,13 +10,13 @@ namespace HomeBudget.Components.Operations.Logs
             EventId = 1000,
             Level = LogLevel.Information,
             Message = "Sending {EventType} for OperationKey={OperationKey}, CorrelationId={CorrelationId}")]
-        public static partial void SendingEvent(ILogger logger, string? eventType, string? operationKey, Guid correlationId);
+        public static partial void SendingEvent(ILogger logger, string eventType, string operationKey, Guid correlationId);
 
         [LoggerMessage(
             EventId = 1001,
             Level = LogLevel.Information,
             Message = "{EventType} sent: OperationKey={OperationKey}, CorrelationId={CorrelationId}")]
-        public static partial void EventSent(ILogger logger, string? eventType, string? operationKey, Guid correlationId);
+        public static partial void EventSent(ILogger logger, string eventType, string operationKey, Guid correlationId);
 
         [LoggerMessage(
             EventId = 1002,

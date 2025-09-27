@@ -80,7 +80,7 @@ namespace HomeBudget.Components.Operations.Configuration
 
             var serviceProvider = services.BuildServiceProvider();
             var eventStoreDbOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
-            var eventStoreUrl = eventStoreDbOptions.Url.ToString();
+            var eventStoreUrl = eventStoreDbOptions.Url.OriginalString;
 
             return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
                 ? services
