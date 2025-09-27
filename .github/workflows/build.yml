@@ -138,7 +138,7 @@ jobs:
             --dcFilters="+:HomeBudget.*;"
 
         # continue-on-error: true
-        timeout-minutes: 15
+        timeout-minutes: 30
 
       - name: Upload coverage artifact
         if: always()
