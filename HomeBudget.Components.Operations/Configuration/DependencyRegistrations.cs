@@ -78,13 +78,16 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
 
+            if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
+            {
+                return services;
+            }
+
             var serviceProvider = services.BuildServiceProvider();
             var eventStoreDbOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
             var eventStoreUrl = eventStoreDbOptions.Url.OriginalString;
 
-            return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
-                ? services
-                : services.AddEventStoreClient(
+            return services.AddEventStoreClient(
                     eventStoreUrl,
                     settings =>
                     {
