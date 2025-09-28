@@ -24,6 +24,6 @@ namespace HomeBudget.Core.Options
         public int EventProcessingBatchSize { get; init; } = 220;
         public int RequestRateLimiter { get; init; } = 32;
 
-        public int BatchProcessingFlushPeriodInMs { get; init; } = 200;
+        public int BatchProcessingFlushPeriodInMs { get; init; } = 100;
     }
 }

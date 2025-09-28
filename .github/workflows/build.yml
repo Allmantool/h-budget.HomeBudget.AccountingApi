@@ -114,9 +114,9 @@ jobs:
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
 
-  test-coverage:
+  unit-tests:
     needs: build-api
-    name: Test coverage
+    name: Unit Tests Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,28 +127,95 @@ jobs:
           dotnet-version: "9.0.x"
 
       - name: Install dotnet tools
-        run: |
-          dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
 
-      - name: Run dotCover tests and generate report
+      - name: Run dotCover Unit Tests
         run: |
-          dotnet-dotcover test \
+          dotnet-dotcover test HomeBudgetAccountingApi.sln \
             --dcReportType=HTML \
-            --dcOutput="test-results/accounting-coverage.html" \
-            --dcFilters="+:HomeBudget.*;"
+            --dcOutput="test-results/unit-coverage.html" \
+            --dcFilters="+:HomeBudget.*;-:module=*IntegrationTests;-:module=*Test.Core"
+        timeout-minutes: 10
 
-        # continue-on-error: true
-        timeout-minutes: 15
-
-      - name: Upload coverage artifact
+      - name: Upload Unit Coverage Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: unit-coverage-report
+          path: test-results/*
+
+  integration-tests:
+    needs: build-api
+    name: Integration Tests Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install dotnet tools
+        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+
+      - name: Run dotCover Integration Tests
+        run: |
+          dotnet-dotcover test HomeBudgetAccountingApi.sln \
+            --dcReportType=HTML \
+            --dcOutput="test-results/integration-coverage.html" \
+            --dcFilters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
+        timeout-minutes: 30
+
+      - name: Upload Integration Coverage Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-coverage-report
+          path: test-results/*
+
+  merge-coverage:
+    needs: [unit-tests, integration-tests]
+    name: Merge Coverage Reports
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install dotnet tools
+        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+
+      - name: Download Unit Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage-report
+          path: test-results/unit
+
+      - name: Download Integration Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-coverage-report
+          path: test-results/integration
+
+      - name: Merge Coverage
+        run: |
+          dotnet-dotcover merge \
+            test-results/unit/unit-coverage.html \
+            test-results/integration/integration-coverage.html \
+            --dcReportType=HTML \
+            --dcOutput="test-results/merged-coverage.html"
+
+      - name: Upload Merged Coverage Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-coverage-report
           path: test-results/*
 
   sonar-analysis:
-    needs: [test-coverage, build-api]
+    needs: [merge-coverage, build-api]
     name: Sonar scanning
     runs-on: ubuntu-latest
     steps:
@@ -204,7 +271,7 @@ jobs:
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api, test-coverage]
+    needs: [build-api, merge-coverage]
     runs-on: ubuntu-latest
     defaults:
       run:
