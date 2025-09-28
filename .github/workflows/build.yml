@@ -133,9 +133,9 @@ jobs:
 
       - name: Run dotCover Unit Tests
         run: |
-          dotCover cover \
-            /TargetExecutable=dotnet \
-            /TargetArguments="test HomeBudgetAccountingApi.sln --no-build --filter Category!=Integration -v:n" \
+          dotCover cover /TargetExecutable=dotnet -- test "HomeBudgetAccountingApi.sln" \
+            --no-build \
+            --filter "Category!=Integration" \
             /Output=test-results/unit-coverage.dcvr \
             /Filters="+:HomeBudget.*;-:module=*IntegrationTests;-:module=*Test.Core"
 
@@ -171,11 +171,11 @@ jobs:
 
       - name: Run dotCover Integration Tests
         run: |
-          dotCover cover \
-             /TargetExecutable=dotnet \
-             /TargetArguments="test HomeBudgetAccountingApi.sln --no-build -v:n" \
-             /Output=test-results/integration-coverage.dcvr \
-             /Filters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
+          dotCover cover /TargetExecutable=dotnet -- test "HomeBudgetAccountingApi.sln" \
+            --no-build \
+            -v:n \
+            /Output=test-results/integration-coverage.dcvr \
+            /Filters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
 
            dotCover report \
              /Source=test-results/integration-coverage.dcvr \
