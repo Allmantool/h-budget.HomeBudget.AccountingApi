@@ -126,15 +126,23 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install dotnet tools
-        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+      - name: Install dotCover CLI
+        run: |
+          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Run dotCover Unit Tests
         run: |
-          dotnet-dotcover test HomeBudgetAccountingApi.sln \
-            --dcReportType=HTML \
-            --dcOutput="test-results/unit-coverage.html" \
-            --dcFilters="+:HomeBudget.*;-:module=*IntegrationTests;-:module=*Test.Core"
+          dotCover cover \
+            /TargetExecutable=dotnet \
+            /TargetArguments="test HomeBudgetAccountingApi.sln --no-build --filter Category!=Integration -v:n" \
+            /Output=test-results/unit-coverage.dcvr \
+            /Filters="+:HomeBudget.*;-:module=*IntegrationTests;-:module=*Test.Core"
+
+          dotCover report \
+            /Source=test-results/unit-coverage.dcvr \
+            /Output=test-results/unit-coverage.html \
+            /ReportType=HTML
         timeout-minutes: 10
 
       - name: Upload Unit Coverage Artifact
@@ -156,15 +164,23 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install dotnet tools
-        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+      - name: Install dotCover CLI
+        run: |
+          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Run dotCover Integration Tests
         run: |
-          dotnet-dotcover test HomeBudgetAccountingApi.sln \
-            --dcReportType=HTML \
-            --dcOutput="test-results/integration-coverage.html" \
-            --dcFilters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
+          dotCover cover \
+             /TargetExecutable=dotnet \
+             /TargetArguments="test HomeBudgetAccountingApi.sln --no-build -v:n" \
+             /Output=test-results/integration-coverage.dcvr \
+             /Filters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
+
+           dotCover report \
+             /Source=test-results/integration-coverage.dcvr \
+             /Output=test-results/integration-coverage.html \
+             /ReportType=HTML
         timeout-minutes: 30
 
       - name: Upload Integration Coverage Artifact
@@ -184,8 +200,10 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Install dotnet tools
-        run: dotnet tool install --global JetBrains.dotCover.GlobalTool --version 2023.2.3
+      - name: Install dotCover CLI
+        run: |
+          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Download Unit Coverage
         uses: actions/download-artifact@v4
@@ -201,11 +219,15 @@ jobs:
 
       - name: Merge Coverage
         run: |
-          dotnet-dotcover merge \
-            test-results/unit/unit-coverage.html \
-            test-results/integration/integration-coverage.html \
-            --dcReportType=HTML \
-            --dcOutput="test-results/merged-coverage.html"
+          dotCover merge \
+            /Source=test-results/unit/unit-coverage.dcvr \
+            /Source=test-results/integration/integration-coverage.dcvr \
+            /Output=test-results/merged-coverage.dcvr
+
+          dotCover report \
+            /Source=test-results/merged-coverage.dcvr \
+            /Output=test-results/merged-coverage.html \
+            /ReportType=HTML
 
       - name: Upload Merged Coverage Artifact
         if: always()
