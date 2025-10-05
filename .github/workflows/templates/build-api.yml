@@ -1,0 +1,80 @@
+name: Build API
+on: workflow_call
+jobs:
+    build-api:
+        runs-on: ubuntu-latest
+        outputs:
+            pr_number: ${{ steps.find-pr.outputs.number }}
+            last_tag: ${{ steps.extract_tag.outputs.TARGET_TAG }}
+            pr: ${{ steps.find-pr.outputs.pr }}
+        steps:
+            - name: Check out code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup .NET SDK
+              uses: actions/setup-dotnet@v3
+              with:
+                  dotnet-version: "9.0.x"
+
+            - name: Setup Reviewdog
+              uses: reviewdog/action-setup@v1
+              with:
+                  reviewdog_version: "v0.20.3"
+
+            - name: Setup Java for SonarQube
+              uses: actions/setup-java@v3
+              with:
+                  distribution: "temurin"
+                  java-version: "21"
+
+            - name: Find Current PR
+              uses: jwalton/gh-find-current-pr@v1
+              id: find-pr
+              with:
+                  state: open
+
+            - name: Get PR Number
+              run: echo "Your PR is ${PR}"
+              if: success() && steps.find-pr.outputs.number
+              env:
+                  PR: ${{ steps.find-pr.outputs.pr }}
+
+            - name: Get Last Git Tag
+              id: extract_tag
+              shell: bash
+              run: |
+                  tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
+                  tag=$(echo $tag_v | sed 's/v//')
+
+                  echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
+                  echo "Last git tag: $tag"
+
+            - name: Install ReviewDog
+              run: |
+                  curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b ./bin
+                  echo "$(pwd)/bin" >> $GITHUB_PATH
+
+            - name: Build
+              run: dotnet build --no-incremental
+
+            - name: StyleCop with ReviewDog
+              run: |
+                  dotnet format --severity info | reviewdog -efm="%f(%l,%c): %m" -name="StyleCop" -reporter=github-pr-review || true
+                  echo "Format result (dummy): done" # Adjust this for real linting feedback
+
+            - name: Cache SonarCloud packages
+              uses: actions/cache@v3
+              with:
+                  path: ~/.sonar/cache
+                  key: ${{ runner.os }}-sonar
+                  restore-keys: ${{ runner.os }}-sonar
+
+            - name: Cache SonarCloud scanner
+              id: cache-sonar-scanner
+              uses: actions/cache@v3
+              with:
+                  path: ./.sonar/scanner
+                  key: ${{ runner.os }}-sonar-scanner
+                  restore-keys: ${{ runner.os }}-sonar-scanner
