@@ -3,6 +3,7 @@ on: workflow_call
 
 jobs:
   build-api:
+    name: Build Web app
     runs-on: ubuntu-latest
     outputs:
       pr_number: ${{ steps.find-pr.outputs.number }}
