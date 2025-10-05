@@ -35,10 +35,12 @@ jobs:
     uses: ./.github/workflows/update_semver.yml
 
   build-api:
+    name: Build app artifact
     needs: [update-tag-version]
     uses: ./.github/workflows/build-api.yml
 
   unit-tests:
+    name: Tests
     needs: [build-api]
     uses: ./.github/workflows/unit-tests.yml
 
