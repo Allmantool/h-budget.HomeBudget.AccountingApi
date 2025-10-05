@@ -1,0 +1,58 @@
+name: Unit Tests Coverage
+on: workflow_call
+
+jobs:
+    unit-tests:
+        name: Unit tests
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup .NET SDK
+              uses: actions/setup-dotnet@v3
+              with:
+                  dotnet-version: "9.0.x"
+
+            - name: Restore dependencies
+              run: dotnet restore HomeBudgetAccountingApi.sln
+
+            - name: Run unit tests and collect coverage
+              run: |
+                  mkdir -p test-results
+                  mkdir -p coverage
+
+                  dotnet test HomeBudgetAccountingApi.sln \
+                  --configuration Release \
+                  --filter "Category!=Integration" \
+                  --no-build \
+                  --logger "trx;LogFileName=test_results.trx" \
+                  --results-directory "test-results" \
+                  --collect:"XPlat Code Coverage"
+
+            - name: Install ReportGenerator tool
+              run: dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.4.16
+            - name: Add ReportGenerator to PATH
+              run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+            - name: Generate combined HTML & Cobertura coverage report
+              run: |
+                  reportgenerator \
+                    -reports:"test-results/**/coverage.cobertura.xml" \
+                    -targetdir:"coverage" \
+                    -reporttypes:"Html;Cobertura" \
+                    -assemblyfilters:"+HomeBudget.*;-*IntegrationTests*;-*Test.Core*"
+
+            - name: Upload Coverage Artifact
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: unit-coverage-html
+                  path: coverage/
+
+            - name: Upload Coverage XML for SonarQube
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: sonar-coverage-xml
+                  path: coverage/Cobertura.xml
