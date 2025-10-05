@@ -36,7 +36,7 @@ jobs:
 
   build-api:
     needs: [update-tag-version]
-    uses: ./.github/workflows/templates/build-api.yml
+    uses: ./.github/workflows/build-api.yml
 
   unit-tests:
     needs: build-api
