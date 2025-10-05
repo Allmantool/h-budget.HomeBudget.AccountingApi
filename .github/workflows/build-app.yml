@@ -39,42 +39,8 @@ jobs:
     uses: ./.github/workflows/build-api.yml
 
   unit-tests:
-    needs: build-api
-    name: Unit Tests Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Install dotCover CLI
-        run: |
-          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-
-      - name: Run dotCover Unit Tests
-        run: |
-          dotCover cover \
-            /TargetExecutable=dotnet \
-            -- test "HomeBudgetAccountingApi.sln" --filter "Category!=Integration" -v:n \
-            /Output=test-results/unit-coverage.dcvr \
-            /Filters="+:HomeBudget.*;-:module=*IntegrationTests;-:module=*Test.Core"
-
-          dotCover report \
-            /Source=test-results/unit-coverage.dcvr \
-            /Output=test-results/unit-coverage.html \
-            /ReportType=HTML
-        timeout-minutes: 10
-
-      - name: Upload Unit Coverage Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-coverage-report
-          path: test-results/*
+    needs: [build-api]
+    uses: ./.github/workflows/unit-tests.yml
 
   integration-tests:
     needs: build-api
