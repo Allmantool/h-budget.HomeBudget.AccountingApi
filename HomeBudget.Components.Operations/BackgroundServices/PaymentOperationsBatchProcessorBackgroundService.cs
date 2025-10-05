@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
@@ -57,7 +58,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "{Service} failed to process batch", nameof(PaymentOperationsBatchProcessorBackgroundService));
+                        _logger.OperationDeliveryError(nameof(PaymentOperationsBatchProcessorBackgroundService), ex.Message, ex);
                     }
                     finally
                     {

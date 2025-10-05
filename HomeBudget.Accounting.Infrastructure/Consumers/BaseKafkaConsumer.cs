@@ -10,6 +10,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -62,22 +63,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _logger = logger;
 
             _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
-                .SetErrorHandler((ctx, error) =>
-                {
-                    _logger.LogError($"Error: {error.Reason} {ctx?.Name} {ctx?.MemberId}");
-                })
-                .SetLogHandler((_, logMessage) =>
-                {
-                    _logger.LogInformation($"Log: {logMessage.Message}");
-                })
-                .SetPartitionsRevokedHandler((c, partitions) =>
-                {
-                    _logger.LogInformation($"Log: {$"Partitions revoked: [{string.Join(", ", partitions)}]"}");
-                })
-                .SetPartitionsAssignedHandler((c, partitions) =>
-                {
-                    _logger.LogInformation($"Partitions assigned: [{string.Join(", ", partitions)}]");
-                })
+                .SetErrorHandler((ctx, error) => BaseKafkaConsumerLogs.KafkaError(_logger, error.Reason, ctx?.Name, ctx?.MemberId))
+                .SetLogHandler((_, logMessage) => BaseKafkaConsumerLogs.KafkaLog(_logger, logMessage.Message))
+                .SetPartitionsRevokedHandler((c, partitions) => BaseKafkaConsumerLogs.PartitionsRevoked(_logger, string.Join(", ", partitions)))
+                .SetPartitionsAssignedHandler((c, partitions) => BaseKafkaConsumerLogs.PartitionsAssigned(_logger, string.Join(", ", partitions)))
                 .Build();
         }
 
@@ -87,7 +76,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 if (_disposed || _consumer == null)
                 {
-                    _logger.LogWarning("Attempted to access Subscriptions on a disposed consumer.");
+                    BaseKafkaConsumerLogs.SubscriptionsAccessedOnDisposed(_logger);
                     return Array.Empty<string>();
                 }
 
@@ -97,13 +86,36 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 }
                 catch (ObjectDisposedException ex)
                 {
-                    _logger.LogError(ex, "Attempted to access Subscriptions on a disposed Kafka consumer.");
+                    BaseKafkaConsumerLogs.SubscriptionsAccessedOnDisposedError(_logger, ex);
                     return Array.Empty<string>();
                 }
             }
         }
 
         public abstract Task ConsumeAsync(CancellationToken stoppingToken);
+
+        public bool IsAlive()
+        {
+            if (_disposed || _consumer == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var _ = _consumer.Subscription;
+                return true;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+            catch (KafkaException ex) when (ex.Error.IsFatal)
+            {
+                BaseKafkaConsumerLogs.FatalKafkaError(_logger, ex);
+                return false;
+            }
+        }
 
         protected virtual async Task ConsumeAsync(
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
@@ -117,7 +129,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 {
                     if (_disposed || _consumer == null)
                     {
-                        _logger.LogWarning("Kafka consumer is disposed.");
+                        BaseKafkaConsumerLogs.ConsumerDisposed(_logger);
                         break;
                     }
 
@@ -152,22 +164,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     {
                         if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
                         {
-                            _logger.LogWarning("Topic/partition not found: {Reason}. Retrying...", ex.Error.Reason);
+                            BaseKafkaConsumerLogs.TopicPartitionNotFound(_logger, ex.Error.Reason);
+
                             await Task.Delay(_consumerSettings.HeartbeatIntervalMs, cancellationToken);
                         }
                         else
                         {
-                            _logger.LogError(ex, "Consume error: {Reason}", ex.Error.Reason);
+                            BaseKafkaConsumerLogs.ConsumeError(_logger, ex.Error.Reason, ex);
                         }
                     }
                     catch (OperationCanceledException)
                     {
-                        _logger.LogInformation("Consumer loop canceled.");
+                        BaseKafkaConsumerLogs.ConsumerLoopCanceled(_logger);
                         break;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Unhandled error in Kafka consumer loop: {Message}", ex.Message);
+                        BaseKafkaConsumerLogs.UnhandledErrorInLoop(_logger, ex.Message, ex);
                     }
                 }
             }
@@ -181,7 +194,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             if (_disposed || _consumer == null)
             {
-                _logger.LogWarning("Attempted to close an already disposed consumer.");
+                BaseKafkaConsumerLogs.CloseAlreadyDisposedConsumer(_logger);
                 return;
             }
 
@@ -192,7 +205,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while closing consumer: {ex.Message}");
+                BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
             }
             finally
             {
@@ -209,7 +222,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             if (_disposed || _consumer == null)
             {
-                _logger.LogError("Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.", topic);
+                BaseKafkaConsumerLogs.SubscribeOnDisposed(_logger, topic);
                 return;
             }
 
@@ -218,7 +231,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _consumer.Subscribe(topicName);
             _subscribedTopics.Add(topicName);
 
-            _logger.LogInformation($"Subscribed to topic: {topicName}, consumer {ConsumerId} topics: {string.Join(',', _subscribedTopics)} ");
+            BaseKafkaConsumerLogs.SubscribedToTopic(_logger, topicName, ConsumerId, string.Join(',', _subscribedTopics));
         }
 
         public void UnSubscribe()
@@ -230,10 +243,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error while closing Kafka consumer.");
+                BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
             }
 
-            _logger.LogInformation($"The consumer {ConsumerId} has been unsubscribed. Related topics {string.Join(",", _subscribedTopics)}");
+            BaseKafkaConsumerLogs.UnsubscribedConsumer(_logger, ConsumerId, string.Join(",", _subscribedTopics));
         }
 
         public void Dispose()
@@ -266,11 +279,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         }
                         catch (ObjectDisposedException)
                         {
-                            _logger.LogWarning("Kafka consumer already disposed. Skipping Close().");
+                            BaseKafkaConsumerLogs.CloseSkippedDisposed(_logger);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Error while closing Kafka consumer.");
+                            BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
                         }
 
                         try
@@ -279,18 +292,18 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         }
                         catch (ObjectDisposedException)
                         {
-                            _logger.LogWarning("Kafka consumer already disposed. Skipping Dispose().");
+                            BaseKafkaConsumerLogs.DisposeSkippedDisposed(_logger);
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Error while disposing Kafka consumer.");
+                            BaseKafkaConsumerLogs.ErrorWhileDisposingConsumer(_logger, ex);
                         }
                     }
                 }
 
                 _disposed = true;
 
-                _logger.LogInformation($"The consumer {ConsumerId} has been disposed. Related topics: {string.Join(",", _subscribedTopics ?? Enumerable.Empty<string>())}");
+                BaseKafkaConsumerLogs.DisposedConsumer(_logger, ConsumerId, string.Join(",", _subscribedTopics ?? Enumerable.Empty<string>()));
             }
         }
     }
