@@ -72,9 +72,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     options.PaymentAccounts = "payment_accounts_test";
                 });
 
+                var eventStoreConnectionSettings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                var eventStoreDbOptions = new EventStoreDbOptions();
+
                 services.AddEventStoreClient(
                     _containersConnections.EventSourceDbContainer,
-                    _ => EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer));
+                    settings =>
+                    {
+                        settings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                        settings.OperationOptions = new EventStoreClientOperationOptions
+                        {
+                            ThrowOnAppendFailure = true,
+                        };
+                        settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+                        settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                        {
+                            KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                            GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                            DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                            MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                        };
+                    });
             });
 
             base.ConfigureWebHost(builder);
