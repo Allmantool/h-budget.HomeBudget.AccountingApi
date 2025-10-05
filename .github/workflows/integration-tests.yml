@@ -1,0 +1,48 @@
+name: Integration Tests Coverage
+on: workflow_call
+
+jobs:
+    integration-tests:
+        name: Run Integration Tests with Coverage
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-dotnet@v3
+              with:
+                  dotnet-version: "9.0.x"
+
+            - run: dotnet restore HomeBudgetAccountingApi.sln
+            - run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore
+
+            - name: Run integration tests
+              run: |
+                  mkdir -p test-results coverage
+                  dotnet test HomeBudgetAccountingApi.sln \
+                    --configuration Release \
+                    --filter "Category=Integration" \
+                    --no-build \
+                    --logger "trx;LogFileName=test_results.trx" \
+                    --results-directory "test-results" \
+                    --collect:"XPlat Code Coverage"
+              timeout-minutes: 30
+
+            - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.4.16
+            - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+            - name: Generate coverage report
+              run: |
+                  reportgenerator \
+                    -reports:"test-results/**/coverage.cobertura.xml" \
+                    -targetdir:"coverage" \
+                    -reporttypes:"Html;Cobertura" \
+                    -assemblyfilters:"+HomeBudget.*;-*Tests;-*Test.Core*"
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: integration-coverage-html
+                  path: coverage/
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: integration-coverage-xml
+                  path: coverage/Cobertura.xml
