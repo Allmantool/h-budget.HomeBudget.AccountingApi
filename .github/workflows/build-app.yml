@@ -40,91 +40,19 @@ jobs:
     uses: ./.github/workflows/build-api.yml
 
   unit-tests:
-    name: Tests
+    name: Unit Tests Coverage
     needs: [build-api]
     uses: ./.github/workflows/unit-tests.yml
 
   integration-tests:
-    needs: build-api
+    needs: [build-api]
     name: Integration Tests Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Install dotCover CLI
-        run: |
-          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-
-      - name: Run dotCover Integration Tests
-        run: |
-          dotCover cover /TargetExecutable=dotnet -- test "HomeBudgetAccountingApi.sln" -v:n \
-            /Output=test-results/integration-coverage.dcvr \
-            /Filters="+:HomeBudget.*;-:module=*Tests;-:module=*Test.Core"
-
-           dotCover report \
-             /Source=test-results/integration-coverage.dcvr \
-             /Output=test-results/integration-coverage.html \
-             /ReportType=HTML
-        timeout-minutes: 30
-
-      - name: Upload Integration Coverage Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-coverage-report
-          path: test-results/*
+    uses: ./.github/workflows/integration-tests.yml
 
   merge-coverage:
     needs: [unit-tests, integration-tests]
     name: Merge Coverage Reports
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Install dotCover CLI
-        run: |
-          dotnet tool install --global JetBrains.dotCover.CommandLineTools --version 2025.2.2
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-
-      - name: Download Unit Coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: unit-coverage-report
-          path: test-results/unit
-
-      - name: Download Integration Coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-coverage-report
-          path: test-results/integration
-
-      - name: Merge Coverage
-        run: |
-          dotCover merge \
-            /Source=test-results/unit/unit-coverage.dcvr \
-            /Source=test-results/integration/integration-coverage.dcvr \
-            /Output=test-results/merged-coverage.dcvr
-
-          dotCover report \
-            /Source=test-results/merged-coverage.dcvr \
-            /Output=test-results/merged-coverage.html \
-            /ReportType=HTML
-
-      - name: Upload Merged Coverage Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: merged-coverage-report
-          path: test-results/*
+    uses: ./.github/workflows/merge-coverage.yml
 
   sonar-analysis:
     needs: [merge-coverage, build-api]
