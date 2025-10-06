@@ -1,0 +1,79 @@
+name: Build Application
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags: ["v*.*.*"]
+
+  pull_request:
+    branches:
+      - master
+      - developed
+      - feature/*
+      - test/*
+      - hotfix/*
+      - fix/*
+      - tech/
+    types: [opened, synchronize, closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
+
+jobs:
+  update-tag-version:
+    name: Generate semantic version Tag
+    if: ${{ github.event.action != 'closed' }}
+    uses: ./.github/workflows/update_semver.yml
+
+  build-api:
+    name: Build app artifact
+    needs: [update-tag-version]
+    uses: ./.github/workflows/build-api.yml
+
+  unit-tests:
+    name: Unit Tests Coverage
+    needs: [build-api]
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      test_timeout_minutes: 10
+
+  integration-tests:
+    needs: [build-api]
+    name: Integration Tests Coverage
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      test_timeout_minutes: 30
+
+  merge-coverage:
+    needs: [unit-tests, integration-tests]
+    name: Merge Coverage Reports
+    uses: ./.github/workflows/merge-coverage.yml
+
+  sonar-analysis:
+    needs: [merge-coverage, build-api]
+    name: Run sonar scanning
+    uses: ./.github/workflows/sonar-analysis.yml
+    with:
+      pull_request_id: ${{ needs.build-api.outputs.pr }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  build-docker:
+    name: Build and Push Docker Image
+    needs: [build-api, merge-coverage]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      last_tag: ${{ needs.build-api.outputs.last_tag }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
