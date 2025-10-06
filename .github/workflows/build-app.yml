@@ -63,7 +63,7 @@ jobs:
     name: Merge Coverage Reports
     uses: ./.github/workflows/sonar-analysis.yml
     with:
-      last_tag: ${{ needs.build-api.outputs.pr }}
+      pull_request_id: ${{ needs.build-api.outputs.pr }}
 
   build-docker:
     name: Build and Push Docker Image
