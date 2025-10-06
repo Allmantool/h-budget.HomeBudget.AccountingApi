@@ -60,7 +60,7 @@ jobs:
 
   sonar-analysis:
     needs: [merge-coverage, build-api]
-    name: Merge Coverage Reports
+    name: Run sonar scanning
     uses: ./.github/workflows/sonar-analysis.yml
     with:
       pull_request_id: ${{ needs.build-api.outputs.pr }}
