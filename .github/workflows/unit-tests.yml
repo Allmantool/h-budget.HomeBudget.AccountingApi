@@ -1,5 +1,12 @@
 name: Unit Tests Coverage
-on: workflow_call
+on:
+  workflow_dispatch:
+    inputs:
+      test_timeout_minutes:
+        description: "Timeout test step"
+        required: false
+        type: number
+        default: 10
 
 jobs:
   unit-tests:
@@ -25,7 +32,7 @@ jobs:
             --logger "trx;LogFileName=test_results.trx" \
             --results-directory "test-results" \
             --collect:"XPlat Code Coverage"
-        timeout-minutes: 10
+        timeout-minutes: ${{ inputs.test_timeout_minutes }}
 
       - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.4.16
       - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
