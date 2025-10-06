@@ -18,6 +18,25 @@ on:
         type: string
         default: "21"
 
+  workflow_call:
+    inputs:
+      pull_request_id:
+        required: false
+        type: number
+      sonar-scanner-version:
+        required: false
+        type: string
+        default: "5.14.0"
+      java-version:
+        required: false
+        type: string
+        default: "21"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+      GITHUB_TOKEN:
+        required: true
+
 jobs:
   sonarqube-scan:
     name: Sonar scanning

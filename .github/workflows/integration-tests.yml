@@ -13,6 +13,19 @@ on:
         type: string
         default: "5.4.16"
 
+  workflow_call:
+    inputs:
+      test_timeout_minutes:
+        description: "Timeout test step"
+        required: false
+        type: number
+        default: 30
+      report-generator_version:
+        description: "Report generator version"
+        required: false
+        type: string
+        default: "5.4.16"
+
 jobs:
   integration-tests:
     name: Run Integration Tests with Coverage
