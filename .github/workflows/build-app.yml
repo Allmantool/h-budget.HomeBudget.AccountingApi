@@ -43,11 +43,15 @@ jobs:
     name: Unit Tests Coverage
     needs: [build-api]
     uses: ./.github/workflows/unit-tests.yml
+    with:
+      test_timeout_minutes: 10
 
   integration-tests:
     needs: [build-api]
     name: Integration Tests Coverage
     uses: ./.github/workflows/integration-tests.yml
+    with:
+      test_timeout_minutes: 30
 
   merge-coverage:
     needs: [unit-tests, integration-tests]
@@ -56,90 +60,14 @@ jobs:
 
   sonar-analysis:
     needs: [merge-coverage, build-api]
-    name: Sonar scanning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Java for SonarQube
-        uses: actions/setup-java@v3
-        with:
-          distribution: "temurin"
-          java-version: "21"
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: test-results
-
-      - name: Install dotnet tools
-        run: |
-          dotnet tool install --global dotnet-sonarscanner --version 5.14.0
-
-      - name: Make the scanner script file executable
-        run: |
-          chmod +x ./startsonar.sh
-
-      - name: Start sonar scanning
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          RUN_NUMBER: ${{ github.run_number }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          PULL_REQUEST_ID: ${{ needs.build-api.outputs.pr }}
-          PULL_REQUEST_SOURCE_BRANCH: ${{ github.ref }}
-          PULL_REQUEST_TARGET_BRANCH: refs/heads/master
-          ACTION: ${{ github.action }}
-          EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: sh ./startsonar.sh
-
-      - name: Build Solution for Metrics
-        shell: bash
-        run: |
-          dotnet build HomeBudgetAccountingApi.sln --no-incremental
-
-      - name: End Sonar scan
-        run: dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
+    name: Merge Coverage Reports
+    uses: ./.github/workflows/sonar-analysis.yml
+    with:
+      last_tag: ${{ needs.build-api.outputs.pr }}
 
   build-docker:
     name: Build and Push Docker Image
     needs: [build-api, merge-coverage]
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Build Docker Image
-        env:
-          BUILD_VERSION: ${{ needs.build-api.outputs.last_tag }}
-        shell: bash
-        run: |
-          docker build \
-            --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}" \
-            .
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Docker Image
-        shell: bash
-        run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ needs.build-api.outputs.last_tag }}"
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      last_tag: ${{ needs.build-api.outputs.last_tag }}
