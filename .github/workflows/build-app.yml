@@ -64,6 +64,9 @@ jobs:
     uses: ./.github/workflows/sonar-analysis.yml
     with:
       pull_request_id: ${{ needs.build-api.outputs.pr }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-docker:
     name: Build and Push Docker Image
@@ -71,3 +74,8 @@ jobs:
     uses: ./.github/workflows/build-docker.yml
     with:
       last_tag: ${{ needs.build-api.outputs.last_tag }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

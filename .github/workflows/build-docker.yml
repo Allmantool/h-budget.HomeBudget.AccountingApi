@@ -8,6 +8,14 @@ on:
         type: string
         default: ""
 
+  workflow_call:
+    inputs:
+      last_tag:
+        description: "Last generated semantic tag"
+        required: false
+        type: string
+        default: ""
+
 jobs:
   build-docker:
     runs-on: ubuntu-latest
