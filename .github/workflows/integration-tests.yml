@@ -7,6 +7,11 @@ on:
         required: false
         type: number
         default: 30
+      report-generator_version:
+        description: "Report generator version"
+        required: false
+        type: string
+        default: "5.4.16"
 
 jobs:
   integration-tests:
@@ -34,7 +39,7 @@ jobs:
             --collect:"XPlat Code Coverage"
         timeout-minutes: ${{ inputs.test_timeout_minutes }}
 
-      - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.4.16
+      - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version ${{ inputs.report-generator_version }}
       - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Generate coverage report
