@@ -7,7 +7,7 @@
     <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.UI.InMemory.Storage" Version="9.0.0" />
     <PackageVersion Include="AutoMapper" Version="15.0.0" />
-    <PackageVersion Include="Confluent.Kafka" Version="2.11.1" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.12.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="9.0.0" />
     <PackageVersion Include="Elastic.Serilog.Sinks" Version="8.18.0" />
