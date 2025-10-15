@@ -45,8 +45,8 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.12.0" />
     <PackageVersion Include="Polly" Version="8.6.4" />
     <PackageVersion Include="RestSharp" Version="112.1.0" />
-    <PackageVersion Include="Sentry.AspNetCore" Version="5.16.0" />
-    <PackageVersion Include="Sentry.Serilog" Version="5.16.0" />
+    <PackageVersion Include="Sentry.AspNetCore" Version="5.16.1" />
+    <PackageVersion Include="Sentry.Serilog" Version="5.16.1" />
     <PackageVersion Include="Serilog" Version="4.3.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Activity" Version="1.0.0.3" />
