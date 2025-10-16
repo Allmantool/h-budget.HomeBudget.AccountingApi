@@ -38,7 +38,7 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             _mongoContainer = new MongoDbBuilder()
                 .WithImage("mongo:7.0.5-rc0-jammy")
-                .WithName($"{nameof(CategoryDocumentsClientTests)}-mongo-db-container")
+                .WithName($"{nameof(CategoryDocumentsClientTests)}-mongo-db-container-{Guid.NewGuid()}")
                 .WithHostname("test-mongo-db-host")
                 .WithPortBinding(28117, 28117)
                 .WithAutoRemove(true)

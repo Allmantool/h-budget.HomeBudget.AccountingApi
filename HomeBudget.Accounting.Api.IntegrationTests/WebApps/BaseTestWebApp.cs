@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Net.Http;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Mvc.Testing;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
@@ -10,12 +12,14 @@ using RestSharp;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Test.Core;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
     internal abstract class BaseTestWebApp<TEntryPoint> : BaseTestWebAppDispose
         where TEntryPoint : class
     {
+        private HttpClient _client;
         private IntegrationTestWebApplicationFactory<TEntryPoint> WebFactory { get; }
         private TestContainersService TestContainersService { get; set; }
 
@@ -51,9 +55,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     };
                 });
 
+            var clientBaseUrl = new Uri("http://localhost:6064");
+            var clientOptions = new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = clientBaseUrl,
+                HandleCookies = true,
+                MaxAutomaticRedirections = 7
+            };
+
+            var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
+            var baseClient = WebFactory.CreateDefaultClient(clientOptions.BaseAddress, handler);
+            var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
+            {
+                ThrowOnAnyError = true
+            };
+
+            _client = new HttpClient(handler)
+            {
+                BaseAddress = baseClient.BaseAddress,
+                Timeout = baseClient.Timeout
+            };
+
             RestHttpClient = new RestClient(
-                WebFactory.CreateClient(),
-                new RestClientOptions(new Uri("http://localhost:6064")));
+                _client,
+                restClientOptions
+            );
         }
 
         public async Task StartAsync()
@@ -99,6 +126,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await WebFactory.DisposeAsync();
             }
 
+            _client?.Dispose();
             RestHttpClient?.Dispose();
         }
     }

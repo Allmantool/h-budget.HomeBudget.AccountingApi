@@ -1,0 +1,46 @@
+name: Merge Unit / Integration tests coverage
+on: workflow_call
+
+jobs:
+  merge-coverage:
+    name: Merge Coverage Reports
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Install ReportGenerator tool
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool --version 5.4.16
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Download Unit Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage-xml
+          path: test-results/unit
+
+      - name: Download Integration Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-coverage-xml
+          path: test-results/integration
+
+      - name: Merge Coverage Reports
+        run: |
+          mkdir -p test-results/merged
+          reportgenerator \
+              -reports:"test-results/unit/Cobertura.xml;test-results/integration/Cobertura.xml" \
+              -targetdir:"test-results/merged" \
+              -reporttypes:"Html;Cobertura" \
+              -assemblyfilters:"+HomeBudget.*;-*Tests;-*Test.Core*"
+
+      - name: Upload Merged Coverage Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-coverage-report
+          path: test-results/merged/
