@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 
 namespace HomeBudget.Core.Exceptions
 {
@@ -7,7 +6,13 @@ namespace HomeBudget.Core.Exceptions
     {
         public static bool IsNullOrEmpty<T>(this IEnumerable<T> origin)
         {
-            return origin == null || !origin.Any();
+            if (origin is null)
+            {
+                return true;
+            }
+
+            using var enumerator = origin.GetEnumerator();
+            return !enumerator.MoveNext();
         }
     }
 }
