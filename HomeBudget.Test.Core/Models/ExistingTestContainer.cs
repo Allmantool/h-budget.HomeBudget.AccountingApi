@@ -82,10 +82,9 @@ namespace HomeBudget.Test.Core.Models
 
         public ushort GetMappedPublicPort(int containerPort)
         {
-            if (containerPort < 0 || containerPort > ushort.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(containerPort), $"Port must be between 0 and {ushort.MaxValue}");
-
-            return _portMappings.TryGetValue((ushort)containerPort, out var publicPort)
+            return containerPort < 0 || containerPort > ushort.MaxValue
+                ? throw new ArgumentOutOfRangeException(nameof(containerPort), $"Port must be between 0 and {ushort.MaxValue}")
+                : _portMappings.TryGetValue((ushort)containerPort, out var publicPort)
                 ? publicPort
                 : (ushort)containerPort;
         }
@@ -93,7 +92,9 @@ namespace HomeBudget.Test.Core.Models
         public ushort GetMappedPublicPort(string containerPort)
         {
             if (string.IsNullOrWhiteSpace(containerPort))
+            {
                 throw new ArgumentException("Port cannot be null or empty", nameof(containerPort));
+            }
 
             if (ushort.TryParse(containerPort, out var port))
             {
