@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Configurations;
+using DotNet.Testcontainers.Containers;
 using EventStore.Client;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
@@ -347,8 +347,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     using var admin = new AdminClientBuilder(config).Build();
                     var metadata = admin.GetMetadata(TimeSpan.FromSeconds(1));
 
-                    if (metadata.Brokers.Any())
+                    if (metadata.Brokers.Count != 0)
                     {
+                        await Task.Delay(timeout);
                         Console.WriteLine("Kafka broker is ready.");
                         return;
                     }
