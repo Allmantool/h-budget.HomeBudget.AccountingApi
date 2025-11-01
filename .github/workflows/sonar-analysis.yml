@@ -1,0 +1,91 @@
+name: Quality gate - Sonarqube
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_id:
+        description: "Pull request id"
+        required: false
+        type: number
+        default: 0
+      sonar-scanner-version:
+        description: "Sonar scanner version"
+        required: false
+        type: string
+        default: "5.14.0"
+      java-version:
+        description: "Sonar scanner version"
+        required: false
+        type: string
+        default: "21"
+
+  workflow_call:
+    inputs:
+      pull_request_id:
+        required: false
+        type: number
+      sonar-scanner-version:
+        required: false
+        type: string
+        default: "5.14.0"
+      java-version:
+        required: false
+        type: string
+        default: "21"
+    secrets:
+      SONAR_TOKEN:
+        required: true
+
+jobs:
+  sonarqube-scan:
+    name: Sonar scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java for SonarQube
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: ${{ inputs.java-version }}
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: test-results
+
+      - name: Install dotnet tools
+        run: |
+          dotnet tool install --global dotnet-sonarscanner --version ${{ inputs.sonar-scanner-version }}
+
+      - name: Make the scanner script file executable
+        run: |
+          chmod +x ./startsonar.sh
+
+      - name: Start sonar scanning
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PULL_REQUEST_ID: ${{ inputs.pull_request_id }}
+          PULL_REQUEST_SOURCE_BRANCH: ${{ github.ref }}
+          PULL_REQUEST_TARGET_BRANCH: refs/heads/master
+          ACTION: ${{ github.action }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: sh ./startsonar.sh
+
+      - name: Build Solution for Metrics
+        shell: bash
+        run: |
+          dotnet build HomeBudgetAccountingApi.sln --no-incremental
+
+      - name: End Sonar scan
+        run: dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
