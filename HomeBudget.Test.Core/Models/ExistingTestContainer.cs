@@ -81,5 +81,49 @@ namespace HomeBudget.Test.Core.Models
         public Task<ExecResult> ExecAsync(IList<string> command, CancellationToken ct = default) => Task.FromResult(default(ExecResult));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public Task CopyAsync(
+            byte[] fileContent,
+            string filePath,
+            uint uid = 0,
+            uint gid = 0,
+            UnixFileModes fileMode = UnixFileModes.OtherRead | UnixFileModes.GroupRead | UnixFileModes.UserWrite | UnixFileModes.UserRead,
+            CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task CopyAsync(
+            string source,
+            string target,
+            uint uid = 0,
+            uint gid = 0,
+            UnixFileModes fileMode = UnixFileModes.OtherRead | UnixFileModes.GroupRead | UnixFileModes.UserWrite | UnixFileModes.UserRead,
+            CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task CopyAsync(
+            DirectoryInfo source,
+            string target,
+            uint uid = 0,
+            uint gid = 0,
+            UnixFileModes fileMode = UnixFileModes.OtherRead | UnixFileModes.GroupRead | UnixFileModes.UserWrite | UnixFileModes.UserRead,
+            CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task CopyAsync(
+            FileInfo source,
+            string target,
+            uint uid = 0,
+            uint gid = 0,
+            UnixFileModes fileMode = UnixFileModes.OtherRead | UnixFileModes.GroupRead | UnixFileModes.UserWrite | UnixFileModes.UserRead,
+            CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
