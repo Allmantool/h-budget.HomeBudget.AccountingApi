@@ -3,8 +3,8 @@ set -e
 
 echo ">> [Test] Testcontainers.sh executed successfully."
 
-CONFIG=/etc/kafka/server.properties
-LOG_DIRS=/tmp/kraft-combined-logs
+CONFIG="/etc/kafka/server.properties"
+LOG_DIRS="/tmp/kraft-combined-logs"
 
 # Cluster ID: use env if present, otherwise generate a new one
 if [ -n "$KAFKA_CLUSTER_ID" ]; then
@@ -15,16 +15,24 @@ else
   echo "Generated random CLUSTER_ID: $CLUSTER_ID"
 fi
 
-# Derive the first controller (fallback to localhost:9092 if unset)
+# Derive controllers or use fallback
 if [ -n "$KAFKA_CONTROLLER_QUORUM_VOTERS" ]; then
   IFS=',' read -r FIRST_CONTROLLER _ <<< "$KAFKA_CONTROLLER_QUORUM_VOTERS"
   INITIAL_CONTROLLERS="$FIRST_CONTROLLER"
 else
-  INITIAL_CONTROLLERS="1@localhost:9092"
+  : "${INITIAL_CONTROLLERS:=1@test-kafka:9093}"
 fi
 
-echo "=== Using Kafka config file at: $CONFIG ==="
-cat "$CONFIG"
+echo "------------------------------------------------------------"
+echo ">> Kafka startup initiated at $(date)"
+echo ">> Config: $CONFIG"
+echo ">> Initial controllers: $INITIAL_CONTROLLERS"
+echo ">> Cluster ID: $CLUSTER_ID"
+echo "------------------------------------------------------------"
+
+if [ "${DEBUG_CONFIG:-false}" = "true" ]; then
+  cat "$CONFIG"
+fi
 
 echo "=== Checking if storage is formatted ==="
 if [ ! -f "$LOG_DIRS/meta.properties" ]; then
@@ -40,7 +48,4 @@ else
 fi
 
 echo "=== Starting Kafka ==="
-kafka-server-start "$CONFIG" || echo "⚠️  Kafka exited with error, container remains running"
-
-# keep container alive for debugging
-tail -f /dev/null
+exec kafka-server-start "$CONFIG"
