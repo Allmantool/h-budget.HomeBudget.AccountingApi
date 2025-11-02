@@ -1,7 +1,7 @@
 ﻿kafka:
   clusters:
     - name: test-kafka-cluster
-      bootstrapServers: test-kafka:9092
+      bootstrapServers: test-kafka:29092
       readonly: false
       properties:
         security.protocol: PLAINTEXT
