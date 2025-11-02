@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 
 using EventStore.Client;
 using Microsoft.AspNetCore.Hosting;
@@ -16,7 +17,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWebApplicationFactory<TStartup>
-        (Func<TestContainersConnections> webHostInitializationCallback) : WebApplicationFactory<TStartup>
+        (Func<Task<TestContainersConnections>> webHostInitializationCallback) : WebApplicationFactory<TStartup>
         where TStartup : class
     {
         private TestContainersConnections _containersConnections;
@@ -25,14 +26,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration((_, conf) =>
+            builder.ConfigureAppConfiguration(async (_, conf) =>
             {
                 conf.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{HostEnvironments.Integration}.json"));
                 conf.AddEnvironmentVariables();
 
                 Configuration = conf.Build();
 
-                _containersConnections = webHostInitializationCallback?.Invoke();
+                _containersConnections = await webHostInitializationCallback?.Invoke();
             });
 
             builder.ConfigureTestServices(services =>
