@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 using EventStore.Client;
 using Microsoft.Extensions.Configuration;
@@ -28,7 +29,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
-        public static IContainer ZookeperKafkaContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
         public static MongoDbContainer MongoDbContainer { get; private set; }
 
@@ -48,9 +48,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     EventSourceDbContainer = new EventStoreDbBuilder()
                         .WithImage("eventstore/eventstore:24.10.4-jammy")
-                        .WithName($"{nameof(TestContainersService)}-event-store-db-container")
+                        .WithName($"{nameof(TestContainersService)}-event-store-db-container-{Guid.NewGuid()}")
                         .WithHostname("test-eventsource-db-host")
                         .WithPortBinding(2117, 2117)
+                        .WithEnvironment("EVENTSTORE_INSECURE", "true")
+                        .WithEnvironment("EVENTSTORE_HTTP_PORT", "2117")
+                        .WithEnvironment("EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP", "true")
+                        .WithEnvironment("EVENTSTORE_CLUSTER_SIZE", "1")
+                        .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "System")
+                        .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
+                        .WithEnvironment("EVENTSTORE_COMMIT_TIMEOUT_MS", "60000")
+                        .WithEnvironment("EVENTSTORE_WRITE_TIMEOUT_MS", "60000")
+                        .WithEnvironment("EVENTSTORE_DISABLE_HTTP_CACHING", "true")
+                        .WithEnvironment("EVENTSTORE_MAX_MEM_TABLE_SIZE", "100000")
+                        .WithEnvironment("EVENTSTORE_CACHED_CHUNKS", "512")
+                        .WithEnvironment("EVENTSTORE_MIN_FLUSH_DELAY_MS", "2000")
+                        .WithEnvironment("EVENTSTORE_STATS_PERIOD_SEC", "60")
+                        .WithEnvironment("EVENTSTORE_SKIP_DB_VERIFY", "true")
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
                         .WithWaitStrategy(Wait.ForUnixContainer())
@@ -68,90 +82,64 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         throw new FileNotFoundException($"Missing script: {testcontainersScriptPath}");
                     }
 
+                    var kafkaConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/server.properties")).Replace('\\', '/');
+
+                    if (!File.Exists(kafkaConfigPath))
+                    {
+                        throw new FileNotFoundException($"Missing config: {kafkaConfigPath}");
+                    }
+
                     var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync("test-kafka-net");
 
-                    KafkaUIContainer = await DockerContainerFactory.GetOrCreateDockerContainerAsync(
-                        $"{nameof(TestContainersService)}-kafka-test-ui",
-                        cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
-                        .WithName($"{nameof(TestContainersService)}-kafka-test-ui")
-                        .WithHostname("test-kafka-ui")
-                        .WithPortBinding(8080, 8080)
-                        .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
-                        .WithEnvironment("KAFKA_CLUSTERS_0_NAME", "test-cluster-kafka")
-                        .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9093")
-                        .WithWaitStrategy(Wait.ForUnixContainer())
-                        .WithNetwork(testKafkaNetwork)
-                        .WithAutoRemove(true)
-                        .WithCleanUp(true)
-                        .Build());
-
-                    ZookeperKafkaContainer = await DockerContainerFactory.GetOrCreateDockerContainerAsync(
-                        $"{nameof(TestContainersService)}-test-zookeper",
-                        cb => cb
-                        .WithImage("confluentinc/cp-zookeeper:7.9.0")
-                        .WithName($"{nameof(TestContainersService)}-test-zookeper")
-                        .WithHostname("test-zookeper")
-                        .WithEnvironment("ZOOKEEPER_CLIENT_PORT", "2181")
-                        .WithEnvironment("ZOOKEEPER_TICK_TIME", "2000")
-                        .WithWaitStrategy(Wait.ForUnixContainer())
-                        .WithNetwork(testKafkaNetwork)
-                        .WithAutoRemove(true)
-                        .WithCleanUp(true)
-                        .Build());
-
                     KafkaContainer = new KafkaBuilder()
-                        .WithImage("confluentinc/cp-kafka:7.9.0")
-                        .WithName($"{nameof(TestContainersService)}-kafka-container")
+                        .WithImage("confluentinc/cp-kafka:8.1.0")
+                        .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                         .WithHostname("test-kafka")
                         .WithPortBinding(9092, 9092)
-                        .WithPortBinding(29092, 29092)
+                        .WithPortBinding(9093, 9093)
+                        .WithPortBinding(9094, 9094)
 
-                         // v8+ KRAFT_MODE
-                         // .WithEnvironment("KAFKA_KRAFT_MODE", "true")
-                         // .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
-                         // .WithEnvironment("KAFKA_NODE_ID", "1")
-                         // .WithEnvironment("KAFKA_LOG_DIRS", "/tmp/kraft-combined-logs")
-                         // .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
-                         // .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@kafka:29093")
-                         // .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
-                         // .WithStartupCallback((kafkaContainer, cancelToken) =>
-                         // {
-                         //    return Task.CompletedTask;
-                         // })
-                         // .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
-                         // .WithBindMount(serverProperties, "/etc/kafka/server.properties", AccessMode.ReadOnly)
-                         // .WithEnvironment("KAFKA_JMX_PORT", "9997")
-                         // .WithEnvironment("KAFKA_JMX_HOSTNAME", "kafka")
-
-                         // Base kafka options
-                         .WithEnvironment("KAFKA_BROKER_ID", "1")
+                        // v8+ KRAFT_MODE
+                        .WithEnvironment("KAFKA_KRAFT_MODE", "true")
+                        .WithEnvironment("KAFKA_NODE_ID", "1")
+                        .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
+                        .WithEnvironment("KAFKA_CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
+                        .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
+                        .WithEnvironment(
+                            "KAFKA_LISTENERS",
+                            "PLAINTEXT://:9092,CONTROLLER://:9093,BROKER://:9094")
                          .WithEnvironment(
-                            "KAFKA_ZOOKEEPER_CONNECT",
-                            $"test-zookeper:2181")
-                         .WithEnvironment(
-                           "KAFKA_LISTENERS",
-                           "PLAINTEXT://0.0.0.0:9092,BROKER://0.0.0.0:9093")
-                         .WithEnvironment(
-                           "KAFKA_ADVERTISED_LISTENERS",
-                           "PLAINTEXT://localhost:9092,BROKER://test-kafka:9093")
+                            "KAFKA_ADVERTISED_LISTENERS",
+                            "PLAINTEXT://test-kafka:9092,BROKER://test-kafka:9094")
                          .WithEnvironment(
                             "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
-                            "PLAINTEXT:PLAINTEXT,BROKER:PLAINTEXT")
-                        .WithEnvironment(
-                            "KAFKA_INTER_BROKER_LISTENER_NAME",
-                            "BROKER")
-                        .WithEnvironment("KAFKA_LOG_RETENTION_BYTES", "1073741824")
-                        .WithEnvironment("KAFKA_LOG_CLEANUP_POLICY", "delete")
+                            "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
+
+                        // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
+                        .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
+                        .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
+                        .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
+                        .WithEnvironment("JMX_PORT", "9997")
+                        .WithEnvironment("KAFKA_JMX_PORT", "9997")
+                        .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
+                        .WithEnvironment("KAFKA_LOG_DIRS", "/tmp/kraft-combined-logs")
                         .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
-                        .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
-                        .WithEnvironment("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "30")
                         .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")
                         .WithEnvironment("KAFKA_LOG_SEGMENT_BYTES", "1073741824")
                         .WithEnvironment("KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS", "300000")
                         .WithEnvironment("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
+                        .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
+                        .WithEnvironment("KAFKA_LOG_CLEANUP_POLICY", "delete")
+                        .WithEnvironment("KAFKA_LOG_RETENTION_BYTES", "1073741824")
+                        .WithEnvironment("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "30")
                         .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                        .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
+                        .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                         .WithNetwork(testKafkaNetwork)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
+
+                        // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
+                        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(".*started.*"))
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
@@ -159,12 +147,45 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         })
 
                         // .WithAutoRemove(true)
-                        .WithCleanUp(true)
+                        // .WithCleanUp(true)
                         .Build();
+
+                    var testcontainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
+
+                    if (!File.Exists(testcontainersConfigPath))
+                    {
+                        throw new FileNotFoundException($"Missing config: {testcontainersScriptPath}");
+                    }
+
+                    KafkaUIContainer = await DockerContainerFactory.GetOrCreateDockerContainerAsync(
+                         $"{nameof(TestContainersService)}-kafka-test-ui",
+                         cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
+                        .WithName($"{nameof(TestContainersService)}-kafka-test-ui")
+                        .WithHostname($"test-kafka-ui")
+                        .WithPortBinding(8080, 8080)
+                        .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
+
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_BOOTSTRAP_SERVERS", "PLAINTEXT://test-kafka:9092")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP", "use_all_dns_ips")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
+                        .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
+                        .WithBindMount(testcontainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
+                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithNetwork(testKafkaNetwork)
+                        .WithStartupCallback((kafkaContainer, cancelToken) =>
+                        {
+                            return Task.CompletedTask;
+                        })
+
+                        // .WithAutoRemove(true)
+                        // .WithCleanUp(true)
+                        .Build());
 
                     MongoDbContainer = new MongoDbBuilder()
                         .WithImage("mongo:7.0.5-rc0-jammy")
-                        .WithName($"{nameof(TestContainersService)}-mongo-db-container")
+                        .WithName($"{nameof(TestContainersService)}-mongo-db-container-{Guid.NewGuid()}")
                         .WithHostname("test-mongo-db-host")
                         .WithPortBinding(28117, 28117)
                         .WithAutoRemove(true)
@@ -176,36 +197,42 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         })
                         .Build();
 
-                    await Task.WhenAll(
-                        EventSourceDbContainer.StartAsync(),
-                        ZookeperKafkaContainer.StartAsync(),
-                        KafkaContainer.StartAsync(),
-                        KafkaUIContainer.StartAsync(),
-                        MongoDbContainer.StartAsync());
+                    await TryToStartContainerAsync();
 
-                    await Task.Delay(TimeSpan.FromSeconds(60));
+                    // Wait until Kafka is fully ready
+                    var bootstrapServers = KafkaContainer.GetBootstrapAddress();
+                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromMinutes(1));
 
                     var config = new AdminClientConfig
                     {
-                        BootstrapServers = KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = bootstrapServers
                     };
 
                     using var admin = new AdminClientBuilder(config).Build();
 
                     await admin.CreateTopicsAsync(
                     [
-                        new TopicSpecification { Name = BaseTopics.AccountingAccounts, NumPartitions = 1, ReplicationFactor = 1 },
-                        new TopicSpecification { Name = BaseTopics.AccountingPayments, NumPartitions = 1, ReplicationFactor = 1 }
+                        new TopicSpecification
+                        {
+                            Name = BaseTopics.AccountingAccounts,
+                            NumPartitions = 1,
+                            ReplicationFactor = 1
+                        },
+                        new TopicSpecification
+                        {
+                            Name = BaseTopics.AccountingPayments,
+                            NumPartitions = 5,
+                            ReplicationFactor = 1
+                        },
                     ]);
                 }
                 catch (Exception ex)
                 {
                     IsStarted = false;
                     Console.WriteLine(ex);
+
                     throw;
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(15));
             }
         }
 
@@ -270,7 +297,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await EventSourceDbContainer?.StopAsync();
                 await KafkaContainer?.StopAsync();
                 await KafkaUIContainer?.StopAsync();
-                await ZookeperKafkaContainer?.StopAsync();
                 await MongoDbContainer?.StopAsync();
             }
             catch (Exception ex)
@@ -290,11 +316,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await EventSourceDbContainer.DisposeAsync();
             }
 
-            if (ZookeperKafkaContainer != null)
-            {
-                await ZookeperKafkaContainer.DisposeAsync();
-            }
-
             if (KafkaContainer != null)
             {
                 await KafkaContainer.DisposeAsync();
@@ -311,6 +332,71 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             _semaphoreGuard?.Dispose();
+        }
+
+        private static async Task<bool> TryToStartContainerAsync()
+        {
+            try
+            {
+                await Task.WhenAll(
+                    EventSourceDbContainer.StartAsync(),
+                    KafkaContainer.StartAsync(),
+                    KafkaUIContainer.StartAsync(),
+                    MongoDbContainer.StartAsync());
+            }
+            catch (Exception ex)
+            {
+                // Ignore "device or resource busy" as a false positive
+                if (ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                IsStarted = false;
+                Console.WriteLine(ex);
+
+                var mongoDbLogs = await MongoDbContainer.GetLogsAsync();
+                Console.WriteLine($"Mongo db container logs: {mongoDbLogs}");
+
+                var eventSourceDbLogs = await EventSourceDbContainer.GetLogsAsync();
+                Console.WriteLine($"Event store db container logs: {eventSourceDbLogs}");
+
+                var kafkaLobs = await KafkaContainer.GetLogsAsync();
+                Console.WriteLine($"Kafka container logs: {kafkaLobs}");
+
+                throw;
+            }
+
+            return true;
+        }
+
+        private static async Task WaitForKafkaReadyAsync(string bootstrapServers, TimeSpan timeout)
+        {
+            var start = DateTime.UtcNow;
+            while (DateTime.UtcNow - start < timeout)
+            {
+                try
+                {
+                    var config = new AdminClientConfig { BootstrapServers = bootstrapServers };
+                    using var admin = new AdminClientBuilder(config).Build();
+                    var metadata = admin.GetMetadata(TimeSpan.FromSeconds(1));
+
+                    if (metadata.Brokers.Count != 0)
+                    {
+                        await Task.Delay(timeout);
+                        Console.WriteLine("Kafka broker is ready.");
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Ignore and retry
+                }
+
+                await Task.Delay(1000);
+            }
+
+            throw new TimeoutException("Kafka did not become ready in time.");
         }
     }
 }

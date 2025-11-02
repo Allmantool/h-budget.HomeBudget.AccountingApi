@@ -1,10 +1,11 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -e
 
 echo ">> [Test] Testcontainers.sh executed successfully."
 
-CONFIG=/etc/kafka/server.properties
-LOG_DIRS=/tmp/kraft-combined-logs
+CONFIG="/etc/kafka/server.properties"
+LOG_DIRS="/tmp/kraft-combined-logs"
+HOST_IP=$(hostname -I | awk '{print $1}') # First IP address of container
 
 # Cluster ID: use env if present, otherwise generate a new one
 if [ -n "$KAFKA_CLUSTER_ID" ]; then
@@ -15,16 +16,37 @@ else
   echo "Generated random CLUSTER_ID: $CLUSTER_ID"
 fi
 
-# Derive the first controller (fallback to localhost:9092 if unset)
+# Derive controllers or use fallback
 if [ -n "$KAFKA_CONTROLLER_QUORUM_VOTERS" ]; then
   IFS=',' read -r FIRST_CONTROLLER _ <<< "$KAFKA_CONTROLLER_QUORUM_VOTERS"
   INITIAL_CONTROLLERS="$FIRST_CONTROLLER"
 else
-  INITIAL_CONTROLLERS="1@localhost:9092"
+  : "${INITIAL_CONTROLLERS:=1@test-kafka:9093}"
 fi
 
-echo "=== Using Kafka config file at: $CONFIG ==="
-cat "$CONFIG"
+# Optional: replace localhost in config with container's IP
+if grep -q "localhost" "$CONFIG"; then
+  echo "Replacing 'localhost' with '$HOST_IP' in Kafka config"
+  sed -i "s/localhost/$HOST_IP/g" "$CONFIG"
+fi
+
+echo "------------------------------------------------------------"
+echo ">> Kafka startup initiated at $(date)"
+echo ">> Host IP: $HOST_IP"
+echo ">> Config file: $CONFIG"
+echo ">> Log dirs: $LOG_DIRS"
+echo ">> Initial controllers: $INITIAL_CONTROLLERS"
+echo ">> Cluster ID: $CLUSTER_ID"
+echo "------------------------------------------------------------"
+
+if [ "${DEBUG_CONFIG:-true}" = "true" ]; then
+  echo
+  echo "=== Effective Kafka Configuration Preview ==="
+  echo "---------------------------------------------"
+  grep -E "^(broker\.id|process\.roles|controller\.listener\.names|listener\.security\.protocol\.map|listeners|advertised.listeners|controller\.quorum\.voters|log\.dirs|node.id|inter\.broker\.listener\.name)" "$CONFIG" || echo "(No key parameters found)"
+  echo "---------------------------------------------"
+  echo
+fi
 
 echo "=== Checking if storage is formatted ==="
 if [ ! -f "$LOG_DIRS/meta.properties" ]; then
@@ -36,11 +58,18 @@ if [ ! -f "$LOG_DIRS/meta.properties" ]; then
     --initial-controllers "$INITIAL_CONTROLLERS:$CLUSTER_ID" \
     || echo "⚠️  Storage format failed (maybe already formatted)"
 else
-  echo "=== Storage already formatted (cluster.id=$(grep ^cluster.id "$LOG_DIRS/meta.properties" | cut -d'=' -f2)) ==="
+  EXISTING_CLUSTER_ID=$(grep ^cluster.id "$LOG_DIRS/meta.properties" | cut -d'=' -f2)
+  echo "=== Storage already formatted (cluster.id=$EXISTING_CLUSTER_ID) ==="
 fi
 
-echo "=== Starting Kafka ==="
-kafka-server-start "$CONFIG" || echo "⚠️  Kafka exited with error, container remains running"
+echo
+echo "=== Final Startup Summary ==="
+echo "Node ID: $(grep ^node.id "$CONFIG" | cut -d'=' -f2)"
+echo "Process Roles: $(grep ^process.roles "$CONFIG" | cut -d'=' -f2)"
+echo "Listeners: $(grep ^listeners "$CONFIG" | cut -d'=' -f2)"
+echo "Advertised Listeners: $(grep ^advertised.listeners "$CONFIG" | cut -d'=' -f2)"
+echo "Controller Quorum Voters: $(grep ^controller.quorum.voters "$CONFIG" | cut -d'=' -f2)"
+echo
 
-# keep container alive for debugging
-tail -f /dev/null
+echo "=== Starting Kafka ==="
+exec kafka-server-start "$CONFIG"
