@@ -51,13 +51,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             KafkaContainer?.GetBootstrapAddress()?.Replace("plaintext://", "", StringComparison.OrdinalIgnoreCase)
         ];
 
-        public async Task UpAndRunningContainersAsync()
+        public async Task<bool> UpAndRunningContainersAsync()
         {
             using (_semaphoreGuard)
             {
                 if (configuration == null || IsStarted)
                 {
-                    return;
+                    return IsStarted;
                 }
 
                 IsStarted = true;
@@ -225,7 +225,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await WaitForKafkaReadyAsync(TimeSpan.FromMinutes(5));
 
                     Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
-                    return;
+
+                    return IsStarted;
                 }
                 catch (Exception ex)
                 {

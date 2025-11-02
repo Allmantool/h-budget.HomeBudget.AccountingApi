@@ -33,30 +33,30 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 Configuration = conf.Build();
 
-                _containersConnections = await webHostInitializationCallback?.Invoke();
+                _containersConnections = WaitForContainersInitialization(webHostInitializationCallback, TimeSpan.FromMinutes(5)).GetAwaiter().GetResult();
             });
 
-            builder.ConfigureTestServices(services =>
+            builder.ConfigureTestServices(async services =>
             {
                 var kafkaOptions = new KafkaOptions
                 {
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer,
+                        BootstrapServers = _containersConnections?.KafkaContainer,
                     },
                     ConsumerSettings = new ConsumerSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer
+                        BootstrapServers = _containersConnections?.KafkaContainer
                     },
                     AdminSettings = new AdminSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer
+                        BootstrapServers = _containersConnections?.KafkaContainer
                     }
                 };
 
                 var mongoDbOptions = new MongoDbOptions
                 {
-                    ConnectionString = _containersConnections.MongoDbContainer
+                    ConnectionString = _containersConnections?.MongoDbContainer
                 };
 
                 services.AddOptions<KafkaOptions>().Configure(options =>
@@ -73,7 +73,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     options.PaymentAccounts = "payment_accounts_test";
                 });
 
-                var eventStoreConnectionSettings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                var eventStoreConnectionSettings = EventStoreClientSettings.Create(_containersConnections?.EventSourceDbContainer);
                 var eventStoreDbOptions = new EventStoreDbOptions();
 
                 services.AddEventStoreClient(
@@ -97,6 +97,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             });
 
             base.ConfigureWebHost(builder);
+        }
+
+        private static async Task<TestContainersConnections> WaitForContainersInitialization(
+            Func<Task<TestContainersConnections>> callback, TimeSpan timeout)
+        {
+            var start = DateTime.UtcNow;
+            while (true)
+            {
+                var result = await callback();
+                if (result != null)
+                {
+                    return result;
+                }
+
+                if (DateTime.UtcNow - start > timeout)
+                {
+                    throw new TimeoutException("Test containers were not initialized within 5 minutes.");
+                }
+
+                await Task.Delay(1000);
+            }
         }
     }
 }
