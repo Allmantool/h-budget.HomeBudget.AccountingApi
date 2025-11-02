@@ -27,60 +27,67 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         protected BaseTestWebApp()
         {
-            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
-
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
-
-            var testProperties = TestContext.CurrentContext.Test.Properties;
-            var testCategory = testProperties.Get("Category") as string;
-
-            if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return;
-            }
+                BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+                BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            WebFactory = new IntegrationTestWebApplicationFactory<TEntryPoint>(
-                () =>
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
+
+                var testProperties = TestContext.CurrentContext.Test.Properties;
+                var testCategory = testProperties.Get("Category") as string;
+
+                if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
                 {
-                    TestContainersService = new TestContainersService(WebFactory?.Configuration);
+                    return;
+                }
 
-                    StartAsync().GetAwaiter().GetResult();
-
-                    return new TestContainersConnections
+                WebFactory = new IntegrationTestWebApplicationFactory<TEntryPoint>(
+                    async () =>
                     {
-                        KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
-                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                        MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
-                    };
-                });
+                        TestContainersService = new TestContainersService(WebFactory?.Configuration);
 
-            var clientBaseUrl = new Uri("http://localhost:6064");
-            var clientOptions = new WebApplicationFactoryClientOptions
+                        await StartAsync();
+
+                        return new TestContainersConnections
+                        {
+                            KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                            EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                        };
+                    });
+
+                var clientBaseUrl = new Uri("http://localhost:6064");
+                var clientOptions = new WebApplicationFactoryClientOptions
+                {
+                    AllowAutoRedirect = false,
+                    BaseAddress = clientBaseUrl,
+                    HandleCookies = true,
+                    MaxAutomaticRedirections = 7
+                };
+
+                var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
+                var baseClient = WebFactory.CreateDefaultClient(clientOptions.BaseAddress, handler);
+                var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
+                {
+                    ThrowOnAnyError = true
+                };
+
+                _client = new HttpClient(handler)
+                {
+                    BaseAddress = baseClient.BaseAddress,
+                    Timeout = baseClient.Timeout
+                };
+
+                RestHttpClient = new RestClient(
+                    _client,
+                    restClientOptions
+                );
+            }
+            catch (Exception ex)
             {
-                AllowAutoRedirect = false,
-                BaseAddress = clientBaseUrl,
-                HandleCookies = true,
-                MaxAutomaticRedirections = 7
-            };
-
-            var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
-            var baseClient = WebFactory.CreateDefaultClient(clientOptions.BaseAddress, handler);
-            var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
-            {
-                ThrowOnAnyError = true
-            };
-
-            _client = new HttpClient(handler)
-            {
-                BaseAddress = baseClient.BaseAddress,
-                Timeout = baseClient.Timeout
-            };
-
-            RestHttpClient = new RestClient(
-                _client,
-                restClientOptions
-            );
+                throw;
+            }
         }
 
         public async Task StartAsync()

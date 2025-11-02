@@ -225,6 +225,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await WaitForKafkaReadyAsync(TimeSpan.FromMinutes(5));
 
                     Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
+                    return;
                 }
                 catch (Exception ex)
                 {
@@ -396,30 +397,43 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                         if (metadata.Brokers.Count > 0)
                         {
-                            await adminClient.CreateTopicsAsync(new[]
-                            {
-                                new TopicSpecification
-                                {
-                                    Name = BaseTopics.AccountingAccounts,
-                                    NumPartitions = 1,
-                                    ReplicationFactor = 1
-                                },
-                                new TopicSpecification
-                                {
-                                    Name = BaseTopics.AccountingPayments,
-                                    NumPartitions = 5,
-                                    ReplicationFactor = 1
-                                }
-                            });
+                            var topicNames = metadata.Topics.Select(t => t.Topic).ToList();
 
-                            await Task.Delay(TimeSpan.FromSeconds(15));
+                            if (!topicNames.Contains(BaseTopics.AccountingAccounts))
+                            {
+                                await adminClient.CreateTopicsAsync(new[]
+                                {
+                                    new TopicSpecification
+                                    {
+                                        Name = BaseTopics.AccountingAccounts,
+                                        NumPartitions = 1,
+                                        ReplicationFactor = 1
+                                    }
+                                });
+                            }
+
+                            if (!topicNames.Contains(BaseTopics.AccountingPayments))
+                            {
+                                await adminClient.CreateTopicsAsync(new[]
+                                {
+                                    new TopicSpecification
+                                    {
+                                        Name = BaseTopics.AccountingPayments,
+                                        NumPartitions = 5,
+                                        ReplicationFactor = 1
+                                    }
+                                });
+                            }
 
                             return;
                         }
                     }
                     catch (Exception ex)
                     {
-                        connectionTestLog.TryAdd(bootstrap, ex.Message);
+                        if (!connectionTestLog.ContainsKey(bootstrap))
+                        {
+                            connectionTestLog.TryAdd(bootstrap, ex.Message);
+                        }
                     }
                 }
 
