@@ -412,6 +412,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                                 }
                             });
 
+                            await Task.Delay(TimeSpan.FromSeconds(15));
+
                             return;
                         }
                     }
