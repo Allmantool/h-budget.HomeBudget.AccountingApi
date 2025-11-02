@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,6 +7,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using HomeBudget.Accounting.Infrastructure.Helpers;
+using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
@@ -29,25 +32,15 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             {
                 try
                 {
-                    logger.LogInformation("Running Kafka consumer health check...");
+                    logger.RunningKafkaConsumerHealthCheck();
 
                     var topicsWithLag = topicProcessor.GetTopicsWithLag(stoppingToken);
 
-                    foreach (var topic in topicsWithLag)
-                    {
-                        var hasActiveConsumer = await topicManager.HasActiveConsumerAsync(topic.Title, consumerSettings.GroupId);
-
-                        if (hasActiveConsumer)
-                        {
-                            continue;
-                        }
-
-                        // Resubscribe(topic);
-                    }
+                    await HandleTopicsWithLagAsync(topicsWithLag, consumerSettings.GroupId, stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error during Kafka consumer health check. Retrying after delay...");
+                    logger.ErrorConsumerMonitoringMessages(ex);
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerHealthCheckIntervalSeconds), stoppingToken);
@@ -69,6 +62,19 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             }
 
             consumerService.CreateAndSubscribe(topic);
+        }
+
+        private async Task HandleTopicsWithLagAsync(IEnumerable<SubscriptionTopic> topicsWithLag, string groupId, CancellationToken stoppingToken)
+        {
+            foreach (var topic in topicsWithLag)
+            {
+                if (await topicManager.HasActiveConsumerAsync(topic.Title, groupId))
+                {
+                    continue;
+                }
+
+                // Resubscribe(topic);
+            }
         }
     }
 }

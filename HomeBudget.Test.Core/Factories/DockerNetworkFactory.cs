@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using Docker.DotNet;
 using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Networks;
 
 using HomeBudget.Test.Core.Models;
@@ -25,6 +26,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 
             var newNetwork = new NetworkBuilder()
                 .WithName(networkName)
+                .WithDriver(NetworkDriver.Bridge)
                 .Build();
 
             await newNetwork.CreateAsync();

@@ -2,7 +2,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace HomeBudget.Components.Operations
+namespace HomeBudget.Components.Operations.Logs
 {
     internal static partial class PaymentOperationsEventStoreClientLogs
     {
@@ -10,13 +10,13 @@ namespace HomeBudget.Components.Operations
             EventId = 1000,
             Level = LogLevel.Information,
             Message = "Sending {EventType} for OperationKey={OperationKey}, CorrelationId={CorrelationId}")]
-        public static partial void SendingEvent(ILogger logger, string? eventType, string? operationKey, Guid correlationId);
+        public static partial void SendingEvent(ILogger logger, string eventType, string operationKey, Guid correlationId);
 
         [LoggerMessage(
             EventId = 1001,
             Level = LogLevel.Information,
             Message = "{EventType} sent: OperationKey={OperationKey}, CorrelationId={CorrelationId}")]
-        public static partial void EventSent(ILogger logger, string? eventType, string? operationKey, Guid correlationId);
+        public static partial void EventSent(ILogger logger, string eventType, string operationKey, Guid correlationId);
 
         [LoggerMessage(
             EventId = 1002,
@@ -59,5 +59,11 @@ namespace HomeBudget.Components.Operations
             Level = LogLevel.Error,
             Message = "Payment event batch processor crashed.")]
         public static partial void BatchProcessorCrashed(ILogger logger, Exception exception);
+
+        [LoggerMessage(
+            EventId = 1009,
+            Level = LogLevel.Error,
+            Message = "Payment event batch processor crashed. Send to dead queue: {Message}")]
+        public static partial void SendEventToDeadQueue(ILogger logger, string message, Exception exception);
     }
 }
