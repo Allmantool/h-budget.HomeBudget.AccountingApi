@@ -98,6 +98,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithPortBinding(9092, 9092)
                         .WithPortBinding(9093, 9093)
                         .WithPortBinding(9094, 9094)
+                        .WithPortBinding(9997, 9997)
 
                         // v8+ KRAFT_MODE
                         .WithEnvironment("KAFKA_KRAFT_MODE", "true")
@@ -201,7 +202,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     // Wait until Kafka is fully ready
                     var bootstrapServers = KafkaContainer.GetBootstrapAddress();
-                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromMinutes(1));
+                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromMinutes(5));
 
                     var config = new AdminClientConfig
                     {
@@ -372,14 +373,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         private static async Task WaitForKafkaReadyAsync(string bootstrapServers, TimeSpan timeout)
         {
+            var config = new AdminClientConfig
+            {
+                BootstrapServers = bootstrapServers
+            };
+
             var start = DateTime.UtcNow;
             while (DateTime.UtcNow - start < timeout)
             {
                 try
                 {
-                    var config = new AdminClientConfig { BootstrapServers = bootstrapServers };
                     using var admin = new AdminClientBuilder(config).Build();
-                    var metadata = admin.GetMetadata(TimeSpan.FromSeconds(1));
+                    var metadata = admin.GetMetadata(TimeSpan.FromSeconds(3));
 
                     if (metadata.Brokers.Count != 0)
                     {
@@ -388,12 +393,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         return;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore and retry
+                    Console.WriteLine($"Waiting for kafka: {ex.Message}");
                 }
 
-                await Task.Delay(1000);
+                await Task.Delay(TimeSpan.FromSeconds(15));
             }
 
             throw new TimeoutException("Kafka did not become ready in time.");
