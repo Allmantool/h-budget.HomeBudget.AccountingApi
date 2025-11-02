@@ -32,6 +32,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         public static KafkaContainer KafkaContainer { get; private set; }
         public static MongoDbContainer MongoDbContainer { get; private set; }
 
+        private static readonly string[] BootstrapVariants =
+        [
+            "127.0.0.1:9092",
+            "localhost:9092",
+            "127.0.0.1:29092",
+            "localhost:29092",
+            "test-kafka:9092",
+            "127.0.0.1:9093",
+            "localhost:9093",
+            "127.0.0.1:9094",
+            "localhost:9094",
+            "test-kafka:9094",
+            "172.18.0.3:9093",
+            "172.18.0.3:9092",
+            KafkaContainer?.GetBootstrapAddress(),
+            KafkaContainer?.GetBootstrapAddress()?.Replace("plaintext://", "", StringComparison.OrdinalIgnoreCase)
+        ];
+
         public async Task UpAndRunningContainersAsync()
         {
             using (_semaphoreGuard)
@@ -95,6 +113,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithImage("confluentinc/cp-kafka:8.1.0")
                         .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                         .WithHostname("test-kafka")
+                        .WithPortBinding(29092, 9092)
                         .WithPortBinding(9092, 9092)
                         .WithPortBinding(9093, 9093)
                         .WithPortBinding(9094, 9094)
@@ -108,18 +127,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
                         .WithEnvironment(
                             "KAFKA_LISTENERS",
-                            "PLAINTEXT://:9092,CONTROLLER://:9093,BROKER://:9094")
+                            "PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,BROKER://0.0.0.0:9094")
                          .WithEnvironment(
                             "KAFKA_ADVERTISED_LISTENERS",
-                            "PLAINTEXT://test-kafka:9092,BROKER://test-kafka:9094")
+                            "PLAINTEXT://test-kafka:9092,PLAINTEXT_HOST://127.0.0.1:29092,BROKER://test-kafka:9094")
                          .WithEnvironment(
                             "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
-                            "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
+                            "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
 
                         // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
                         .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
                         .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
-                        .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
+                        .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
                         .WithEnvironment("JMX_PORT", "9997")
                         .WithEnvironment("KAFKA_JMX_PORT", "9997")
                         .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
@@ -136,6 +155,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
+                        .WithEnvironment("KAFKA_SOCKET_REQUEST_MAX_BYTES", "2147483647") // ~2GB
+                        .WithEnvironment("KAFKA_MESSAGE_MAX_BYTES", "2147483647")
+                        .WithEnvironment("KAFKA_REPLICA_FETCH_MAX_BYTES", "2147483647")
                         .WithNetwork(testKafkaNetwork)
                         .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
 
@@ -151,9 +173,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithCleanUp(true)
                         .Build();
 
-                    var testcontainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
+                    var testContainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
 
-                    if (!File.Exists(testcontainersConfigPath))
+                    if (!File.Exists(testContainersConfigPath))
                     {
                         throw new FileNotFoundException($"Missing config: {testcontainersScriptPath}");
                     }
@@ -172,7 +194,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
                         // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
                         .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
-                        .WithBindMount(testcontainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
+                        .WithBindMount(testContainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
                         .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithNetwork(testKafkaNetwork)
                         .WithStartupCallback((kafkaContainer, cancelToken) =>
@@ -199,33 +221,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .Build();
 
                     await TryToStartContainerAsync();
+                    await WaitForKafkaReadyAsync(TimeSpan.FromMinutes(5));
 
-                    // Wait until Kafka is fully ready
-                    var bootstrapServers = KafkaContainer.GetBootstrapAddress();
-                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromMinutes(5));
-
-                    var config = new AdminClientConfig
-                    {
-                        BootstrapServers = bootstrapServers
-                    };
-
-                    using var admin = new AdminClientBuilder(config).Build();
-
-                    await admin.CreateTopicsAsync(
-                    [
-                        new TopicSpecification
-                        {
-                            Name = BaseTopics.AccountingAccounts,
-                            NumPartitions = 1,
-                            ReplicationFactor = 1
-                        },
-                        new TopicSpecification
-                        {
-                            Name = BaseTopics.AccountingPayments,
-                            NumPartitions = 5,
-                            ReplicationFactor = 1
-                        },
-                    ]);
+                    Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
                 }
                 catch (Exception ex)
                 {
@@ -350,6 +348,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 // Ignore "device or resource busy" as a false positive
                 if (ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
                 {
+                    await Task.Delay(TimeSpan.FromSeconds(30));
                     return true;
                 }
 
@@ -371,34 +370,56 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             return true;
         }
 
-        private static async Task WaitForKafkaReadyAsync(string bootstrapServers, TimeSpan timeout)
+        private static async Task WaitForKafkaReadyAsync(TimeSpan timeout)
         {
-            var config = new AdminClientConfig
-            {
-                BootstrapServers = bootstrapServers
-            };
-
             var start = DateTime.UtcNow;
+
             while (DateTime.UtcNow - start < timeout)
             {
-                try
+                foreach (var bootstrap in BootstrapVariants.Where(b => !string.IsNullOrWhiteSpace(b)))
                 {
-                    using var admin = new AdminClientBuilder(config).Build();
-                    var metadata = admin.GetMetadata(TimeSpan.FromSeconds(3));
-
-                    if (metadata.Brokers.Count != 0)
+                    try
                     {
-                        await Task.Delay(timeout);
-                        Console.WriteLine("Kafka broker is ready.");
-                        return;
+                        var adminClientConfig = new AdminClientConfig
+                        {
+                            BootstrapServers = bootstrap,
+                            SocketTimeoutMs = 5000,
+                            ConnectionsMaxIdleMs = 10000,
+                            MessageMaxBytes = 2147483647
+                        };
+
+                        using var adminClient = new AdminClientBuilder(adminClientConfig).Build();
+                        var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
+
+                        if (metadata.Brokers.Count > 0)
+                        {
+                            await adminClient.CreateTopicsAsync(new[]
+                            {
+                                new TopicSpecification
+                                {
+                                    Name = BaseTopics.AccountingAccounts,
+                                    NumPartitions = 1,
+                                    ReplicationFactor = 1
+                                },
+                                new TopicSpecification
+                                {
+                                    Name = BaseTopics.AccountingPayments,
+                                    NumPartitions = 5,
+                                    ReplicationFactor = 1
+                                }
+                            });
+
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to connect to Kafka at {bootstrap}: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Waiting for kafka: {ex.Message}");
-                }
 
-                await Task.Delay(TimeSpan.FromSeconds(15));
+                // wait before retrying all variants
+                await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
             throw new TimeoutException("Kafka did not become ready in time.");
