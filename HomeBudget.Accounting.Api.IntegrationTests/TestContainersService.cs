@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -127,10 +128,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
                         .WithEnvironment(
                             "KAFKA_LISTENERS",
-                            "PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,BROKER://0.0.0.0:9094")
+                            "PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,BROKER://0.0.0.0:9094")
                          .WithEnvironment(
                             "KAFKA_ADVERTISED_LISTENERS",
-                            "PLAINTEXT://test-kafka:9092,PLAINTEXT_HOST://127.0.0.1:29092,BROKER://test-kafka:9094")
+                            "PLAINTEXT://test-kafka:29092,PLAINTEXT_HOST://localhost:9092,BROKER://test-kafka:9094")
                          .WithEnvironment(
                             "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
                             "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
@@ -155,7 +156,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
-                        .WithEnvironment("KAFKA_SOCKET_REQUEST_MAX_BYTES", "2147483647") // ~2GB
+                        .WithEnvironment("KAFKA_SOCKET_REQUEST_MAX_BYTES", "1000000000")
                         .WithEnvironment("KAFKA_MESSAGE_MAX_BYTES", "2147483647")
                         .WithEnvironment("KAFKA_REPLICA_FETCH_MAX_BYTES", "2147483647")
                         .WithNetwork(testKafkaNetwork)
@@ -374,6 +375,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             var start = DateTime.UtcNow;
 
+            var connectionTestLog = new Dictionary<string, string>();
+
             while (DateTime.UtcNow - start < timeout)
             {
                 foreach (var bootstrap in BootstrapVariants.Where(b => !string.IsNullOrWhiteSpace(b)))
@@ -383,9 +386,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         var adminClientConfig = new AdminClientConfig
                         {
                             BootstrapServers = bootstrap,
-                            SocketTimeoutMs = 5000,
+                            SocketTimeoutMs = 50000,
                             ConnectionsMaxIdleMs = 10000,
-                            MessageMaxBytes = 2147483647
+                            MessageMaxBytes = 1000000000
                         };
 
                         using var adminClient = new AdminClientBuilder(adminClientConfig).Build();
@@ -414,7 +417,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to connect to Kafka at {bootstrap}: {ex.Message}");
+                        connectionTestLog.TryAdd(bootstrap, ex.Message);
                     }
                 }
 
