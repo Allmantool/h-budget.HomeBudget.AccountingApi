@@ -47,7 +47,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     {
                         TestContainersService = new TestContainersService(WebFactory?.Configuration);
 
-                        await StartAsync();
+                        var isStarted = await StartAsync();
 
                         return new TestContainersConnections
                         {
@@ -90,14 +90,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             }
         }
 
-        public async Task StartAsync()
+        public async Task<bool> StartAsync()
         {
-            if (TestContainersService == null)
+            if (TestContainersService is null)
             {
-                return;
+                return false;
             }
 
-            await TestContainersService.UpAndRunningContainersAsync();
+            return await TestContainersService.UpAndRunningContainersAsync();
         }
 
         public async Task ResetAsync()
