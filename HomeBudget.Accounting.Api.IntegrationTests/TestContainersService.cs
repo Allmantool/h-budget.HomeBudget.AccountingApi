@@ -97,6 +97,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithHostname("test-kafka")
                         .WithPortBinding(9092, 9092)
                         .WithPortBinding(9093, 9093)
+                        .WithPortBinding(9094, 9094)
 
                         // v8+ KRAFT_MODE
                         .WithEnvironment("KAFKA_KRAFT_MODE", "true")
@@ -104,16 +105,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                         .WithEnvironment("KAFKA_CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                         .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
-                        .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
-                        .WithEnvironment("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093")
-                        .WithEnvironment("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://test-kafka:9092,PLAINTEXT_HOST://host.docker.internal:9092")
-                        .WithEnvironment("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT")
+                        .WithEnvironment(
+                            "KAFKA_LISTENERS",
+                            "PLAINTEXT://:9092,CONTROLLER://:9093,BROKER://:9094")
+                         .WithEnvironment(
+                            "KAFKA_ADVERTISED_LISTENERS",
+                            "PLAINTEXT://test-kafka:9092,BROKER://test-kafka:9094")
+                         .WithEnvironment(
+                            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
+                            "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
+
+                        // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
                         .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
                         .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
+                        .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
+                        .WithEnvironment("JMX_PORT", "9997")
                         .WithEnvironment("KAFKA_JMX_PORT", "9997")
                         .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
                         .WithEnvironment("KAFKA_LOG_DIRS", "/tmp/kraft-combined-logs")
-                        .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
                         .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
                         .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")
                         .WithEnvironment("KAFKA_LOG_SEGMENT_BYTES", "1073741824")
@@ -127,6 +136,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                         .WithNetwork(testKafkaNetwork)
+                        .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
 
                         // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
                         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(".*started.*"))
@@ -160,7 +170,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP", "use_all_dns_ips")
                         // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
                         // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
-                        .WithEnvironment("DYNAMIC_CONFIG_PATH", "/etc/kafkaui/dynamic_config.yaml")
                         .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
                         .WithBindMount(testcontainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
                         .WithWaitStrategy(Wait.ForUnixContainer())
