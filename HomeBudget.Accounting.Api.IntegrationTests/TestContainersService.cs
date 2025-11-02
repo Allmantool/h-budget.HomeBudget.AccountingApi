@@ -82,6 +82,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         throw new FileNotFoundException($"Missing script: {testcontainersScriptPath}");
                     }
 
+                    var kafkaConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/server.properties")).Replace('\\', '/');
+
+                    if (!File.Exists(kafkaConfigPath))
+                    {
+                        throw new FileNotFoundException($"Missing config: {kafkaConfigPath}");
+                    }
+
                     var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync("test-kafka-net");
 
                     KafkaContainer = new KafkaBuilder()
@@ -89,26 +96,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                         .WithHostname("test-kafka")
                         .WithPortBinding(9092, 9092)
-                        .WithPortBinding(29093, 29093)
+                        .WithPortBinding(9093, 9093)
 
                         // v8+ KRAFT_MODE
                         .WithEnvironment("KAFKA_KRAFT_MODE", "true")
                         .WithEnvironment("KAFKA_NODE_ID", "1")
                         .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
+                        .WithEnvironment("KAFKA_CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                         .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
-                        .WithEnvironment("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093")
-                        .WithEnvironment("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://test-kafka:9092")
-                        .WithEnvironment("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
-                        .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:29093")
+                        .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
+                        .WithEnvironment("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093")
+                        .WithEnvironment("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://test-kafka:9092,PLAINTEXT_HOST://host.docker.internal:9092")
+                        .WithEnvironment("KAFKA_LISTENER_SECURITY_PROTOCOL_MAP", "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT")
+                        .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
                         .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
                         .WithEnvironment("KAFKA_JMX_PORT", "9997")
-                        .WithEnvironment("KAFKA_JMX_HOSTNAME", "kafka")
+                        .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
                         .WithEnvironment("KAFKA_LOG_DIRS", "/tmp/kraft-combined-logs")
                         .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
-                        .WithStartupCallback((kafkaContainer, cancelToken) =>
-                         {
-                             return Task.CompletedTask;
-                         })
                         .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
                         .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")
                         .WithEnvironment("KAFKA_LOG_SEGMENT_BYTES", "1073741824")
@@ -122,7 +127,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
                         .WithEnvironment("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
                         .WithNetwork(testKafkaNetwork)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
+
+                        // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
+                        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(".*started.*"))
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
@@ -133,17 +140,35 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithCleanUp(true)
                         .Build();
 
+                    var testcontainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
+
+                    if (!File.Exists(testcontainersConfigPath))
+                    {
+                        throw new FileNotFoundException($"Missing config: {testcontainersScriptPath}");
+                    }
+
                     KafkaUIContainer = await DockerContainerFactory.GetOrCreateDockerContainerAsync(
-                        $"{nameof(TestContainersService)}-kafka-test-ui",
-                        cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
+                         $"{nameof(TestContainersService)}-kafka-test-ui",
+                         cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
                         .WithName($"{nameof(TestContainersService)}-kafka-test-ui")
                         .WithHostname($"test-kafka-ui")
                         .WithPortBinding(8080, 8080)
                         .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
-                        .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
-                        .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
+
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_BOOTSTRAP_SERVERS", "PLAINTEXT://test-kafka:9092")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP", "use_all_dns_ips")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
+                        .WithEnvironment("DYNAMIC_CONFIG_PATH", "/etc/kafkaui/dynamic_config.yaml")
+                        .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
+                        .WithBindMount(testcontainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
                         .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithNetwork(testKafkaNetwork)
+                        .WithStartupCallback((kafkaContainer, cancelToken) =>
+                        {
+                            return Task.CompletedTask;
+                        })
 
                         // .WithAutoRemove(true)
                         // .WithCleanUp(true)
@@ -167,7 +192,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     // Wait until Kafka is fully ready
                     var bootstrapServers = KafkaContainer.GetBootstrapAddress();
-                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromSeconds(30));
+                    await WaitForKafkaReadyAsync(bootstrapServers, TimeSpan.FromMinutes(1));
 
                     var config = new AdminClientConfig
                     {

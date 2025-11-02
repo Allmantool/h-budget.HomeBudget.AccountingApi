@@ -1,0 +1,15 @@
+﻿kafka:
+  clusters:
+    - name: test-kafka-cluster
+      bootstrapServers: test-kafka:9092
+      readonly: false
+      properties:
+        security.protocol: PLAINTEXT
+        client.dns.lookup: use_all_dns_ips
+        metadata.max.age.ms: 30000
+      metrics:
+        port: 9997
+        type: JMX
+      uiOptions:
+        topic:
+          defaultView: HIDE_INTERNAL
