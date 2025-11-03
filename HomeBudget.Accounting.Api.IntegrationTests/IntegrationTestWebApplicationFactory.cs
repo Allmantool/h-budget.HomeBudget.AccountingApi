@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 
 using EventStore.Client;
 using Microsoft.AspNetCore.Hosting;
@@ -16,7 +17,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWebApplicationFactory<TStartup>
-        (Func<TestContainersConnections> webHostInitializationCallback) : WebApplicationFactory<TStartup>
+        (Func<Task<TestContainersConnections>> webHostInitializationCallback) : WebApplicationFactory<TStartup>
         where TStartup : class
     {
         private TestContainersConnections _containersConnections;
@@ -25,37 +26,37 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration((_, conf) =>
+            builder.ConfigureAppConfiguration(async (_, conf) =>
             {
                 conf.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{HostEnvironments.Integration}.json"));
                 conf.AddEnvironmentVariables();
 
                 Configuration = conf.Build();
 
-                _containersConnections = webHostInitializationCallback?.Invoke();
+                _containersConnections = WaitForContainersInitializationAsync(webHostInitializationCallback, TimeSpan.FromMinutes(5)).GetAwaiter().GetResult();
             });
 
-            builder.ConfigureTestServices(services =>
+            builder.ConfigureTestServices(async services =>
             {
                 var kafkaOptions = new KafkaOptions
                 {
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer,
+                        BootstrapServers = _containersConnections?.KafkaContainer,
                     },
                     ConsumerSettings = new ConsumerSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer
+                        BootstrapServers = _containersConnections?.KafkaContainer
                     },
                     AdminSettings = new AdminSettings
                     {
-                        BootstrapServers = _containersConnections.KafkaContainer
+                        BootstrapServers = _containersConnections?.KafkaContainer
                     }
                 };
 
                 var mongoDbOptions = new MongoDbOptions
                 {
-                    ConnectionString = _containersConnections.MongoDbContainer
+                    ConnectionString = _containersConnections?.MongoDbContainer
                 };
 
                 services.AddOptions<KafkaOptions>().Configure(options =>
@@ -72,12 +73,51 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     options.PaymentAccounts = "payment_accounts_test";
                 });
 
+                var eventStoreConnectionSettings = EventStoreClientSettings.Create(_containersConnections?.EventSourceDbContainer);
+                var eventStoreDbOptions = new EventStoreDbOptions();
+
                 services.AddEventStoreClient(
                     _containersConnections.EventSourceDbContainer,
-                    _ => EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer));
+                    settings =>
+                    {
+                        settings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                        settings.OperationOptions = new EventStoreClientOperationOptions
+                        {
+                            ThrowOnAppendFailure = true,
+                        };
+                        settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+                        settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                        {
+                            KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                            GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                            DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                            MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                        };
+                    });
             });
 
             base.ConfigureWebHost(builder);
+        }
+
+        private static async Task<TestContainersConnections> WaitForContainersInitializationAsync(
+            Func<Task<TestContainersConnections>> callback, TimeSpan timeout)
+        {
+            var start = DateTime.UtcNow;
+            while (true)
+            {
+                var result = await callback();
+                if (result != null)
+                {
+                    return result;
+                }
+
+                if (DateTime.UtcNow - start > timeout)
+                {
+                    throw new TimeoutException("Test containers were not initialized within 5 minutes.");
+                }
+
+                await Task.Delay(1000);
+            }
         }
     }
 }
