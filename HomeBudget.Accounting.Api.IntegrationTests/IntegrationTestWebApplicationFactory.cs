@@ -33,7 +33,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 Configuration = conf.Build();
 
-                _containersConnections = WaitForContainersInitialization(webHostInitializationCallback, TimeSpan.FromMinutes(5)).GetAwaiter().GetResult();
+                _containersConnections = WaitForContainersInitializationAsync(webHostInitializationCallback, TimeSpan.FromMinutes(5)).GetAwaiter().GetResult();
             });
 
             builder.ConfigureTestServices(async services =>
@@ -99,7 +99,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             base.ConfigureWebHost(builder);
         }
 
-        private static async Task<TestContainersConnections> WaitForContainersInitialization(
+        private static async Task<TestContainersConnections> WaitForContainersInitializationAsync(
             Func<Task<TestContainersConnections>> callback, TimeSpan timeout)
         {
             var start = DateTime.UtcNow;
