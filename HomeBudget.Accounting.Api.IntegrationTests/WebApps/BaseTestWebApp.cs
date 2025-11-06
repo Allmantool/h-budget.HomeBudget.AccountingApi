@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
     internal abstract class BaseTestWebApp<TEntryPoint> : BaseTestWebAppDispose
         where TEntryPoint : class
     {
-        private HttpClient _client;
+        private readonly HttpClient _client;
         private IntegrationTestWebApplicationFactory<TEntryPoint> WebFactory { get; }
         private TestContainersService TestContainersService { get; set; }
 
@@ -43,11 +43,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 }
 
                 WebFactory = new IntegrationTestWebApplicationFactory<TEntryPoint>(
-                    async () =>
+                    () =>
                     {
                         TestContainersService = new TestContainersService(WebFactory?.Configuration);
 
-                        var isStarted = await StartAsync();
+                        var isStarted = StartAsync().GetAwaiter().GetResult();
 
                         return new TestContainersConnections
                         {

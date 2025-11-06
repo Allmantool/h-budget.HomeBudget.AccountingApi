@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 
 using EventStore.Client;
 using Microsoft.AspNetCore.Hosting;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
@@ -17,7 +18,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWebApplicationFactory<TStartup>
-        (Func<Task<TestContainersConnections>> webHostInitializationCallback) : WebApplicationFactory<TStartup>
+        (Func<TestContainersConnections> webHostInitializationCallback) : WebApplicationFactory<TStartup>
         where TStartup : class
     {
         private TestContainersConnections _containersConnections;
@@ -26,18 +27,29 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration(async (_, conf) =>
+            builder.ConfigureAppConfiguration((_, conf) =>
             {
                 conf.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{HostEnvironments.Integration}.json"));
                 conf.AddEnvironmentVariables();
 
                 Configuration = conf.Build();
 
-                _containersConnections = WaitForContainersInitializationAsync(webHostInitializationCallback, TimeSpan.FromMinutes(5)).GetAwaiter().GetResult();
+                _containersConnections = webHostInitializationCallback.Invoke();
+
+                conf.AddInMemoryCollection(new Dictionary<string, string>
+                {
+                    ["Kafka:BootstrapServers"] = _containersConnections.KafkaContainer,
+                    ["MongoDb:ConnectionString"] = _containersConnections.MongoDbContainer,
+                    ["EventStore:ConnectionString"] = _containersConnections.EventSourceDbContainer
+                });
+
+                Configuration = conf.Build();
             });
 
-            builder.ConfigureTestServices(async services =>
+            builder.ConfigureTestServices(services =>
             {
+                var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
+
                 var kafkaOptions = new KafkaOptions
                 {
                     ProducerSettings = new ProducerSettings
@@ -99,24 +111,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             base.ConfigureWebHost(builder);
         }
 
-        private static async Task<TestContainersConnections> WaitForContainersInitializationAsync(
-            Func<Task<TestContainersConnections>> callback, TimeSpan timeout)
+        protected override IHost CreateHost(IHostBuilder builder)
         {
-            var start = DateTime.UtcNow;
-            while (true)
+            try
             {
-                var result = await callback();
-                if (result != null)
-                {
-                    return result;
-                }
+                var host = builder.Build();
+                host.Start();
 
-                if (DateTime.UtcNow - start > timeout)
-                {
-                    throw new TimeoutException("Test containers were not initialized within 5 minutes.");
-                }
-
-                await Task.Delay(1000);
+                return host;
+            }
+            catch (Exception ex)
+            {
+                throw;
             }
         }
     }
