@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +8,8 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
+using HomeBudget.Accounting.Infrastructure.Helpers;
+using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
@@ -26,7 +27,7 @@ namespace HomeBudget.Accounting.Infrastructure.Services
         {
             if (stoppingToken.IsCancellationRequested)
             {
-                logger.LogInformation("Consume loop has been stopped");
+                KafkaConsumerServiceLogs.ConsumeLoopStopped(logger);
                 return;
             }
 
@@ -38,7 +39,7 @@ namespace HomeBudget.Accounting.Infrastructure.Services
 
                     if (ConsumersStore.Consumers.IsEmpty)
                     {
-                        logger.LogTrace("No active consumers. Waiting for new topics...");
+                        KafkaConsumerServiceLogs.NoActiveConsumers(logger);
                         await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                         continue;
                     }
@@ -47,35 +48,21 @@ namespace HomeBudget.Accounting.Infrastructure.Services
                         .Where(c => !c.Any(s => s.Subscriptions.IsNullOrEmpty()))
                         .ToList();
 
-                    List<Task> consumeTasks = [];
-                    foreach (var consumers in consumersWithSubscriptions)
+                    foreach (var consumer in consumersWithSubscriptions.SelectMany(c => c))
                     {
-                        if (consumers.IsNullOrEmpty())
-                        {
-                            continue;
-                        }
-
-                        var tasks = consumers.Select(c => c.ConsumeAsync(stoppingToken)).ToList();
-
-                        consumeTasks.AddRange(consumers.Select(c => c.ConsumeAsync(stoppingToken)));
+                        _ = Task.Run(async () => await consumer.ConsumeAsync(stoppingToken), stoppingToken);
                     }
 
-                    if (consumeTasks.IsNullOrEmpty())
-                    {
-                        await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
-                        continue;
-                    }
-
-                    await Task.WhenAll(consumeTasks);
+                    await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
-                    logger.LogInformation("Consume loop has been cancelled.");
+                    KafkaConsumerServiceLogs.ConsumeLoopCancelled(logger);
                     break;
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error while consuming Kafka messages.");
+                    KafkaConsumerServiceLogs.ErrorConsumingMessages(logger, ex);
                     await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
                 }
             }
@@ -91,17 +78,17 @@ namespace HomeBudget.Accounting.Infrastructure.Services
 
             if (consumer != null)
             {
-                ConsumersStore.Consumers.TryGetValue(topicTitle, out var topicConsumers);
-
-                var consumers = topicConsumers.IsNullOrEmpty()
-                        ? [consumer]
-                        : topicConsumers.Append(consumer);
-
-                ConsumersStore.Consumers.Remove(topicTitle, out var _);
-                ConsumersStore.Consumers.TryAdd(topicTitle, consumers);
+                if (!ConsumersStore.Consumers.TryGetValue(topicTitle, out var topicConsumers))
+                {
+                    ConsumersStore.Consumers.TryAdd(topicTitle, [consumer]);
+                }
+                else
+                {
+                    topicConsumers.Add(consumer);
+                }
 
                 consumer.Subscribe(topicTitle);
-                logger.LogInformation("Subscribed to topic {Title}, consumer type {ConsumerType}", topicTitle, topic.ConsumerType);
+                KafkaConsumerServiceLogs.SubscribedToTopic(logger, topicTitle, topic.ConsumerType.ToString());
             }
 
             return consumer;

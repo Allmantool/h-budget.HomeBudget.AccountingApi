@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using RestSharp;
@@ -16,13 +17,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             int executionDelayAfterInMs = BaseDelayUntilEventSourceReachASyncStateMs,
             CancellationToken cancellationToken = default)
         {
-            await Task.Delay(executionDelayBeforeInMs, cancellationToken);
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(request);
 
-            var response = await client.ExecuteAsync<T>(request, cancellationToken);
-
-            await Task.Delay(executionDelayAfterInMs, cancellationToken);
-
-            return response;
+            return await ExecuteWithDelayInternalAsync(
+                async () => await client.ExecuteAsync<T>(request, cancellationToken),
+                executionDelayBeforeInMs,
+                executionDelayAfterInMs,
+                cancellationToken
+            );
         }
 
         public static async Task ExecuteWithDelayAsync(
@@ -31,11 +34,45 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             int executionDelayInMs = BaseDelayUntilEventSourceReachASyncStateMs,
             CancellationToken cancellationToken = default)
         {
-            await Task.Delay(executionDelayInMs, cancellationToken);
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(request);
 
-            await client.ExecuteAsync(request, cancellationToken);
+            await ExecuteWithDelayInternalAsync(
+                async () =>
+                {
+                    await client.ExecuteAsync(request, cancellationToken);
+                    return true;
+                },
+                executionDelayInMs,
+                executionDelayInMs,
+                cancellationToken
+            );
+        }
 
-            await Task.Delay(executionDelayInMs, cancellationToken);
+        private static async Task<T> ExecuteWithDelayInternalAsync<T>(
+            Func<Task<T>> operation,
+            int delayBeforeMs,
+            int delayAfterMs,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(delayBeforeMs, cancellationToken);
+
+            try
+            {
+                return await operation();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Unexpected error during HTTP delayed execution: {ex.Message}", ex);
+            }
+            finally
+            {
+                await Task.Delay(delayAfterMs, cancellationToken);
+            }
         }
     }
 }
