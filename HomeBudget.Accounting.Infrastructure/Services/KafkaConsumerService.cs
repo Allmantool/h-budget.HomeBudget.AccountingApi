@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -79,14 +78,14 @@ namespace HomeBudget.Accounting.Infrastructure.Services
 
             if (consumer != null)
             {
-                ConsumersStore.Consumers.TryGetValue(topicTitle, out var topicConsumers);
-
-                var consumers = topicConsumers.IsNullOrEmpty()
-                        ? [consumer]
-                        : topicConsumers.Append(consumer);
-
-                ConsumersStore.Consumers.Remove(topicTitle, out var _);
-                ConsumersStore.Consumers.TryAdd(topicTitle, consumers);
+                if (!ConsumersStore.Consumers.TryGetValue(topicTitle, out var topicConsumers))
+                {
+                    ConsumersStore.Consumers.TryAdd(topicTitle, [consumer]);
+                }
+                else
+                {
+                    topicConsumers.Add(consumer);
+                }
 
                 consumer.Subscribe(topicTitle);
                 KafkaConsumerServiceLogs.SubscribedToTopic(logger, topicTitle, topic.ConsumerType.ToString());

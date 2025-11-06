@@ -40,14 +40,11 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                         continue;
                     }
 
-                    while (consumerSettings.MaxAccountingPaymentConsumers >= GetAlivePaymentConsumers().Count())
+                    consumerService.CreateAndSubscribe(new SubscriptionTopic
                     {
-                        consumerService.CreateAndSubscribe(new SubscriptionTopic
-                        {
-                            ConsumerType = ConsumerTypes.PaymentOperations,
-                            Title = BaseTopics.AccountingPayments
-                        });
-                    }
+                        ConsumerType = ConsumerTypes.PaymentOperations,
+                        Title = BaseTopics.AccountingPayments
+                    });
                 }
                 catch (OperationCanceledException ex)
                 {

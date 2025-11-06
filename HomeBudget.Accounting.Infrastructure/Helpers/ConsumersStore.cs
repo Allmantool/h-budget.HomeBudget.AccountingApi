@@ -7,6 +7,6 @@ namespace HomeBudget.Accounting.Infrastructure.Helpers
 {
     internal static class ConsumersStore
     {
-        public static readonly ConcurrentDictionary<string, IEnumerable<IKafkaConsumer>> Consumers = new();
+        public static readonly ConcurrentDictionary<string, ICollection<IKafkaConsumer>> Consumers = new();
     }
 }
