@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,9 +9,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Helpers;
+using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -30,41 +34,46 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             {
                 try
                 {
-                    if (ConsumersStore.Consumers.TryGetValue(BaseTopics.AccountingPayments, out var consumers))
+                    if (GetAlivePaymentConsumers().Count() >= consumerSettings.MaxAccountingPaymentConsumers)
                     {
                         await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
                         continue;
                     }
 
-                    if (!consumers.IsNullOrEmpty() && consumers.Count() >= consumerSettings.MaxAccountingPaymentConsumers)
+                    consumerService.CreateAndSubscribe(new SubscriptionTopic
                     {
-                        continue;
-                    }
-
-                    foreach (var _ in Enumerable.Range(1, consumerSettings.MaxAccountingPaymentConsumers))
-                    {
-                        consumerService.CreateAndSubscribe(new SubscriptionTopic
-                        {
-                            ConsumerType = ConsumerTypes.PaymentOperations,
-                            Title = BaseTopics.AccountingPayments
-                        });
-                    }
+                        ConsumerType = ConsumerTypes.PaymentOperations,
+                        Title = BaseTopics.AccountingPayments
+                    });
                 }
                 catch (OperationCanceledException ex)
                 {
-                    logger.LogError(ex, "Shutting down {Service}...", nameof(KafkaPaymentsConsumerBackgroundService));
+                    KafkaPaymentsConsumerBackgroundServiceLogs.OperationCanceled(
+                        logger,
+                        nameof(KafkaPaymentsConsumerBackgroundService),
+                        ex);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(
-                    ex,
-                    "Unexpected error in {Service}. Restarting in {Delay} seconds...",
-                    nameof(KafkaPaymentsConsumerBackgroundService),
-                    options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds);
+                    KafkaPaymentsConsumerBackgroundServiceLogs.UnexpectedError(
+                        logger,
+                        nameof(KafkaPaymentsConsumerBackgroundService),
+                        consumerSettings.ConsumerCircuitBreakerDelayInSeconds,
+                        ex);
 
-                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
                 }
             }
+        }
+
+        private static IEnumerable<IKafkaConsumer> GetAlivePaymentConsumers()
+        {
+            if (ConsumersStore.Consumers.TryGetValue(BaseTopics.AccountingPayments, out var paymentConsumers))
+            {
+                return paymentConsumers.Where(p => p.IsAlive());
+            }
+
+            return Enumerable.Empty<BaseKafkaConsumer<string, string>>();
         }
     }
 }
