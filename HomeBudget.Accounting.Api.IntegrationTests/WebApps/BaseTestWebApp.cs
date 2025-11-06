@@ -76,7 +76,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 _client = new HttpClient(handler)
                 {
                     BaseAddress = baseClient.BaseAddress,
-                    Timeout = baseClient.Timeout
+                    Timeout = TimeSpan.FromMinutes(5)
                 };
 
                 RestHttpClient = new RestClient(
