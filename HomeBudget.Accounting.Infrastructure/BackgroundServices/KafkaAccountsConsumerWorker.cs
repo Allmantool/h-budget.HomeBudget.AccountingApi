@@ -9,17 +9,17 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Accounting.Infrastructure.Helpers;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
-    internal class KafkaAccountsConsumerBackgroundService(
-        ILogger<KafkaAccountsConsumerBackgroundService> logger,
+    internal class KafkaAccountsConsumerWorker(
+        ILogger<KafkaAccountsConsumerWorker> logger,
         IOptions<KafkaOptions> options,
         Channel<AccountRecord> paymentAccountsChannel,
         IConsumerService consumerService,
@@ -65,14 +65,14 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 }
                 catch (OperationCanceledException ex)
                 {
-                    logger.LogError(ex, "Shutting down {Service}...", nameof(KafkaAccountsConsumerBackgroundService));
+                    logger.LogError(ex, "Shutting down {Service}...", nameof(KafkaAccountsConsumerWorker));
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(
                     ex,
                     "Unexpected error in {Service}. Restarting in {Delay} seconds...",
-                    nameof(KafkaAccountsConsumerBackgroundService),
+                    nameof(KafkaAccountsConsumerWorker),
                     options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds);
 
                     await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);

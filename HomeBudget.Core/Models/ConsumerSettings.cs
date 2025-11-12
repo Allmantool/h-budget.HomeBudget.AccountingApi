@@ -10,11 +10,11 @@
         public int FetchWaitMaxMs { get; set; } = 5;
         public int AutoOffsetReset { get; set; } = 1;
         public bool AllowAutoCreateTopics { get; set; }
-        public int MaxPollIntervalMs { get; set; } = 30000;
+        public int MaxPollIntervalMs { get; set; } = 300000;
         public int SessionTimeoutMs { get; set; } = 10000;
         public int HeartbeatIntervalMs { get; set; } = 3000;
         public int ConsumerCircuitBreakerDelayInSeconds { get; set; } = 5;
-        public long ConsumeDelayInMilliseconds { get; set; } = 300;
+        public long ConsumeDelayInMilliseconds { get; set; } = 5000;
         public string Debug { get; set; } = "all";
         public int PartitionAssignmentStrategy { get; set; } = 2;
         public int ConsumerHealthCheckIntervalSeconds { get; set; } = 90;

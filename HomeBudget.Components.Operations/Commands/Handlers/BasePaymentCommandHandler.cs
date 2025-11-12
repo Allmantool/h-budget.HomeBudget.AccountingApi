@@ -35,7 +35,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
                 try
                 {
-                    var deliveryResult = await producer.ProduceAsync(BaseTopics.AccountingPayments, message, CancellationToken.None);
+                    var deliveryResult = await producer.ProduceAsync(BaseTopics.AccountingPayments, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {

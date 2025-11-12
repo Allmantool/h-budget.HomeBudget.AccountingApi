@@ -10,9 +10,9 @@ using HomeBudget.Accounting.Infrastructure.Helpers;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
-    internal class KafkaMessageConsumerBackgroundService(
+    internal class KafkaConsumerOrchestratorWorker(
         IConsumerService kafkaConsumerService,
-        ILogger<KafkaMessageConsumerBackgroundService> logger)
+        ILogger<KafkaConsumerOrchestratorWorker> logger)
     : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,7 +29,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            logger.LogInformation("Stopping {BackgroundService}...", nameof(KafkaMessageConsumerBackgroundService));
+            logger.LogInformation("Stopping {BackgroundService}...", nameof(KafkaConsumerOrchestratorWorker));
 
             foreach (var topic in ConsumersStore.Consumers.Keys)
             {

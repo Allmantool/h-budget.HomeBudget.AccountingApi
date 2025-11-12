@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
+
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -44,10 +46,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerConfig = new ConsumerConfig
             {
-                // GroupInstanceId = ConsumerId,
+                GroupInstanceId = $"{_consumerSettings.GroupId}-{_consumerSettings.ClientId}",
+                GroupId = $"{_consumerSettings.GroupId}",
                 ClientId = _consumerSettings.ClientId,
                 BootstrapServers = _consumerSettings.BootstrapServers,
-                GroupId = $"{_consumerSettings.GroupId}",
                 AutoOffsetReset = (AutoOffsetReset)_consumerSettings.AutoOffsetReset,
                 EnableAutoCommit = _consumerSettings.EnableAutoCommit,
                 AllowAutoCreateTopics = _consumerSettings.AllowAutoCreateTopics,
@@ -76,7 +78,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 if (_disposed || _consumer == null)
                 {
-                    BaseKafkaConsumerLogs.SubscriptionsAccessedOnDisposed(_logger);
+                    _logger.SubscriptionsAccessedOnDisposed();
                     return Array.Empty<string>();
                 }
 
@@ -86,7 +88,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 }
                 catch (ObjectDisposedException ex)
                 {
-                    BaseKafkaConsumerLogs.SubscriptionsAccessedOnDisposedError(_logger, ex);
+                    _logger.SubscriptionsAccessedOnDisposedError(ex);
                     return Array.Empty<string>();
                 }
             }
@@ -96,23 +98,38 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public bool IsAlive()
         {
-            if (_disposed || _consumer == null)
+            if (_disposed || _consumer is null)
             {
                 return false;
             }
 
             try
             {
-                var _ = _consumer.Subscription;
-                return true;
+                var assigned = _consumer.Assignment;
+                var subscribed = _consumer.Subscription;
+
+                return assigned.Count != 0 || subscribed.Count != 0;
             }
             catch (ObjectDisposedException)
             {
                 return false;
             }
-            catch (KafkaException ex) when (ex.Error.IsFatal)
+            catch (KafkaException ex)
             {
-                BaseKafkaConsumerLogs.FatalKafkaError(_logger, ex);
+                if (ex.Error.IsFatal)
+                {
+                    _logger.FatalKafkaError(ex);
+                }
+                else
+                {
+                    _logger.TransientKafkaError(ex);
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unexpected error checking consumer liveness");
                 return false;
             }
         }
@@ -127,7 +144,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (_disposed || _consumer == null)
+                    if (_disposed || _consumer is null)
                     {
                         BaseKafkaConsumerLogs.ConsumerDisposed(_logger);
                         break;
@@ -137,7 +154,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     {
                         var consumeResult = _consumer.Consume(TimeSpan.FromMilliseconds(_consumerSettings.ConsumeDelayInMilliseconds));
 
-                        if (consumeResult == null)
+                        if (consumeResult is null)
                         {
                             await Task.Delay((int)_consumerSettings.ConsumeDelayInMilliseconds, cancellationToken);
                             continue;
@@ -164,23 +181,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     {
                         if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
                         {
-                            BaseKafkaConsumerLogs.TopicPartitionNotFound(_logger, ex.Error.Reason);
+                            _logger.TopicPartitionNotFound(ex.Error.Reason);
 
                             await Task.Delay(_consumerSettings.HeartbeatIntervalMs, cancellationToken);
                         }
                         else
                         {
-                            BaseKafkaConsumerLogs.ConsumeError(_logger, ex.Error.Reason, ex);
+                            _logger.ConsumeError(ex.Error.Reason, ex);
                         }
                     }
                     catch (OperationCanceledException)
                     {
-                        BaseKafkaConsumerLogs.ConsumerLoopCanceled(_logger);
+                        _logger.ConsumerLoopCanceled();
                         break;
                     }
                     catch (Exception ex)
                     {
-                        BaseKafkaConsumerLogs.UnhandledErrorInLoop(_logger, ex.Message, ex);
+                        _logger.UnhandledErrorInLoop(ex.Message, ex);
                     }
                 }
             }
@@ -194,7 +211,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             if (_disposed || _consumer == null)
             {
-                BaseKafkaConsumerLogs.CloseAlreadyDisposedConsumer(_logger);
+                _logger.CloseAlreadyDisposedConsumer();
                 return;
             }
 
@@ -205,7 +222,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
             catch (Exception ex)
             {
-                BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
+                _logger.ErrorWhileClosingConsumer(ex.Message, ex);
             }
             finally
             {
@@ -215,23 +232,23 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
         public void Subscribe(string topic)
         {
-            if (string.IsNullOrEmpty(topic))
+            if (string.IsNullOrWhiteSpace(topic))
             {
                 throw new ArgumentNullException(nameof(topic));
             }
 
             if (_disposed || _consumer == null)
             {
-                BaseKafkaConsumerLogs.SubscribeOnDisposed(_logger, topic);
+                _logger.SubscribeOnDisposed(topic);
                 return;
             }
 
-            var topicName = topic.ToLower();
+            var topicName = topic.ToLower(CultureInfo.CurrentCulture);
 
             _consumer.Subscribe(topicName);
             _subscribedTopics.Add(topicName);
 
-            BaseKafkaConsumerLogs.SubscribedToTopic(_logger, topicName, ConsumerId, string.Join(',', _subscribedTopics));
+            _logger.SubscribedToTopic(topicName, ConsumerId, string.Join(',', _subscribedTopics));
         }
 
         public void UnSubscribe()
@@ -243,10 +260,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
             catch (Exception ex)
             {
-                BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
+                _logger.ErrorWhileClosingConsumer(ex.Message, ex);
             }
 
-            BaseKafkaConsumerLogs.UnsubscribedConsumer(_logger, ConsumerId, string.Join(",", _subscribedTopics));
+            _logger.UnsubscribedConsumer(ConsumerId, string.Join(",", _subscribedTopics));
         }
 
         public void Dispose()
@@ -279,11 +296,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         }
                         catch (ObjectDisposedException)
                         {
-                            BaseKafkaConsumerLogs.CloseSkippedDisposed(_logger);
+                            _logger.CloseSkippedDisposed();
                         }
                         catch (Exception ex)
                         {
-                            BaseKafkaConsumerLogs.ErrorWhileClosingConsumer(_logger, ex.Message, ex);
+                            _logger.ErrorWhileClosingConsumer(ex.Message, ex);
                         }
 
                         try
@@ -292,18 +309,18 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         }
                         catch (ObjectDisposedException)
                         {
-                            BaseKafkaConsumerLogs.DisposeSkippedDisposed(_logger);
+                            _logger.DisposeSkippedDisposed();
                         }
                         catch (Exception ex)
                         {
-                            BaseKafkaConsumerLogs.ErrorWhileDisposingConsumer(_logger, ex);
+                            _logger.ErrorWhileDisposingConsumer(ex);
                         }
                     }
                 }
 
                 _disposed = true;
 
-                BaseKafkaConsumerLogs.DisposedConsumer(_logger, ConsumerId, string.Join(",", _subscribedTopics ?? Enumerable.Empty<string>()));
+                _logger.DisposedConsumer(ConsumerId, string.Join(",", _subscribedTopics ?? Enumerable.Empty<string>()));
             }
         }
     }

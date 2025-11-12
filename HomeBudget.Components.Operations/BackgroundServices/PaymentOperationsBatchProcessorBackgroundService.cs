@@ -15,7 +15,7 @@ using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
+namespace HomeBudget.Components.Operations.BackgroundServices
 {
     internal class PaymentOperationsBatchProcessorBackgroundService : BackgroundService
     {
@@ -73,7 +73,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             var batchStartTime = _dateTimeProvider.GetNowUtc();
             var eventsBatch = new List<PaymentOperationEvent>();
 
-            while ((_dateTimeProvider.GetNowUtc() - batchStartTime) < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
+            while (_dateTimeProvider.GetNowUtc() - batchStartTime < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
             {
                 if (_paymentEventsChannel.Reader.TryRead(out var evt))
                 {

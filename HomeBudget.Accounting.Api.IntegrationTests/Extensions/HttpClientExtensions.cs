@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 
 using RestSharp;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Policies;
+
 namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
     internal static class HttpClientExtensions
@@ -21,7 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             ArgumentNullException.ThrowIfNull(request);
 
             return await ExecuteWithDelayInternalAsync(
-                async () => await client.ExecuteAsync<T>(request, cancellationToken),
+                async () => await client.ExecuteWithRetryAsync<T>(request, cancellationToken: cancellationToken),
                 executionDelayBeforeInMs,
                 executionDelayAfterInMs,
                 cancellationToken
@@ -40,7 +42,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             await ExecuteWithDelayInternalAsync(
                 async () =>
                 {
-                    await client.ExecuteAsync(request, cancellationToken);
+                    await client.ExecuteWithRetryAsync(request, cancellationToken: cancellationToken);
+
                     return true;
                 },
                 executionDelayInMs,

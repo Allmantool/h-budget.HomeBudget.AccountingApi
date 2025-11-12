@@ -11,7 +11,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Warning,
             Message = "Error while disposing Kafka consumer.")]
         public static partial void ErrorWhileDisposingConsumer(
-            ILogger logger,
+            this ILogger logger,
             Exception exception);
 
         [LoggerMessage(
@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Attempted to access Subscriptions on a disposed Kafka consumer.")]
         public static partial void SubscriptionsAccessedOnDisposedError(
-            ILogger logger,
+            this ILogger logger,
             Exception exception);
 
         [LoggerMessage(
@@ -27,7 +27,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Information,
             Message = "Partitions assigned: [{Partitions}]")]
         public static partial void PartitionsAssigned(
-            ILogger logger,
+            this ILogger logger,
             string partitions);
 
         [LoggerMessage(
@@ -35,7 +35,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Information,
             Message = "Partitions revoked: [{Partitions}]")]
         public static partial void PartitionsRevoked(
-            ILogger logger,
+            this ILogger logger,
             string partitions);
 
         [LoggerMessage(
@@ -43,7 +43,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Information,
             Message = "Kafka log: {Message}")]
         public static partial void KafkaLog(
-            ILogger logger,
+            this ILogger logger,
             string message);
 
         [LoggerMessage(
@@ -51,7 +51,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Kafka error: {Reason}. Context: Name={ContextName}, MemberId={MemberId}")]
         public static partial void KafkaError(
-            ILogger logger,
+            this ILogger logger,
             string reason,
             string contextName,
             string memberId);
@@ -60,90 +60,96 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             EventId = 1001,
             Level = LogLevel.Warning,
             Message = "Attempted to access Subscriptions on a disposed consumer.")]
-        public static partial void SubscriptionsAccessedOnDisposed(ILogger logger);
+        public static partial void SubscriptionsAccessedOnDisposed(this ILogger logger);
 
         [LoggerMessage(
             EventId = 1002,
             Level = LogLevel.Error,
             Message = "Fatal Kafka error, consumer not alive.")]
-        public static partial void FatalKafkaError(ILogger logger, Exception exception);
+        public static partial void FatalKafkaError(this ILogger logger, Exception exception);
 
         [LoggerMessage(
             EventId = 1003,
-            Level = LogLevel.Warning,
-            Message = "Kafka consumer is disposed.")]
-        public static partial void ConsumerDisposed(ILogger logger);
+            Level = LogLevel.Error,
+            Message = "Transient Kafka error, consumer not alive.")]
+        public static partial void TransientKafkaError(this ILogger logger, Exception exception);
 
         [LoggerMessage(
             EventId = 1004,
             Level = LogLevel.Warning,
-            Message = "Topic/partition not found: {Reason}. Retrying...")]
-        public static partial void TopicPartitionNotFound(ILogger logger, string reason);
+            Message = "Kafka consumer is disposed.")]
+        public static partial void ConsumerDisposed(this ILogger logger);
 
         [LoggerMessage(
             EventId = 1005,
-            Level = LogLevel.Error,
-            Message = "Consume error: {Reason}")]
-        public static partial void ConsumeError(ILogger logger, string reason, Exception exception);
+            Level = LogLevel.Warning,
+            Message = "Topic/partition not found: {Reason}. Retrying...")]
+        public static partial void TopicPartitionNotFound(this ILogger logger, string reason);
 
         [LoggerMessage(
             EventId = 1006,
-            Level = LogLevel.Information,
-            Message = "Consumer loop canceled.")]
-        public static partial void ConsumerLoopCanceled(ILogger logger);
+            Level = LogLevel.Error,
+            Message = "Consume error: {Reason}")]
+        public static partial void ConsumeError(this ILogger logger, string reason, Exception exception);
 
         [LoggerMessage(
             EventId = 1007,
-            Level = LogLevel.Error,
-            Message = "Unhandled error in Kafka consumer loop: {Message}")]
-        public static partial void UnhandledErrorInLoop(ILogger logger, string message, Exception exception);
+            Level = LogLevel.Information,
+            Message = "Consumer loop canceled.")]
+        public static partial void ConsumerLoopCanceled(this ILogger logger);
 
         [LoggerMessage(
             EventId = 1008,
-            Level = LogLevel.Warning,
-            Message = "Attempted to close an already disposed consumer.")]
-        public static partial void CloseAlreadyDisposedConsumer(ILogger logger);
+            Level = LogLevel.Error,
+            Message = "Unhandled error in Kafka consumer loop: {Message}")]
+        public static partial void UnhandledErrorInLoop(this ILogger logger, string message, Exception exception);
 
         [LoggerMessage(
             EventId = 1009,
-            Level = LogLevel.Error,
-            Message = "Error while closing consumer: {Message}")]
-        public static partial void ErrorWhileClosingConsumer(ILogger logger, string message, Exception exception);
+            Level = LogLevel.Warning,
+            Message = "Attempted to close an already disposed consumer.")]
+        public static partial void CloseAlreadyDisposedConsumer(this ILogger logger);
 
         [LoggerMessage(
             EventId = 1010,
             Level = LogLevel.Error,
-            Message = "Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.")]
-        public static partial void SubscribeOnDisposed(ILogger logger, string topic);
+            Message = "Error while closing consumer: {Message}")]
+        public static partial void ErrorWhileClosingConsumer(this ILogger logger, string message, Exception exception);
 
         [LoggerMessage(
             EventId = 1011,
-            Level = LogLevel.Information,
-            Message = "Subscribed to topic: {Topic}, consumer {ConsumerId} topics: {SubscribedTopics}")]
-        public static partial void SubscribedToTopic(ILogger logger, string topic, string consumerId, string subscribedTopics);
+            Level = LogLevel.Error,
+            Message = "Attempted to subscribe to topic '{Topic}' on a disposed Kafka consumer.")]
+        public static partial void SubscribeOnDisposed(this ILogger logger, string topic);
 
         [LoggerMessage(
             EventId = 1012,
             Level = LogLevel.Information,
-            Message = "The consumer {ConsumerId} has been unsubscribed. Related topics {SubscribedTopics}")]
-        public static partial void UnsubscribedConsumer(ILogger logger, string consumerId, string subscribedTopics);
+            Message = "Subscribed to topic: {Topic}, consumer {ConsumerId} topics: {SubscribedTopics}")]
+        public static partial void SubscribedToTopic(this ILogger logger, string topic, string consumerId, string subscribedTopics);
 
         [LoggerMessage(
             EventId = 1013,
-            Level = LogLevel.Warning,
-            Message = "Kafka consumer already disposed. Skipping Close().")]
-        public static partial void CloseSkippedDisposed(ILogger logger);
+            Level = LogLevel.Information,
+            Message = "The consumer {ConsumerId} has been unsubscribed. Related topics {SubscribedTopics}")]
+        public static partial void UnsubscribedConsumer(this ILogger logger, string consumerId, string subscribedTopics);
 
         [LoggerMessage(
             EventId = 1014,
             Level = LogLevel.Warning,
-            Message = "Kafka consumer already disposed. Skipping Dispose().")]
-        public static partial void DisposeSkippedDisposed(ILogger logger);
+            Message = "Kafka consumer already disposed. Skipping Close().")]
+        public static partial void CloseSkippedDisposed(this ILogger logger);
 
         [LoggerMessage(
             EventId = 1015,
+            Level = LogLevel.Warning,
+            Message = "Kafka consumer already disposed. Skipping Dispose().")]
+        public static partial void DisposeSkippedDisposed(this ILogger logger);
+
+        [LoggerMessage(
+            EventId = 1016,
             Level = LogLevel.Information,
             Message = "The consumer {ConsumerId} has been disposed. Related topics: {SubscribedTopics}")]
-        public static partial void DisposedConsumer(ILogger logger, string consumerId, string subscribedTopics);
+        public static partial void DisposedConsumer(this ILogger logger, string consumerId, string subscribedTopics);
     }
 }

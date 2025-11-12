@@ -2,7 +2,6 @@
 using System.Threading.Channels;
 
 using EventStore.Client;
-using EventStoreDbClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -10,7 +9,6 @@ using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
-using HomeBudget.Accounting.Infrastructure.BackgroundServices;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Components.Operations.Builders;
@@ -23,6 +21,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Options;
+using HomeBudget.Components.Operations.BackgroundServices;
 
 namespace HomeBudget.Components.Operations.Configuration
 {

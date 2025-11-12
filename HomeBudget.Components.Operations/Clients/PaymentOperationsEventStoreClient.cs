@@ -7,7 +7,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using EventStore.Client;
-using EventStoreDbClient;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +16,7 @@ using Polly.Retry;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Factories;

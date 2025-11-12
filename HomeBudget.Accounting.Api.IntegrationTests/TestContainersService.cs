@@ -16,10 +16,9 @@ using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
-
-using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Core.Constants;
+using HomeBudget.Test.Core.Factories;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {

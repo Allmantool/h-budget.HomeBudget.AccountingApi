@@ -5,10 +5,9 @@ using Docker.DotNet;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Networks;
-
 using HomeBudget.Test.Core.Models;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
+namespace HomeBudget.Test.Core.Factories
 {
     public static class DockerNetworkFactory
     {

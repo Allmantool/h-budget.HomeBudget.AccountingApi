@@ -60,10 +60,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 var clientBaseUrl = new Uri("http://localhost:6064");
                 var clientOptions = new WebApplicationFactoryClientOptions
                 {
-                    AllowAutoRedirect = false,
+                    AllowAutoRedirect = true,
                     BaseAddress = clientBaseUrl,
-                    HandleCookies = true,
-                    MaxAutomaticRedirections = 7
+                    HandleCookies = true
                 };
 
                 var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
@@ -76,7 +75,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 _client = new HttpClient(handler)
                 {
                     BaseAddress = baseClient.BaseAddress,
-                    Timeout = TimeSpan.FromMinutes(5)
+                    Timeout = TimeSpan.FromMinutes(3)
                 };
 
                 RestHttpClient = new RestClient(

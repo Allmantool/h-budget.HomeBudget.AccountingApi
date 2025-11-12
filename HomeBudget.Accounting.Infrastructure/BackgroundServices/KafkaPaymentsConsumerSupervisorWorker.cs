@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,8 +8,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Accounting.Infrastructure.Consumers;
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
@@ -20,9 +17,10 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
-    internal class KafkaPaymentsConsumerBackgroundService(
-        ILogger<KafkaPaymentsConsumerBackgroundService> logger,
+    internal class KafkaPaymentsConsumerSupervisorWorker(
+        ILogger<KafkaPaymentsConsumerSupervisorWorker> logger,
         IOptions<KafkaOptions> options,
+        ITopicManager topicManager,
         IConsumerService consumerService)
         : BackgroundService
     {
@@ -34,30 +32,35 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             {
                 try
                 {
-                    if (GetAlivePaymentConsumers().Count() >= consumerSettings.MaxAccountingPaymentConsumers)
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
-                        continue;
-                    }
+                    var activeConsumersAmount = GetAlivePaymentConsumersAmount();
 
-                    consumerService.CreateAndSubscribe(new SubscriptionTopic
+                    if (activeConsumersAmount <= consumerSettings.MaxAccountingPaymentConsumers && topicManager.IsBrokerReady())
                     {
-                        ConsumerType = ConsumerTypes.PaymentOperations,
-                        Title = BaseTopics.AccountingPayments
-                    });
+                        var topic = new SubscriptionTopic
+                        {
+                            ConsumerType = ConsumerTypes.PaymentOperations,
+                            Title = BaseTopics.AccountingPayments
+                        };
+
+                        consumerService.CreateAndSubscribe(topic);
+                    }
+                    else
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException ex)
                 {
                     KafkaPaymentsConsumerBackgroundServiceLogs.OperationCanceled(
                         logger,
-                        nameof(KafkaPaymentsConsumerBackgroundService),
+                        nameof(KafkaPaymentsConsumerSupervisorWorker),
                         ex);
                 }
                 catch (Exception ex)
                 {
                     KafkaPaymentsConsumerBackgroundServiceLogs.UnexpectedError(
                         logger,
-                        nameof(KafkaPaymentsConsumerBackgroundService),
+                        nameof(KafkaPaymentsConsumerSupervisorWorker),
                         consumerSettings.ConsumerCircuitBreakerDelayInSeconds,
                         ex);
 
@@ -66,14 +69,16 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             }
         }
 
-        private static IEnumerable<IKafkaConsumer> GetAlivePaymentConsumers()
+        private static int GetAlivePaymentConsumersAmount()
         {
             if (ConsumersStore.Consumers.TryGetValue(BaseTopics.AccountingPayments, out var paymentConsumers))
             {
-                return paymentConsumers.Where(p => p.IsAlive());
+                var activeConsumers = paymentConsumers.Where(p => p.IsAlive()).ToList();
+
+                return activeConsumers.Count;
             }
 
-            return Enumerable.Empty<BaseKafkaConsumer<string, string>>();
+            return 0;
         }
     }
 }

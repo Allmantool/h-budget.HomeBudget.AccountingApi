@@ -15,8 +15,8 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {
-    internal class KafkaConsumerHealthMonitorBackgroundService(
-        ILogger<KafkaConsumerHealthMonitorBackgroundService> logger,
+    internal class KafkaConsumerWatchdogWorker(
+        ILogger<KafkaConsumerWatchdogWorker> logger,
         IOptions<KafkaOptions> options,
         IConsumerService consumerService,
         ITopicProcessor topicProcessor,
@@ -30,6 +30,8 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerHealthCheckIntervalSeconds), stoppingToken);
+
                 try
                 {
                     logger.RunningKafkaConsumerHealthCheck();
@@ -41,9 +43,8 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                 catch (Exception ex)
                 {
                     logger.ErrorConsumerMonitoringMessages(ex);
+                    await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerHealthCheckIntervalSeconds), stoppingToken);
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerHealthCheckIntervalSeconds), stoppingToken);
             }
         }
 

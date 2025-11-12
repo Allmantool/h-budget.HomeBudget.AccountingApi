@@ -78,10 +78,10 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
             return services
-                .AddHostedService<KafkaConsumerHealthMonitorBackgroundService>()
-                .AddHostedService<KafkaAccountsConsumerBackgroundService>()
-                .AddHostedService<KafkaMessageConsumerBackgroundService>()
-                .AddHostedService<KafkaPaymentsConsumerBackgroundService>();
+                .AddHostedService<KafkaConsumerWatchdogWorker>()
+                .AddHostedService<KafkaAccountsConsumerWorker>()
+                .AddHostedService<KafkaConsumerOrchestratorWorker>()
+                .AddHostedService<KafkaPaymentsConsumerSupervisorWorker>();
         }
     }
 }

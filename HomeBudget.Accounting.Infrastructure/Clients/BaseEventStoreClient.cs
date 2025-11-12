@@ -15,8 +15,9 @@ using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
-namespace EventStoreDbClient
+namespace HomeBudget.Accounting.Infrastructure.Clients
 {
     public abstract class BaseEventStoreClient<T> : IEventStoreDbClient<T>, IDisposable
         where T : class, new()

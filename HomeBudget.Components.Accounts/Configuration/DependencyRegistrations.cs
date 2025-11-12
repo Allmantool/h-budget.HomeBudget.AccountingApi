@@ -2,8 +2,8 @@
 
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Services;
+
+using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
@@ -12,7 +12,6 @@ using HomeBudget.Components.Accounts.Factories;
 using HomeBudget.Components.Accounts.Handlers;
 using HomeBudget.Components.Accounts.Services;
 using HomeBudget.Components.Accounts.Services.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Consumers;
 
 namespace HomeBudget.Components.Accounts.Configuration
 {
