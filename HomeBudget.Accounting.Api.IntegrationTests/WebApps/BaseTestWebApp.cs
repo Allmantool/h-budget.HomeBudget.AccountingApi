@@ -71,12 +71,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
                 var clientOptions = new WebApplicationFactoryClientOptions
                 {
+                    // BaseAddress = new Uri(""),
                     AllowAutoRedirect = true,
                     HandleCookies = true
                 };
 
                 var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
-                var baseClient = WebFactory.CreateClient(clientOptions);
+                var baseClient = WebFactory.CreateDefaultClient();
 
                 var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
                 {

@@ -352,7 +352,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 // Ignore "device or resource busy" as a false positive
                 if (ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(30));
                     return true;
                 }
 
