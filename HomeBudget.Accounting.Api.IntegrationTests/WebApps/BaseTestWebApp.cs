@@ -69,16 +69,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                         MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                     });
 
-                var clientBaseUrl = new Uri("http://localhost:6064");
                 var clientOptions = new WebApplicationFactoryClientOptions
                 {
                     AllowAutoRedirect = true,
-                    BaseAddress = clientBaseUrl,
                     HandleCookies = true
                 };
 
                 var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
-                var baseClient = WebFactory.CreateDefaultClient(clientOptions.BaseAddress, handler);
+                var baseClient = WebFactory.CreateClient(clientOptions);
+
                 var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
                 {
                     ThrowOnAnyError = true
@@ -87,7 +86,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 Client = new HttpClient(handler)
                 {
                     BaseAddress = baseClient.BaseAddress,
-                    Timeout = TimeSpan.FromMinutes(3)
+                    Timeout = TimeSpan.FromMinutes(2)
                 };
 
                 RestHttpClient = new RestClient(

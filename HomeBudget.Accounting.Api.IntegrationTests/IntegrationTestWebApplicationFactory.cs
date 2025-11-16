@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
@@ -44,6 +45,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 });
 
                 Configuration = conf.Build();
+            });
+
+            builder.ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+                logging.AddFilter("Grpc.Net.Client.Internal", LogLevel.Warning);
             });
 
             builder.ConfigureTestServices(services =>
@@ -115,10 +123,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             try
             {
-                var host = builder?.Build();
-                host.Start();
-
-                return host;
+                // var host = builder?.Build();
+                // host.Start();
+                // return host;
+                return base.CreateHost(builder);
             }
             catch (Exception ex)
             {
