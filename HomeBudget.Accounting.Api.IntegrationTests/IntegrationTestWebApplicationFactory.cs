@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 
 using EventStore.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,23 +19,48 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWebApplicationFactory<TStartup>
-        (Func<TestContainersConnections> webHostInitializationCallback) : WebApplicationFactory<TStartup>
+    : WebApplicationFactory<TStartup>
         where TStartup : class
     {
+        private readonly Func<TestContainersConnections> _webHostInitializationCallback;
         private TestContainersConnections _containersConnections;
 
         internal IConfiguration Configuration { get; private set; }
 
+        public IntegrationTestWebApplicationFactory(
+            Func<TestContainersConnections> webHostInitializationCallback)
+        {
+            _webHostInitializationCallback = webHostInitializationCallback;
+        }
+
+        protected override IHost CreateHost(IHostBuilder builder)
+        {
+            var host = builder.Build();
+            host.Start();
+            return host;
+        }
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            var port = GetSecureRandomPort(5000, 6000);
+
+            builder.UseKestrel(options =>
+            {
+                // HTTP only (same as your original)
+                options.ListenLocalhost(port);
+            });
+
+            builder.UseSetting(WebHostDefaults.ApplicationKey, typeof(TStartup).Assembly.FullName);
+
             builder.ConfigureAppConfiguration((_, conf) =>
             {
-                conf.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{HostEnvironments.Integration}.json"));
+                conf.AddJsonFile(Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    $"appsettings.{HostEnvironments.Integration}.json"));
+
                 conf.AddEnvironmentVariables();
 
-                Configuration = conf.Build();
-
-                _containersConnections = webHostInitializationCallback.Invoke();
+                _containersConnections = _webHostInitializationCallback.Invoke();
 
                 conf.AddInMemoryCollection(new Dictionary<string, string>
                 {
@@ -54,10 +79,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 logging.AddFilter("Grpc.Net.Client.Internal", LogLevel.Warning);
             });
 
-            builder.ConfigureTestServices(services =>
+            builder.ConfigureServices(services =>
             {
-                var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
-
                 var kafkaOptions = new KafkaOptions
                 {
                     ProducerSettings = new ProducerSettings
@@ -74,26 +97,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     }
                 };
 
-                var mongoDbOptions = new MongoDbOptions
+                services.Configure<KafkaOptions>(opts =>
                 {
-                    ConnectionString = _containersConnections?.MongoDbContainer
-                };
-
-                services.AddOptions<KafkaOptions>().Configure(options =>
-                {
-                    options.AdminSettings = kafkaOptions.AdminSettings;
-                    options.ProducerSettings = kafkaOptions.ProducerSettings;
-                    options.ConsumerSettings = kafkaOptions.ConsumerSettings;
-                });
-                services.AddOptions<MongoDbOptions>().Configure(options =>
-                {
-                    options.ConnectionString = mongoDbOptions.ConnectionString;
-                    options.PaymentsHistory = "payments_history_test";
-                    options.HandBooks = "handbooks_test";
-                    options.PaymentAccounts = "payment_accounts_test";
+                    opts.AdminSettings = kafkaOptions.AdminSettings;
+                    opts.ProducerSettings = kafkaOptions.ProducerSettings;
+                    opts.ConsumerSettings = kafkaOptions.ConsumerSettings;
                 });
 
-                var eventStoreConnectionSettings = EventStoreClientSettings.Create(_containersConnections?.EventSourceDbContainer);
+                services.Configure<MongoDbOptions>(opts =>
+                {
+                    opts.ConnectionString = _containersConnections?.MongoDbContainer;
+                    opts.PaymentsHistory = "payments_history_test";
+                    opts.HandBooks = "handbooks_test";
+                    opts.PaymentAccounts = "payment_accounts_test";
+                });
+
                 var eventStoreDbOptions = new EventStoreDbOptions();
 
                 services.AddEventStoreClient(
@@ -103,9 +121,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         settings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
                         settings.OperationOptions = new EventStoreClientOperationOptions
                         {
-                            ThrowOnAppendFailure = true,
+                            ThrowOnAppendFailure = true
                         };
-                        settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+                        settings.DefaultDeadline = TimeSpan.FromSeconds(
+                            eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+
                         settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
                         {
                             KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
@@ -115,23 +135,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         };
                     });
             });
-
-            base.ConfigureWebHost(builder);
         }
 
-        protected override IHost CreateHost(IHostBuilder builder)
+        private static int GetSecureRandomPort(int minPort, int maxPort)
         {
-            try
-            {
-                // var host = builder?.Build();
-                // host.Start();
-                // return host;
-                return base.CreateHost(builder);
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
+            using var rng = RandomNumberGenerator.Create();
+            var portRange = maxPort - minPort;
+            var randomBytes = new byte[4];
+
+            rng.GetBytes(randomBytes);
+            var randomValue = BitConverter.ToUInt32(randomBytes, 0);
+
+            return minPort + (int)(randomValue % portRange);
         }
     }
 }

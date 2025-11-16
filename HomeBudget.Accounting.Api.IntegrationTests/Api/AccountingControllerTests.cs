@@ -9,6 +9,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
@@ -70,7 +71,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
 

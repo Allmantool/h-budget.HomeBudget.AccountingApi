@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -69,30 +71,35 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                         MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                     });
 
+                var server = WebFactory.Server;
+                var addresses = server.Features.Get<IServerAddressesFeature>();
+                var realAddress = addresses.Addresses.FirstOrDefault();
+                var baseAddress = realAddress is null ?
+                    WebFactory.ClientOptions.BaseAddress
+                    : new Uri(realAddress);
+
                 var clientOptions = new WebApplicationFactoryClientOptions
                 {
-                    // BaseAddress = new Uri(""),
+                    BaseAddress = baseAddress,
                     AllowAutoRedirect = true,
                     HandleCookies = true
                 };
 
                 var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
-                var baseClient = WebFactory.CreateDefaultClient();
-
-                var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
-                {
-                    ThrowOnAnyError = true
-                };
+                var baseClient = WebFactory.CreateDefaultClient(baseAddress, handler);
 
                 Client = new HttpClient(handler)
                 {
-                    BaseAddress = baseClient.BaseAddress,
+                    BaseAddress = baseAddress,
                     Timeout = TimeSpan.FromMinutes(2)
                 };
 
                 RestHttpClient = new RestClient(
                     Client,
-                    restClientOptions
+                    new RestClientOptions(baseAddress)
+                    {
+                        ThrowOnAnyError = true
+                    }
                 );
 
                 return true;
