@@ -10,14 +10,13 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Testcontainers.Kafka;
-
-using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Test.Core.Factories;
 
 namespace HomeBudget.Components.Operations.Tests
 {

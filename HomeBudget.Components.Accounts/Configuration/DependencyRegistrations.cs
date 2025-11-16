@@ -2,8 +2,8 @@
 
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Services;
+
+using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
@@ -42,7 +42,7 @@ namespace HomeBudget.Components.Accounts.Configuration
             return services
                 .AddSingleton<IKafkaProducer<string, string>, PaymentAccountProducer>()
                 .AddSingleton<IAccountOperationsHandler, AccountOperationsHandler>()
-                .AddTransient<IKafkaConsumer, AccountOperationsConsumer>();
+                .AddSingleton<BaseKafkaConsumer<string, string>, AccountOperationsConsumer>();
         }
     }
 }

@@ -3,6 +3,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Constants;
@@ -33,15 +34,13 @@ services
         configure.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 
-services.SetUpDi(configuration, environment);
-
-webAppBuilder.Services.AddEndpointsApiExplorer();
-webAppBuilder.Services
+services
+    .SetUpDi(configuration, environment)
+    .AddEndpointsApiExplorer()
     .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
     .AddResponseCaching()
-    .AddSwaggerGen();
-
-services.SetupSwaggerGen();
+    .AddSwaggerGen()
+    .SetupSwaggerGen();
 
 services.AddHeaderPropagation(options =>
 {
@@ -73,7 +72,15 @@ webApp.SetUpBaseApplication(services, environment, configuration);
 webApp.UseAuthorization();
 webApp.MapControllers();
 
-webApp.Run();
+try
+{
+    await webApp.RunAsync();
+}
+catch (Exception ex)
+{
+    webApp.Logger.LogError($"Fatal error: {ex}");
+    Environment.Exit(1);
+}
 
 // To add visibility for integration tests
 namespace HomeBudget.Accounting.Api
