@@ -86,12 +86,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 };
 
                 var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
-                var baseClient = WebFactory.CreateDefaultClient(baseAddress, handler);
+                var baseClient = WebFactory.CreateClient(clientOptions);
 
                 Client = new HttpClient(handler)
                 {
                     BaseAddress = baseAddress,
-                    Timeout = TimeSpan.FromMinutes(2)
+                    Timeout = TimeSpan.FromMinutes(1)
                 };
 
                 RestHttpClient = new RestClient(

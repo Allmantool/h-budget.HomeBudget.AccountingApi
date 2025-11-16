@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 options.ListenLocalhost(port);
             });
 
-            builder.UseUrls($"http://127.0.0.1:{port}");
+            builder.UseUrls($"http://127.0.0.1:{port}", $"http://localhost:{port}");
             builder.UseSetting(WebHostDefaults.ApplicationKey, typeof(TStartup).Assembly.FullName);
 
             builder.ConfigureAppConfiguration((_, conf) =>
