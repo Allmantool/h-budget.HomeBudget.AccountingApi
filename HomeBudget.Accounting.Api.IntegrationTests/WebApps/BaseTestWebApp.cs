@@ -1,9 +1,8 @@
-﻿using Elastic.CommonSchema;
-using HomeBudget.Accounting.Api.Constants;
-using HomeBudget.Accounting.Api.IntegrationTests.Constants;
-using HomeBudget.Accounting.Api.IntegrationTests.Models;
-using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Test.Core;
+﻿using System;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using MongoDB.Bson;
@@ -11,10 +10,12 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 using RestSharp;
-using System;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
+
+using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Models;
+using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Test.Core;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
