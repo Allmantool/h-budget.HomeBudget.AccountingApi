@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HomeBudget.Accounting.Workers.OperationsConsumer": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}

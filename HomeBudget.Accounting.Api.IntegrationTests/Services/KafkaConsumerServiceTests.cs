@@ -9,9 +9,9 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Infrastructure;
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Factories;
+using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Services;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
@@ -70,14 +70,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
         public async Task ConsumeKafkaMessagesLoopAsync_ConsumesMessages()
         {
             const string topic = "test-topic";
-            var consumerMock = new Mock<IKafkaConsumer>();
+            var consumerMock = new Mock<BaseKafkaConsumer<string, string>>();
             consumerMock
                 .Setup(c => c.ConsumeAsync(It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
 
             consumerMock.SetupGet(c => c.Subscriptions).Returns(new List<string> { topic });
 
-            ConsumersStore.Consumers[topic] = new List<IKafkaConsumer> { consumerMock.Object };
+            ConsumersStore.Consumers[topic] = new List<BaseKafkaConsumer<string, string>>
+            {
+                consumerMock.Object
+            };
 
             using var cts = new CancellationTokenSource();
             cts.CancelAfter(50);
@@ -96,7 +99,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
                 ConsumerType = "type1"
             };
 
-            var consumerMock = new Mock<IKafkaConsumer>();
+            var consumerMock = new Mock<BaseKafkaConsumer<string, string>>();
             _factoryMock.Setup(f => f.WithTopic("some-topic")).Returns(_factoryMock.Object);
             _factoryMock.Setup(f => f.Build("type1")).Returns(consumerMock.Object);
 
