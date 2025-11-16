@@ -8,12 +8,16 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using EventStore.Client;
+using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Options;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
-namespace EventStoreDbClient
+namespace HomeBudget.Accounting.Infrastructure.Clients
 {
     public abstract class BaseEventStoreClient<T> : IEventStoreDbClient<T>, IDisposable
         where T : class, new()
@@ -22,11 +26,13 @@ namespace EventStoreDbClient
         private readonly ILogger _logger;
         private bool _disposed;
         private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new();
+        private readonly EventStoreDbOptions _options;
 
-        protected BaseEventStoreClient(EventStoreClient client, ILogger logger)
+        protected BaseEventStoreClient(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _client = client;
+            _logger = logger;
+            _options = options;
         }
 
         public virtual async Task<IWriteResult> SendAsync(
@@ -41,26 +47,27 @@ namespace EventStoreDbClient
 
             var writeStreamName = streamName ?? typeof(T).Name;
 
-            var result = await _client.AppendToStreamAsync(
+            await EnsureSubscriptionAsync(writeStreamName, token);
+
+            var appendResult = await _client.AppendToStreamAsync(
                 writeStreamName,
                 StreamState.Any,
                 [eventData],
                 cancellationToken: token);
 
-            await EnsureSubscriptionAsync(writeStreamName, token);
-
-            return result;
+            return appendResult;
         }
 
         public virtual async Task<IWriteResult> SendBatchAsync(
             IEnumerable<T> eventsForSending,
             string streamName,
             string eventType = null,
-            CancellationToken token = default)
+            CancellationToken ctx = default)
         {
             ArgumentNullException.ThrowIfNull(eventsForSending);
 
             var eventsToSend = eventsForSending
+                .AsParallel()
                 .Select(e => CreateEventData(e, eventType))
                 .ToList();
 
@@ -71,15 +78,15 @@ namespace EventStoreDbClient
 
             var writeStreamName = streamName ?? typeof(T).Name;
 
-            var result = await _client.AppendToStreamAsync(
+            await EnsureSubscriptionAsync(writeStreamName, ctx);
+
+            var appendResult = await _client.AppendToStreamAsync(
                 writeStreamName,
                 StreamState.Any,
                 eventsToSend,
-                cancellationToken: token);
+                cancellationToken: ctx);
 
-            await EnsureSubscriptionAsync(writeStreamName, token);
-
-            return result;
+            return appendResult;
         }
 
         public virtual async IAsyncEnumerable<T> ReadAsync(
@@ -117,18 +124,27 @@ namespace EventStoreDbClient
             Func<T, Task> onEventAppeared,
             CancellationToken cancellationToken = default)
         {
-            await _client.SubscribeToStreamAsync(
-                streamName,
-                FromStream.Start,
-                async (_, resolvedEvent, ct) =>
-                {
-                    var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
-                    if (evt != null)
+            try
+            {
+                await _client.SubscribeToStreamAsync(
+                    streamName,
+                    FromStream.End,
+                    async (_, resolvedEvent, ct) =>
                     {
-                        await onEventAppeared(evt);
-                    }
-                },
-                cancellationToken: cancellationToken);
+                        var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
+                        if (evt != null)
+                        {
+                            await onEventAppeared(evt);
+                        }
+                    },
+                    cancellationToken: cancellationToken);
+
+                SubscribedStreams.TryAdd(streamName, true);
+            }
+            catch (Exception ex)
+            {
+                BaseEventStoreClientLogs.SubscriptionError(_logger, streamName, ex);
+            }
         }
 
         private static EventData CreateEventData(T @event, string eventType)
@@ -146,20 +162,19 @@ namespace EventStoreDbClient
 
             try
             {
-                if (!SubscribedStreams.TryAdd(streamName, true))
-                {
-                    return;
-                }
-
-                var readState = _client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, cancellationToken: token);
-                if (await readState.ReadState != ReadState.StreamNotFound)
-                {
-                    await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
-                }
+                await SubscribeToStreamAsync(streamName, OnEventAppearedAsync, token);
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+            {
+                // Stream does not exist
+            }
+            catch (RpcException ex)
+            {
+                _logger.SubscriptionRpcError(streamName, ex);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error ensuring subscription for stream {StreamName}", streamName);
+                BaseEventStoreClientLogs.SubscriptionError(_logger, streamName, ex);
             }
         }
 
@@ -178,26 +193,29 @@ namespace EventStoreDbClient
                 "DeadLetterStream",
                 StreamState.Any,
                 [data],
-                cancellationToken: default);
+                cancellationToken: CancellationToken.None);
         }
 
         public async Task SendToDeadLetterQueueAsync(
             IEnumerable<BaseEvent> eventsForSending,
             Exception exception)
         {
-            foreach (var eventForSending in eventsForSending)
+            Parallel.ForEach(eventsForSending, eventForSending =>
             {
-                eventForSending.Metadata ??= [];
+                eventForSending.Metadata ??= new Dictionary<string, string>();
                 eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception?.Message;
-            }
+            });
 
-            var data = eventsForSending.Select(ev => CreateEventData((T)(object)ev, "DeadLetter"));
+            var data = eventsForSending
+                .AsParallel()
+                .Select(ev => CreateEventData((T)(object)ev, "DeadLetter"));
 
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutInSeconds));
             await _client.AppendToStreamAsync(
                 "DeadLetterStream",
                 StreamState.Any,
                 data,
-                cancellationToken: default);
+                cancellationToken: cts.Token);
         }
 
         public void Dispose()

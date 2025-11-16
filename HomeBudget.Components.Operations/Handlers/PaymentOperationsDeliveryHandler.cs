@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
-using EventStoreDbClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +10,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Components.Operations.Handlers
 {

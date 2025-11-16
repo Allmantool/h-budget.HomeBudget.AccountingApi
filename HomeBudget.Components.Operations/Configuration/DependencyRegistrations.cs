@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Threading.Channels;
-
 using EventStore.Client;
-using EventStoreDbClient;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -10,9 +9,9 @@ using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
-using HomeBudget.Accounting.Infrastructure.BackgroundServices;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Components.Operations.BackgroundServices;
 using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -59,7 +58,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
-                .AddTransient<IKafkaConsumer, PaymentOperationsConsumer>();
+                .AddSingleton<BaseKafkaConsumer<string, string>, PaymentOperationsConsumer>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
@@ -78,13 +77,16 @@ namespace HomeBudget.Components.Operations.Configuration
         {
             services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
 
+            if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
+            {
+                return services;
+            }
+
             var serviceProvider = services.BuildServiceProvider();
             var eventStoreDbOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
-            var eventStoreUrl = eventStoreDbOptions.Url.ToString();
+            var eventStoreUrl = eventStoreDbOptions.Url.OriginalString;
 
-            return HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase)
-                ? services
-                : services.AddEventStoreClient(
+            return services.AddEventStoreClient(
                     eventStoreUrl,
                     settings =>
                     {

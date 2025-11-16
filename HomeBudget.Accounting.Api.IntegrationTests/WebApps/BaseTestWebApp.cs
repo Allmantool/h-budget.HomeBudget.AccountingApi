@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Net.Http;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Mvc.Testing;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
@@ -10,60 +12,109 @@ using RestSharp;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Test.Core;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
-    internal abstract class BaseTestWebApp<TEntryPoint> : BaseTestWebAppDispose
-        where TEntryPoint : class
+    internal abstract class BaseTestWebApp<TWebAppEntryPoint, TWorkerEntryPoint> : BaseTestWebAppDispose
+        where TWebAppEntryPoint : class
+        where TWorkerEntryPoint : class
     {
-        private IntegrationTestWebApplicationFactory<TEntryPoint> WebFactory { get; }
+        private HttpClient Client { get; set; }
+        private IntegrationTestWebApplicationFactory<TWebAppEntryPoint> WebFactory { get; set; }
+
+        private IntegrationTestWorkerFactory<TWorkerEntryPoint> WorkerFactory { get; set; }
+
         private TestContainersService TestContainersService { get; set; }
 
-        internal RestClient RestHttpClient { get; }
+        internal RestClient RestHttpClient { get; set; }
 
-        protected BaseTestWebApp()
+        public async Task<bool> InitAsync()
         {
-            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
-
-            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
-
-            var testProperties = TestContext.CurrentContext.Test.Properties;
-            var testCategory = testProperties.Get("Category") as string;
-
-            if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return;
-            }
+                BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+                BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            WebFactory = new IntegrationTestWebApplicationFactory<TEntryPoint>(
-                () =>
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", HostEnvironments.Integration);
+                Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", HostEnvironments.Integration);
+
+                var testProperties = TestContext.CurrentContext.Test.Properties;
+                var testCategory = testProperties.Get("Category") as string;
+
+                if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
                 {
-                    TestContainersService = new TestContainersService(WebFactory?.Configuration);
+                    return false;
+                }
 
-                    StartAsync().GetAwaiter().GetResult();
+                TestContainersService = new TestContainersService();
 
-                    return new TestContainersConnections
+                await StartContainersAsync();
+
+                WorkerFactory = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
+                    () => new TestContainersConnections
                     {
                         KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
                         EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
                         MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
-                    };
-                });
+                    });
 
-            RestHttpClient = new RestClient(
-                WebFactory.CreateClient(),
-                new RestClientOptions(new Uri("http://localhost:6064")));
+                await WorkerFactory.StartAsync();
+
+                WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
+                    () => new TestContainersConnections
+                    {
+                        KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                        MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                    });
+
+                var clientOptions = new WebApplicationFactoryClientOptions
+                {
+                    AllowAutoRedirect = true,
+                    HandleCookies = true
+                };
+
+                var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
+                var baseClient = WebFactory.CreateClient(clientOptions);
+
+                var restClientOptions = new RestClientOptions(baseClient.BaseAddress)
+                {
+                    ThrowOnAnyError = true
+                };
+
+                Client = new HttpClient(handler)
+                {
+                    BaseAddress = baseClient.BaseAddress,
+                    Timeout = TimeSpan.FromMinutes(2)
+                };
+
+                RestHttpClient = new RestClient(
+                    Client,
+                    restClientOptions
+                );
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
         }
 
-        public async Task StartAsync()
+        public async Task<bool> StartContainersAsync()
         {
-            if (TestContainersService == null)
+            if (TestContainersService is null)
             {
-                return;
+                return false;
             }
 
-            await TestContainersService.UpAndRunningContainersAsync();
+            if (TestContainersService.IsStarted)
+            {
+                return true;
+            }
+
+            return await TestContainersService.UpAndRunningContainersAsync();
         }
 
         public async Task ResetAsync()
@@ -99,6 +150,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await WebFactory.DisposeAsync();
             }
 
+            if (WorkerFactory is not null)
+            {
+                _ = WorkerFactory.StopAsync();
+            }
+
+            Client?.Dispose();
             RestHttpClient?.Dispose();
         }
     }

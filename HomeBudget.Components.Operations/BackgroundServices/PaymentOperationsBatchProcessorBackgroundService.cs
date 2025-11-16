@@ -11,10 +11,11 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
+namespace HomeBudget.Components.Operations.BackgroundServices
 {
     internal class PaymentOperationsBatchProcessorBackgroundService : BackgroundService
     {
@@ -57,7 +58,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "{Service} failed to process batch", nameof(PaymentOperationsBatchProcessorBackgroundService));
+                        _logger.OperationDeliveryError(nameof(PaymentOperationsBatchProcessorBackgroundService), ex.Message, ex);
                     }
                     finally
                     {
@@ -72,7 +73,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             var batchStartTime = _dateTimeProvider.GetNowUtc();
             var eventsBatch = new List<PaymentOperationEvent>();
 
-            while ((_dateTimeProvider.GetNowUtc() - batchStartTime) < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
+            while (_dateTimeProvider.GetNowUtc() - batchStartTime < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
             {
                 if (_paymentEventsChannel.Reader.TryRead(out var evt))
                 {
