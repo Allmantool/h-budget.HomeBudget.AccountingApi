@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Infrastructure.Factories
 {
-    internal interface IKafkaConsumersFactory
+    public interface IKafkaConsumersFactory
     {
         IKafkaConsumer Build(string consumerType);
         IKafkaConsumersFactory WithTopic(string topicTitle);

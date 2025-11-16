@@ -11,22 +11,22 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 using EventStore.Client;
-using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
+
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Core.Constants;
 using HomeBudget.Test.Core.Factories;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
-    internal class TestContainersService(IConfiguration configuration) : IAsyncDisposable
+    internal class TestContainersService() : IAsyncDisposable
     {
-        private readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
-        private static bool IsStarted { get; set; }
+        public static bool IsStarted { get; private set; }
 
+        private readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
@@ -54,7 +54,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             using (_semaphoreGuard)
             {
-                if (configuration == null || IsStarted)
+                if (IsStarted)
                 {
                     return IsStarted;
                 }

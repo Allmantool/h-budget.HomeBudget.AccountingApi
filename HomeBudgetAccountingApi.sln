@@ -48,6 +48,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Test.Core", "Hom
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Components.Categories.Tests", "HomeBudget.Components.Categories.Tests\HomeBudget.Components.Categories.Tests.csproj", "{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workers", "Workers", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Accounting.Workers.OperationsConsumer", "HomeBudget.Accounting.Workers.OperationsConsumer\HomeBudget.Accounting.Workers.OperationsConsumer.csproj", "{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -106,6 +110,10 @@ Global
 		{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -124,6 +132,7 @@ Global
 		{3F1E85E7-792D-40A7-BB2B-5EB3925939CD} = {DA942901-C03B-444A-8C98-30E1BFE42A27}
 		{461F2118-D177-46B9-81CC-9D2D5BA708F9} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
+		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CDA43629-25A6-4514-AA5B-1AD407073983}

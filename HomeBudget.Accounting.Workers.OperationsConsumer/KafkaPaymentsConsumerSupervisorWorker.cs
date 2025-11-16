@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,14 +7,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Accounting.Infrastructure.Helpers;
-using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
+namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
     internal class KafkaPaymentsConsumerSupervisorWorker(
         ILogger<KafkaPaymentsConsumerSupervisorWorker> logger,
@@ -24,6 +23,8 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
         IConsumerService consumerService)
         : BackgroundService
     {
+        private IKafkaConsumer _consumer;
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var consumerSettings = options.Value.ConsumerSettings;
@@ -32,9 +33,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             {
                 try
                 {
-                    var activeConsumersAmount = GetAlivePaymentConsumersAmount();
-
-                    if (activeConsumersAmount <= consumerSettings.MaxAccountingPaymentConsumers && topicManager.IsBrokerReady())
+                    if (topicManager.IsBrokerReady() && _consumer is null)
                     {
                         var topic = new SubscriptionTopic
                         {
@@ -42,24 +41,27 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                             Title = BaseTopics.AccountingPayments
                         };
 
-                        consumerService.CreateAndSubscribe(topic);
+                        _consumer = consumerService.CreateAndSubscribe(topic);
                     }
                     else
                     {
                         await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
                     }
+
+                    if (_consumer is not null || _consumer.IsAlive())
+                    {
+                        await consumerService.ConsumeKafkaMessagesLoopAsync(_consumer, stoppingToken);
+                    }
                 }
                 catch (OperationCanceledException ex)
                 {
-                    KafkaPaymentsConsumerBackgroundServiceLogs.OperationCanceled(
-                        logger,
+                    logger.OperationCanceled(
                         nameof(KafkaPaymentsConsumerSupervisorWorker),
                         ex);
                 }
                 catch (Exception ex)
                 {
-                    KafkaPaymentsConsumerBackgroundServiceLogs.UnexpectedError(
-                        logger,
+                    logger.UnexpectedError(
                         nameof(KafkaPaymentsConsumerSupervisorWorker),
                         consumerSettings.ConsumerCircuitBreakerDelayInSeconds,
                         ex);
@@ -69,16 +71,19 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             }
         }
 
-        private static int GetAlivePaymentConsumersAmount()
+        public override Task StopAsync(CancellationToken cancellationToken)
         {
-            if (ConsumersStore.Consumers.TryGetValue(BaseTopics.AccountingPayments, out var paymentConsumers))
+            try
             {
-                var activeConsumers = paymentConsumers.Where(p => p.IsAlive()).ToList();
-
-                return activeConsumers.Count;
+                _consumer?.UnSubscribe();
+                _consumer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger.FailedToDisposeConsumer(ex);
             }
 
-            return 0;
+            return base.StopAsync(cancellationToken);
         }
     }
 }

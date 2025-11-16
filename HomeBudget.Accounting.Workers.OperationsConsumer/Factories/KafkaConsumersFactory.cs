@@ -6,8 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Factories;
 
-namespace HomeBudget.Accounting.Infrastructure.Factories
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
 {
     internal class KafkaConsumersFactory(IServiceProvider serviceProvider) : IKafkaConsumersFactory
     {

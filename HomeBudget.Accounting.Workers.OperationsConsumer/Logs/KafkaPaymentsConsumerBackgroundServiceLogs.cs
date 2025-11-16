@@ -2,7 +2,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace HomeBudget.Accounting.Infrastructure.Logs
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Logs
 {
     internal static partial class KafkaPaymentsConsumerBackgroundServiceLogs
     {
@@ -11,7 +11,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Shutting down {Service}...")]
         public static partial void OperationCanceled(
-            ILogger logger,
+            this ILogger logger,
             string service,
             Exception exception);
 
@@ -20,9 +20,17 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Unexpected error in {Service}. Restarting in {Delay} seconds...")]
         public static partial void UnexpectedError(
-            ILogger logger,
+            this ILogger logger,
             string service,
             int delay,
+            Exception exception);
+
+        [LoggerMessage(
+            EventId = 2003,
+            Level = LogLevel.Error,
+            Message = "Failed to stop consumer")]
+        public static partial void FailedToDisposeConsumer(
+            this ILogger logger,
             Exception exception);
     }
 }

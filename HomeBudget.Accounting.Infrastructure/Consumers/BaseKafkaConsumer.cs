@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +12,6 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
-
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -65,7 +64,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _logger = logger;
 
             _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
-                .SetErrorHandler((ctx, error) => BaseKafkaConsumerLogs.KafkaError(_logger, error.Reason, ctx?.Name, ctx?.MemberId))
+                .SetErrorHandler((ctx, error) =>
+                {
+                    BaseKafkaConsumerLogs.KafkaError(_logger, error.Reason, ctx?.Name, ctx?.MemberId);
+                })
                 .SetLogHandler((_, logMessage) => BaseKafkaConsumerLogs.KafkaLog(_logger, logMessage.Message))
                 .SetPartitionsRevokedHandler((c, partitions) => BaseKafkaConsumerLogs.PartitionsRevoked(_logger, string.Join(", ", partitions)))
                 .SetPartitionsAssignedHandler((c, partitions) => BaseKafkaConsumerLogs.PartitionsAssigned(_logger, string.Join(", ", partitions)))
@@ -190,10 +192,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             _logger.ConsumeError(ex.Error.Reason, ex);
                         }
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException ex)
                     {
                         _logger.ConsumerLoopCanceled();
-                        break;
+
+                        // break;
                     }
                     catch (Exception ex)
                     {

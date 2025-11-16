@@ -42,7 +42,7 @@ namespace HomeBudget.Components.Accounts.Configuration
             return services
                 .AddSingleton<IKafkaProducer<string, string>, PaymentAccountProducer>()
                 .AddSingleton<IAccountOperationsHandler, AccountOperationsHandler>()
-                .AddTransient<BaseKafkaConsumer<string, string>, AccountOperationsConsumer>();
+                .AddSingleton<BaseKafkaConsumer<string, string>, AccountOperationsConsumer>();
         }
     }
 }

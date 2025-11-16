@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Channels;
-
 using EventStore.Client;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Components.Operations.BackgroundServices;
 using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -21,7 +22,6 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Options;
-using HomeBudget.Components.Operations.BackgroundServices;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
@@ -58,7 +58,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
-                .AddTransient<BaseKafkaConsumer<string, string>, PaymentOperationsConsumer>();
+                .AddSingleton<BaseKafkaConsumer<string, string>, PaymentOperationsConsumer>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)

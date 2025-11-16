@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using NUnit.Framework;
 using RestSharp;
-using Polly.Retry;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
@@ -33,8 +32,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private RestClient _restClient;
 
         [OneTimeSetUp]
-        public void Setup()
+        public async Task SetupAsync()
         {
+            await _sut.InitAsync();
             _restClient = _sut.RestHttpClient;
         }
 

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
@@ -12,7 +6,7 @@ using NUnit.Framework;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Helpers;
-using HomeBudget.Accounting.Infrastructure.Services;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -44,41 +38,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
             _service = new KafkaConsumerService(_loggerMock.Object, optionsMock, _factoryMock.Object);
 
             ConsumersStore.Consumers.Clear();
-        }
-
-        [Test]
-        public async Task ConsumeKafkaMessagesLoopAsync_ConsumesMessages()
-        {
-            const string topic = "test-topic";
-            var consumerMock = new Mock<IKafkaConsumer>();
-            consumerMock.SetupGet(c => c.Subscriptions).Returns(new List<string> { topic });
-            consumerMock.Setup(c => c.ConsumeAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-
-            ConsumersStore.Consumers[topic] = new List<IKafkaConsumer> { consumerMock.Object };
-
-            using var cts = new CancellationTokenSource();
-            cts.CancelAfter(50);
-
-            await _service.ConsumeKafkaMessagesLoopAsync(cts.Token);
-
-            consumerMock.Verify(c => c.ConsumeAsync(It.IsAny<CancellationToken>()), Times.AtLeastOnce);
-        }
-
-        [Test]
-        public async Task ConsumeKafkaMessagesLoopAsync_SkipsConsumerWithEmptySubscriptions()
-        {
-            const string topic = "empty-subscriptions-topic";
-            var consumerMock = new Mock<IKafkaConsumer>();
-            consumerMock.SetupGet(c => c.Subscriptions).Returns(new List<string>());
-
-            ConsumersStore.Consumers[topic] = new List<IKafkaConsumer> { consumerMock.Object };
-
-            using var cts = new CancellationTokenSource();
-            cts.CancelAfter(50);
-
-            await _service.ConsumeKafkaMessagesLoopAsync(cts.Token);
-
-            consumerMock.Verify(c => c.ConsumeAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]

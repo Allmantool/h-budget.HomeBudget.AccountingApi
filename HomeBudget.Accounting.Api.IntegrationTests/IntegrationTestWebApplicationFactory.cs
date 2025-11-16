@@ -115,7 +115,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             try
             {
-                var host = builder.Build();
+                var host = builder?.Build();
                 host.Start();
 
                 return host;

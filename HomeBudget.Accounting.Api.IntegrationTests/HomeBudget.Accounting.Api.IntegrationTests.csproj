@@ -30,6 +30,7 @@
     <ProjectReference Include="..\HomeBudget.Accounting.Api\HomeBudget.Accounting.Api.csproj" />
     <ProjectReference Include="..\HomeBudget.Accounting.Domain\HomeBudget.Accounting.Domain.csproj" />
     <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
+    <ProjectReference Include="..\HomeBudget.Accounting.Workers.OperationsConsumer\HomeBudget.Accounting.Workers.OperationsConsumer.csproj" />
     <ProjectReference Include="..\HomeBudget.Test.Core\HomeBudget.Test.Core.csproj" />
   </ItemGroup>
 
