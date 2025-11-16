@@ -26,6 +26,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly AccountingTestWebApp _sut = new();
 
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+        }
+
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
         {
@@ -58,13 +64,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
+        public async Task GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
         {
             const string paymentAccountId = "invalidRef";
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = _sut.RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
 
