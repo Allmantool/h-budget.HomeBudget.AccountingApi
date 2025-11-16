@@ -37,6 +37,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             var host = builder.Build();
             host.Start();
+
             return host;
         }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -76,6 +77,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Policies
 
             return Policy<TResponse>
                 .Handle<HttpRequestException>()
+                .Or<TimeoutException>()
                 .Or<TaskCanceledException>()
                 .OrResult(shouldRetry)
                 .WaitAndRetryAsync(
@@ -88,7 +90,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Policies
                         var status = outcome.Result?.GetType()
                             .GetProperty("StatusCode")?.GetValue(outcome.Result)?.ToString() ?? "n/a";
 
-                        System.Diagnostics.Debug.WriteLine(
+                        Debug.WriteLine(
                             $"Retry {attempt} after {delay.TotalSeconds:F1}s for {method} {url} (status={status})");
                     });
         }
