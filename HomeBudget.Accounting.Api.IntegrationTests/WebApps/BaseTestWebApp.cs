@@ -1,8 +1,9 @@
-﻿using System;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-
+﻿using Elastic.CommonSchema;
+using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Models;
+using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Test.Core;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using MongoDB.Bson;
@@ -10,12 +11,10 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 using RestSharp;
-
-using HomeBudget.Accounting.Api.Constants;
-using HomeBudget.Accounting.Api.IntegrationTests.Constants;
-using HomeBudget.Accounting.Api.IntegrationTests.Models;
-using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Test.Core;
+using System;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
@@ -88,7 +87,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 var baseClient = WebFactory.CreateClient(clientOptions);
                 baseClient.Timeout = TimeSpan.FromMinutes(2);
 
-                var response = await baseClient.GetAsync(new Uri(Endpoints.HealthCheckSource));
+                var healthUri = new Uri(baseClient.BaseAddress!, Endpoints.HealthCheckSource);
+                var response = await baseClient.GetAsync(healthUri);
                 response.EnsureSuccessStatusCode();
 
                 RestHttpClient = new RestClient(
