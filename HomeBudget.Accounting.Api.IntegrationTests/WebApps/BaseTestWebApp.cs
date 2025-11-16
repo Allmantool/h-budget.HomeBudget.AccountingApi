@@ -22,7 +22,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
         where TWebAppEntryPoint : class
         where TWorkerEntryPoint : class
     {
-        private HttpClient Client { get; set; }
         private IntegrationTestWebApplicationFactory<TWebAppEntryPoint> WebFactory { get; set; }
 
         private IntegrationTestWorkerFactory<TWorkerEntryPoint> WorkerFactory { get; set; }
@@ -85,20 +84,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     HandleCookies = true
                 };
 
-                var handler = new ErrorHandlerDelegatingHandler(new HttpClientHandler());
                 var baseClient = WebFactory.CreateClient(clientOptions);
-
-                Client = new HttpClient(handler)
-                {
-                    BaseAddress = baseAddress,
-                    Timeout = TimeSpan.FromMinutes(1)
-                };
+                baseClient.Timeout = TimeSpan.FromMinutes(1);
 
                 RestHttpClient = new RestClient(
-                    Client,
-                    new RestClientOptions(baseAddress)
+                    baseClient,
+                    new RestClientOptions()
                     {
-                        ThrowOnAnyError = true
+                        ThrowOnAnyError = true,
+                        ConfigureMessageHandler = (handler) => new ErrorHandlerDelegatingHandler(new HttpClientHandler())
                     }
                 );
 
@@ -163,7 +157,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 _ = WorkerFactory.StopAsync();
             }
 
-            Client?.Dispose();
             RestHttpClient?.Dispose();
         }
     }
