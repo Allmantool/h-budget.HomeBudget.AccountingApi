@@ -5,18 +5,14 @@ jobs:
   build-api:
     name: Build Web app
     runs-on: ubuntu-latest
-    outputs:
-      pr_number: ${{ steps.find-pr.outputs.number }}
-      last_tag: ${{ steps.extract_tag.outputs.TARGET_TAG }}
-      pr: ${{ steps.find-pr.outputs.pr }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "9.0.x"
 
@@ -26,32 +22,10 @@ jobs:
           reviewdog_version: "v0.20.3"
 
       - name: Setup Java for SonarQube
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "21"
-
-      - name: Find Current PR
-        uses: jwalton/gh-find-current-pr@v1
-        id: find-pr
-        with:
-          state: open
-
-      - name: Get PR Number
-        run: echo "Your PR is ${PR}"
-        if: success() && steps.find-pr.outputs.number
-        env:
-          PR: ${{ steps.find-pr.outputs.pr }}
-
-      - name: Get Last Git Tag
-        id: extract_tag
-        shell: bash
-        run: |
-          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
-          tag=$(echo $tag_v | sed 's/v//')
-
-          echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
-          echo "Last git tag: $tag"
 
       - name: Install ReviewDog
         run: |
@@ -67,7 +41,7 @@ jobs:
           echo "Format result (dummy): done" # Adjust this for real linting feedback
 
       - name: Cache SonarCloud packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
@@ -75,7 +49,7 @@ jobs:
 
       - name: Cache SonarCloud scanner
         id: cache-sonar-scanner
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ./.sonar/scanner
           key: ${{ runner.os }}-sonar-scanner

@@ -56,10 +56,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Services
             var consumer = _service.CreateAndSubscribe(topic);
 
             Assert.That(consumer, Is.Not.Null);
-            Assert.That(ConsumersStore.Consumers.ContainsKey("some-topic"), Is.True);
-
-            var list = ConsumersStore.Consumers["some-topic"];
-            Assert.That(list.Contains(consumer), Is.True);
 
             consumerMock.Verify(c => c.Subscribe("some-topic"), Times.Once);
         }

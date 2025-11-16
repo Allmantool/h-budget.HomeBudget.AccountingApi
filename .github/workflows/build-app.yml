@@ -27,16 +27,31 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
   IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  update-tag-version:
-    name: Generate semantic version Tag
-    if: ${{ github.event.action != 'closed' }}
-    uses: ./.github/workflows/update_semver.yml
+  get-tag:
+    name: Get Latest Git Tag
+    runs-on: ubuntu-latest
+    outputs:
+      target_tag: ${{ steps.last_tag.outputs.TARGET_TAG }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
+      - name: Enquire last git tag
+        id: last_tag
+        shell: bash
+        run: |
+          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
+          tag=$(echo $tag_v | sed 's/v//')
+          echo "Generated tag: $tag"
+          echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
   build-api:
     name: Build app artifact
-    needs: [update-tag-version]
+    needs: [get-tag]
     uses: ./.github/workflows/build-api.yml
 
   unit-tests:
@@ -63,16 +78,16 @@ jobs:
     name: Run sonar scanning
     uses: ./.github/workflows/sonar-analysis.yml
     with:
-      pull_request_id: ${{ needs.build-api.outputs.pr }}
+      pull_request_id: ${{ github.event.pull_request.number }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api, merge-coverage]
+    needs: [build-api, merge-coverage, get-tag]
     uses: ./.github/workflows/build-docker.yml
     with:
-      last_tag: ${{ needs.build-api.outputs.last_tag }}
+      last_tag: ${{ needs.get-tag.outputs.target_tag }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}

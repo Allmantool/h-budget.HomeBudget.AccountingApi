@@ -1,16 +1,27 @@
 name: Update Semver
 
 on:
-  workflow_call:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
 
 jobs:
-  update-semver:
+  update-semver_if_merged:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false # Required for PAT-based push
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Git Semantic Version
         id: tag_version
@@ -22,41 +33,20 @@ jobs:
           version_from_branch: true
           debug: true
 
-      - name: Increment Tag and Push
+      - name: Tag Release & Push
+        env:
+          PAT_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          base_tag=${{ steps.tag_version.outputs.version_tag }}
-          max_attempts=10
-          attempt=1
-          tag_to_push=$base_tag
+          TAG=${{ steps.tag_version.outputs.version_tag }}
 
-          while [ $attempt -le $max_attempts ]; do
-            if git rev-parse "$tag_to_push" >/dev/null 2>&1; then
-              echo "Tag $tag_to_push already exists. Incrementing version..."
-              # Extract base version and safely initialize build_number
-              if [[ "$tag_to_push" =~ -build([0-9]+)$ ]]; then
-                build_number="${BASH_REMATCH[1]}"
-              else
-                build_number=0
-              fi
+          git tag $TAG
 
-              version_base=$(echo "$tag_to_push" | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+)(-build[0-9]*)?$/\1/')
-              build_number=$((build_number + 1))
-              tag_to_push="${version_base}-build${build_number}"
-              attempt=$((attempt + 1))
-            else
-              echo "Tag $tag_to_push does not exist. Creating and pushing..."
-              git tag "$tag_to_push"
-              git push origin "$tag_to_push"
-              break
-            fi
-          done
+          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git $TAG
 
-          if [ $attempt -gt $max_attempts ]; then
-            echo "Failed to create a unique tag after $max_attempts attempts."
-            exit 1
-          fi
+          echo "✅ Generated and pushed tag: $TAG"
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Show Generated Tag
+      - name: Show latest tag
         run: |
-          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
-          echo "Last git tag: $tag_v"
+          TAG_LATEST=$(git describe --tags $(git rev-list --tags --max-count=1))
+          echo "🔹 Latest tag in repo: $TAG_LATEST"
