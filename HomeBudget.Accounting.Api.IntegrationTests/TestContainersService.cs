@@ -89,6 +89,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
+                            config.StopTimeout = TimeSpan.FromMinutes(5);
                         })
                         .Build();
 
@@ -167,6 +168,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
                             config.HostConfig.NanoCPUs = 1500000000;
+                            config.StopTimeout = TimeSpan.FromMinutes(5);
                         })
 
                         // .WithAutoRemove(true)
@@ -219,6 +221,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
+                            config.StopTimeout = TimeSpan.FromMinutes(5);
                         })
                         .Build();
 
