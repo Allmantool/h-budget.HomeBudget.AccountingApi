@@ -163,7 +163,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithBindMount(testcontainersScriptPath, "/testcontainers.sh", AccessMode.ReadOnly)
 
                         // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
-                        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(".*started.*"))
+                        .WithWaitStrategy(
+                            Wait.ForUnixContainer()
+                                .UntilContainerIsHealthy()
+                                .AddCustomWaitStrategy(
+                                    new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                ))
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
