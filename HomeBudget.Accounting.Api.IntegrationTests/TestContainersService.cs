@@ -85,7 +85,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("EVENTSTORE_SKIP_DB_VERIFY", "true")
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithWaitStrategy(
+                            Wait.ForUnixContainer()
+                                .AddCustomWaitStrategy(
+                                    new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                ))
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;
@@ -165,7 +169,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
                         .WithWaitStrategy(
                             Wait.ForUnixContainer()
-                                .UntilContainerIsHealthy()
                                 .AddCustomWaitStrategy(
                                     new CustomWaitStrategy(TimeSpan.FromMinutes(5))
                                 ))
@@ -175,9 +178,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                             config.HostConfig.NanoCPUs = 1500000000;
                             config.StopTimeout = TimeSpan.FromMinutes(5);
                         })
-
-                        // .WithAutoRemove(true)
-                        // .WithCleanUp(true)
+                        .WithAutoRemove(true)
+                        .WithCleanUp(true)
                         .Build();
 
                     var testContainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
@@ -202,15 +204,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
                         .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
                         .WithBindMount(testContainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithWaitStrategy(
+                            Wait.ForUnixContainer()
+                                .AddCustomWaitStrategy(
+                                    new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                ))
                         .WithNetwork(testKafkaNetwork)
                         .WithStartupCallback((kafkaContainer, cancelToken) =>
                         {
                             return Task.CompletedTask;
                         })
-
-                        // .WithAutoRemove(true)
-                        // .WithCleanUp(true)
+                        .WithAutoRemove(true)
+                        .WithCleanUp(true)
                         .Build());
 
                     MongoDbContainer = new MongoDbBuilder()
@@ -222,7 +227,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         .WithEnvironment("MONGO_INITDB_ROOT_PASSWORD", "mongo")
                         .WithAutoRemove(true)
                         .WithCleanUp(true)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithWaitStrategy(
+                            Wait.ForUnixContainer()
+                                .AddCustomWaitStrategy(
+                                    new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                ))
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = ContainerMaxMemoryAllocation;

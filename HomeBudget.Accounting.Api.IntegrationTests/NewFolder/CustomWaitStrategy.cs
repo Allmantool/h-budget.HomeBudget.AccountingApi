@@ -19,7 +19,7 @@ internal class CustomWaitStrategy : IWaitUntil
 
         while (DateTime.UtcNow - startTime < _timeout)
         {
-            if (await CheckIfContainerIsReady(container))
+            if (await CheckIfContainerIsReadyAsync(container))
             {
                 return true;
             }
@@ -31,7 +31,7 @@ internal class CustomWaitStrategy : IWaitUntil
         return false;
     }
 
-    private async Task<bool> CheckIfContainerIsReady(IContainer container)
+    private static async Task<bool> CheckIfContainerIsReadyAsync(IContainer container)
     {
         try
         {
