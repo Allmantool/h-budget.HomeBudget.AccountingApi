@@ -117,26 +117,28 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 });
 
                 var eventStoreDbOptions = new EventStoreDbOptions();
+                var eventStoreDbSettings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                eventStoreDbSettings.OperationOptions = new EventStoreClientOperationOptions
+                {
+                    ThrowOnAppendFailure = true
+                };
+                eventStoreDbSettings.DefaultDeadline = TimeSpan.FromSeconds(
+                    eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
+
+                eventStoreDbSettings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                {
+                    Address = new Uri(_containersConnections.EventSourceDbContainer),
+                    KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                    GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                    DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                    MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                };
 
                 services.AddEventStoreClient(
                     _containersConnections.EventSourceDbContainer,
                     settings =>
                     {
-                        settings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
-                        settings.OperationOptions = new EventStoreClientOperationOptions
-                        {
-                            ThrowOnAppendFailure = true
-                        };
-                        settings.DefaultDeadline = TimeSpan.FromSeconds(
-                            eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
-
-                        settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
-                        {
-                            KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
-                            GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
-                            DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
-                            MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
-                        };
+                        settings = eventStoreDbSettings;
                     });
             });
         }

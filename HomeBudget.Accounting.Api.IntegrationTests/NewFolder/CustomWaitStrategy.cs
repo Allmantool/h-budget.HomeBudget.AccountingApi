@@ -40,7 +40,7 @@ internal class CustomWaitStrategy : IWaitUntil
             return logs.Stdout.Contains("started", StringComparison.OrdinalIgnoreCase)
                 || logs.Stderr.Contains("started", StringComparison.OrdinalIgnoreCase);
         }
-        catch
+        catch (Exception ex)
         {
             return false;
         }

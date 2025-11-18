@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
@@ -142,9 +143,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             ArgumentNullException.ThrowIfNull(processMessageAsync);
 
+            var subscribeTopics = _consumer.Subscription;
+
             try
             {
-                while (!cancellationToken.IsCancellationRequested)
+                while (!cancellationToken.IsCancellationRequested && !_consumer.Subscription.IsNullOrEmpty())
                 {
                     if (_disposed || _consumer is null)
                     {

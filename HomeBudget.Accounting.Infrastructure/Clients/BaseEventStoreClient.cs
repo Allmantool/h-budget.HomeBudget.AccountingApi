@@ -11,11 +11,11 @@ using EventStore.Client;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
