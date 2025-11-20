@@ -9,28 +9,28 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Components.Operations.BackgroundServices
+namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
-    internal class PaymentOperationsBatchProcessorBackgroundService : BackgroundService
+    internal class BatchPaymentEventsProcessorWorker : BackgroundService
     {
         private readonly EventStoreDbOptions _options;
         private readonly Channel<PaymentOperationEvent> _paymentEventsChannel;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IPaymentOperationsDeliveryHandler _operationsDeliveryHandler;
-        private readonly ILogger<PaymentOperationsBatchProcessorBackgroundService> _logger;
+        private readonly ILogger<BatchPaymentEventsProcessorWorker> _logger;
         private readonly TimeSpan _flushInterval;
 
         private const int DelayForChannelReader = 10;
 
-        public PaymentOperationsBatchProcessorBackgroundService(
+        public BatchPaymentEventsProcessorWorker(
             Channel<PaymentOperationEvent> paymentEventsChannel,
-            ILogger<PaymentOperationsBatchProcessorBackgroundService> logger,
+            ILogger<BatchPaymentEventsProcessorWorker> logger,
             IDateTimeProvider dateTimeProvider,
             IOptions<EventStoreDbOptions> eventStoreDbOptions,
             IPaymentOperationsDeliveryHandler operationsDeliveryHandler)
@@ -58,7 +58,7 @@ namespace HomeBudget.Components.Operations.BackgroundServices
                     }
                     catch (Exception ex)
                     {
-                        _logger.OperationDeliveryError(nameof(PaymentOperationsBatchProcessorBackgroundService), ex.Message, ex);
+                        _logger.OperationDeliveryError(nameof(BatchPaymentEventsProcessorWorker), ex.Message, ex);
                     }
                     finally
                     {

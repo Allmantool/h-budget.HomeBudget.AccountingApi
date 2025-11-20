@@ -1,9 +1,9 @@
 ﻿using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 
-namespace HomeBudget.Components.Operations
+namespace HomeBudget.Accounting.Domain
 {
-    internal static class PaymentOperationNamesGenerator
+    public static class PaymentOperationNamesGenerator
     {
         public static string GenerateForAccountMonthStream(string monthPeriodIdentifier)
             => string.Join(

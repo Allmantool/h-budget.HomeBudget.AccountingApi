@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Channels;
 using EventStore.Client;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +10,6 @@ using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers;
-using HomeBudget.Components.Operations.BackgroundServices;
 using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
@@ -39,7 +37,6 @@ namespace HomeBudget.Components.Operations.Configuration
                 .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
-                .RegisterBackgroundServices()
                 .RegisterMongoDbClient(webHostEnvironment);
         }
 
@@ -57,20 +54,12 @@ namespace HomeBudget.Components.Operations.Configuration
             return services
                 .AddSingleton<IKafkaClientHandler, PaymentOperationsClientHandler>()
                 .AddSingleton<IKafkaProducer<string, string>, PaymentOperationsProducer>()
-                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
                 .AddSingleton<BaseKafkaConsumer<string, string>, PaymentOperationsConsumer>();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services, string webHostEnvironment)
         {
             return services.AddSingleton<IPaymentsHistoryDocumentsClient, PaymentsHistoryDocumentsClient>();
-        }
-
-        private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
-        {
-            return services
-                .AddSingleton(Channel.CreateUnbounded<PaymentOperationEvent>())
-                .AddHostedService<PaymentOperationsBatchProcessorBackgroundService>();
         }
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)

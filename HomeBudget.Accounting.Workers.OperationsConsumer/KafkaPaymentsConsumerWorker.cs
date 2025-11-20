@@ -16,8 +16,8 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
-    internal class KafkaPaymentsConsumerSupervisorWorker(
-        ILogger<KafkaPaymentsConsumerSupervisorWorker> logger,
+    internal class KafkaPaymentsConsumerWorker(
+        ILogger<KafkaPaymentsConsumerWorker> logger,
         IOptions<KafkaOptions> options,
         ITopicManager topicManager,
         IConsumerService consumerService)
@@ -56,13 +56,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 catch (OperationCanceledException ex)
                 {
                     logger.OperationCanceled(
-                        nameof(KafkaPaymentsConsumerSupervisorWorker),
+                        nameof(KafkaPaymentsConsumerWorker),
                         ex);
                 }
                 catch (Exception ex)
                 {
                     logger.UnexpectedError(
-                        nameof(KafkaPaymentsConsumerSupervisorWorker),
+                        nameof(KafkaPaymentsConsumerWorker),
                         consumerSettings.ConsumerCircuitBreakerDelayInSeconds,
                         ex);
 

@@ -114,6 +114,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     opts.PaymentsHistory = "payments_history_test";
                     opts.HandBooks = "handbooks_test";
                     opts.PaymentAccounts = "payment_accounts_test";
+                    opts.LedgerDatabase = "ledger_test";
                 });
 
                 var eventStoreDbOptions = new EventStoreDbOptions();

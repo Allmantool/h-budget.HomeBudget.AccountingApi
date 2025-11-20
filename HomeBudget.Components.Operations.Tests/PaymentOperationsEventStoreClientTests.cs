@@ -12,6 +12,7 @@ using Moq;
 using NUnit.Framework;
 using Testcontainers.EventStoreDb;
 
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;

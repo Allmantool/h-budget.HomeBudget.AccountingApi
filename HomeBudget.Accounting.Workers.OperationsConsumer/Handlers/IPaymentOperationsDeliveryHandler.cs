@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 using HomeBudget.Components.Operations.Models;
 
-namespace HomeBudget.Components.Operations.Handlers;
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 
 internal interface IPaymentOperationsDeliveryHandler
 {

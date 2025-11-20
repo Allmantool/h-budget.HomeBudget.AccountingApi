@@ -25,7 +25,7 @@ internal class CustomWaitStrategy : IWaitUntil
             }
 
             // Avoid hammering logs too fast
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
 
         return false;
@@ -36,9 +36,11 @@ internal class CustomWaitStrategy : IWaitUntil
         try
         {
             var logs = await container.GetLogsAsync();
-
-            return logs.Stdout.Contains("started", StringComparison.OrdinalIgnoreCase)
+            var isHealthStatus = container.Health == TestcontainersHealthStatus.Healthy;
+            var isStartedFromLog = logs.Stdout.Contains("started", StringComparison.OrdinalIgnoreCase)
                 || logs.Stderr.Contains("started", StringComparison.OrdinalIgnoreCase);
+
+            return isStartedFromLog;
         }
         catch (Exception ex)
         {

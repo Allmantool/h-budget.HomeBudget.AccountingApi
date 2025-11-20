@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
 
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;

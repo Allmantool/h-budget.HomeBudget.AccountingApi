@@ -8,6 +8,8 @@ using Microsoft.Extensions.Hosting;
 
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
+using HomeBudget.Components.Categories.Configuration;
+using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
@@ -52,8 +54,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             services
                 .RegisterWorkerDependencies(configuration)
                 .RegisterInfrastructureDependencies(configuration)
+                .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(environment.EnvironmentName)
-                .AddHostedService<KafkaPaymentsConsumerSupervisorWorker>();
+                .RegisterCategoriesDependencies()
+                .AddHostedService<KafkaPaymentsConsumerWorker>();
 
             configureServices?.Invoke(services);
 

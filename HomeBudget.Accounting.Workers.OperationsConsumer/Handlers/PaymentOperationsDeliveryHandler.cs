@@ -3,16 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 
-namespace HomeBudget.Components.Operations.Handlers
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
 {
     internal class PaymentOperationsDeliveryHandler : IPaymentOperationsDeliveryHandler
     {
@@ -68,7 +70,7 @@ namespace HomeBudget.Components.Operations.Handlers
             }
         }
 
-        private string GenerateStreamName(PaymentOperationEvent paymentEvent)
+        private static string GenerateStreamName(PaymentOperationEvent paymentEvent)
         {
             var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodIdentifier();
             return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);

@@ -58,6 +58,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         options.PaymentsHistory = "payments_history_test";
                         options.HandBooks = "handbooks_test";
                         options.PaymentAccounts = "payment_accounts_test";
+                        options.LedgerDatabase = "ledger_test";
                     });
 
                     var eventStoreDbOptions = new EventStoreDbOptions();
@@ -81,24 +82,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 });
 
             var configBuilder = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string>
-                {
-                    ["Kafka:BootstrapServers"] = _containersConnections.KafkaContainer,
-                    ["MongoDb:ConnectionString"] = _containersConnections.MongoDbContainer,
-                    ["EventStore:ConnectionString"] = _containersConnections.EventSourceDbContainer
-                })
                 .AddConfiguration(WorkerHost.Services.GetRequiredService<IConfiguration>());
 
             Configuration = configBuilder.Build();
-
-            var servicesProviderField = typeof(Host).GetProperty("Services");
-            if (WorkerHost.Services.GetService<IConfiguration>() is IConfigurationRoot configurationRoot)
-            {
-                foreach (var kv in Configuration.AsEnumerable())
-                {
-                    configurationRoot[kv.Key] = kv.Value;
-                }
-            }
 
             await WorkerHost.StartAsync();
         }

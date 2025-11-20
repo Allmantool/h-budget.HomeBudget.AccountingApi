@@ -1,8 +1,7 @@
 ﻿using System;
-
 using Microsoft.Extensions.Logging;
 
-namespace HomeBudget.Components.Operations.Logs
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Logs
 {
     internal static partial class PaymentOperationsBatchProcessorBackgroundServiceLogs
     {

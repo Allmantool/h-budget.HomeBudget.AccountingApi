@@ -12,9 +12,9 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
