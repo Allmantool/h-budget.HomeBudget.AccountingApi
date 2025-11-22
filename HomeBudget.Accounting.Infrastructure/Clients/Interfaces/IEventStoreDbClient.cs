@@ -4,10 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using EventStore.Client;
-
 using HomeBudget.Core;
 
-namespace EventStoreDbClient
+namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
 {
     public interface IEventStoreDbClient<T>
     {

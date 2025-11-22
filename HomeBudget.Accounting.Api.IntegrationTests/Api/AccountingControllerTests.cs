@@ -9,6 +9,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
@@ -25,6 +26,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
         private readonly AccountingTestWebApp _sut = new();
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+        }
 
         [Test]
         public async Task GetPaymentAccounts_WhenTryToGetAllPaymentAccounts_ThenIsSuccessStatusCode()
@@ -58,13 +65,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
+        public async Task GetPaymentAccountById_WhenInValidFilterById_ReturnsFalseResult()
         {
             const string paymentAccountId = "invalidRef";
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = _sut.RestHttpClient.Execute<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
 

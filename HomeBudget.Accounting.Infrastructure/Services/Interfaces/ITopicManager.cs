@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,5 +12,6 @@ namespace HomeBudget.Accounting.Infrastructure.Services.Interfaces
         IReadOnlyCollection<string> GetAll();
         long GetTopicLag(string topic);
         Task<bool> HasActiveConsumerAsync(string topic, string consumerGroupId);
+        bool IsBrokerReady(TimeSpan? timeout = null);
     }
 }

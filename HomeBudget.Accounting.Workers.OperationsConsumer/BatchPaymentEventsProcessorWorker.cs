@@ -9,27 +9,28 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
-using HomeBudget.Components.Operations.Handlers;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
+namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
-    internal class PaymentOperationsBatchProcessorBackgroundService : BackgroundService
+    internal class BatchPaymentEventsProcessorWorker : BackgroundService
     {
         private readonly EventStoreDbOptions _options;
         private readonly Channel<PaymentOperationEvent> _paymentEventsChannel;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IPaymentOperationsDeliveryHandler _operationsDeliveryHandler;
-        private readonly ILogger<PaymentOperationsBatchProcessorBackgroundService> _logger;
+        private readonly ILogger<BatchPaymentEventsProcessorWorker> _logger;
         private readonly TimeSpan _flushInterval;
 
         private const int DelayForChannelReader = 10;
 
-        public PaymentOperationsBatchProcessorBackgroundService(
+        public BatchPaymentEventsProcessorWorker(
             Channel<PaymentOperationEvent> paymentEventsChannel,
-            ILogger<PaymentOperationsBatchProcessorBackgroundService> logger,
+            ILogger<BatchPaymentEventsProcessorWorker> logger,
             IDateTimeProvider dateTimeProvider,
             IOptions<EventStoreDbOptions> eventStoreDbOptions,
             IPaymentOperationsDeliveryHandler operationsDeliveryHandler)
@@ -57,7 +58,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "{Service} failed to process batch", nameof(PaymentOperationsBatchProcessorBackgroundService));
+                        _logger.OperationDeliveryError(nameof(BatchPaymentEventsProcessorWorker), ex.Message, ex);
                     }
                     finally
                     {
@@ -72,7 +73,7 @@ namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
             var batchStartTime = _dateTimeProvider.GetNowUtc();
             var eventsBatch = new List<PaymentOperationEvent>();
 
-            while ((_dateTimeProvider.GetNowUtc() - batchStartTime) < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
+            while (_dateTimeProvider.GetNowUtc() - batchStartTime < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
             {
                 if (_paymentEventsChannel.Reader.TryRead(out var evt))
                 {

@@ -9,21 +9,29 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     [SetUpFixture]
     public class GlobalTestContainerSetup
     {
-        private GlobalWebApp _sut;
+        private GlobalWebApp _webAppSut;
+        private GlobalWorker _workerSut;
 
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            _sut = new GlobalWebApp();
-            await _sut.StartAsync();
+            _webAppSut = new GlobalWebApp();
+            _workerSut = new GlobalWorker();
+
+            await Task.WhenAll(_webAppSut.StartContainersAsync(), _workerSut.StartContainersAsync());
         }
 
         [OneTimeTearDown]
         public async Task TeardownAsync()
         {
-            if (_sut != null)
+            if (_webAppSut != null)
             {
-                await _sut.DisposeAsync();
+                await _webAppSut.DisposeAsync();
+            }
+
+            if (_workerSut != null)
+            {
+                await _workerSut.DisposeAsync();
             }
         }
     }

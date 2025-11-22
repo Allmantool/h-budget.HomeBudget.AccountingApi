@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
@@ -30,14 +31,22 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             fireAndForgetHandler.Execute(async producer =>
             {
+                var message = paymentMessageResult.Payload;
+
                 try
                 {
-                    var message = paymentMessageResult.Payload;
                     var deliveryResult = await producer.ProduceAsync(BaseTopics.AccountingPayments, message, cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error during producing message event. The error: {Message}", ex.Message);
+                    var reason = ex.InnerException?.Message ?? ex.Message;
+
+                    BasePaymentCommandHandlerLogs.ProduceFailed(
+                        logger,
+                        BaseTopics.AccountingPayments,
+                        message.Key,
+                        reason,
+                        ex);
                 }
             });
 

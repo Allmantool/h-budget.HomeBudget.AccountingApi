@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.BackgroundServices;
-using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Providers;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Services;
@@ -46,7 +45,6 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                         sp.GetRequiredService<ILogger<KafkaTopicManager>>());
                 })
                 .AddSingleton<ITopicProcessor, KafkaTopicProcessor>()
-                .AddSingleton<IConsumerService, KafkaConsumerService>()
                 .AddSingleton<IDateTimeProvider, DateTimeProvider>()
                 .AddSingleton(Channel.CreateUnbounded<AccountRecord>())
                 .AddSingleton(sp =>
@@ -70,18 +68,16 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 .Configure<HostOptions>(options =>
                 {
                     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
-                })
-                .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
-                .RegisterBackgroundServices();
+                });
+
+                // .RegisterBackgroundServices();
         }
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
             return services
-                .AddHostedService<KafkaConsumerHealthMonitorBackgroundService>()
-                .AddHostedService<KafkaAccountsConsumerBackgroundService>()
-                .AddHostedService<KafkaMessageConsumerBackgroundService>()
-                .AddHostedService<KafkaPaymentsConsumerBackgroundService>();
+                .AddHostedService<KafkaConsumerWatchdogWorker>()
+                .AddHostedService<KafkaAccountsConsumerWorker>();
         }
     }
 }

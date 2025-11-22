@@ -19,11 +19,11 @@ namespace HomeBudget.Components.Operations
 
             return Policy
                 .Handle<RpcException>(ex =>
-                    ex.StatusCode == StatusCode.DeadlineExceeded ||
-                    ex.StatusCode == StatusCode.Unavailable ||
-                    ex.StatusCode == StatusCode.Cancelled ||
-                    ex.StatusCode == StatusCode.ResourceExhausted ||
-                    ex.StatusCode == StatusCode.Internal)
+                    ex.StatusCode is StatusCode.DeadlineExceeded or
+                    StatusCode.Unavailable or
+                    StatusCode.Cancelled or
+                    StatusCode.ResourceExhausted or
+                    StatusCode.Internal)
                 .WaitAndRetryAsync(
                     retryCount: retryCount,
                     sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(rise, attempt)),

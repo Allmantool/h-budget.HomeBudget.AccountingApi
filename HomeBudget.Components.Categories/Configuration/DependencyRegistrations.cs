@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
+using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Factories;
-using HomeBudget.Accounting.Domain.Factories;
 
 namespace HomeBudget.Components.Categories.Configuration
 {
