@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-using DotNet.Testcontainers.Containers;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
-using Testcontainers.MongoDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
 
@@ -18,40 +17,22 @@ namespace HomeBudget.Components.Operations.Tests.Providers
     [TestFixture]
     public class OperationsHistoryProviderTests
     {
-        private MongoDbContainer _mongoDbContainer;
-
         [OneTimeSetUp]
-        public void Setup()
+        public async Task SetupAsync()
         {
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            _mongoDbContainer = new MongoDbBuilder()
-                .WithImage("mongo:7.0.5-rc0-jammy")
-                .WithName($"{nameof(OperationsHistoryProviderTests)}-container")
-                .WithHostname("test-mongo-db-host")
-                .WithAutoRemove(true)
-                .WithCleanUp(true)
-                .WithPortBinding(28017, 28017)
-                .Build();
-        }
-
-        [OneTimeTearDown]
-        public async Task DownAsync()
-        {
-            await _mongoDbContainer.DisposeAsync();
+            while (!TestContainersService.IsStarted)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(20));
+            }
         }
 
         [Test]
         public async Task Should_InsertOneAsync_PaymentRecordsSuccessfully()
         {
-            if (_mongoDbContainer.State != TestcontainersStates.Running)
-            {
-                await _mongoDbContainer.StartAsync();
-                await Task.Delay(TimeSpan.FromSeconds(60));
-            }
-
-            var dbConnection = _mongoDbContainer.GetConnectionString();
+            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 
@@ -90,13 +71,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
         [Test]
         public async Task Should_InsertManyAsync_PaymentRecordsSuccessfully()
         {
-            if (_mongoDbContainer.State != TestcontainersStates.Running)
-            {
-                await _mongoDbContainer.StartAsync();
-                await Task.Delay(TimeSpan.FromSeconds(60));
-            }
-
-            var dbConnection = _mongoDbContainer.GetConnectionString();
+            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 

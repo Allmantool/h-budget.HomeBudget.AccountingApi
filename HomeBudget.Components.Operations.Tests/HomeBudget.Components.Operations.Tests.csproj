@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\HomeBudget.Accounting.Api.IntegrationTests\HomeBudget.Accounting.Api.IntegrationTests.csproj" />
     <ProjectReference Include="..\HomeBudget.Components.Operations\HomeBudget.Components.Operations.csproj" />
     <ProjectReference Include="..\HomeBudget.Test.Core\HomeBudget.Test.Core.csproj" />
   </ItemGroup>

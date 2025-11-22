@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         private List<IntegrationTestWorkerFactory<TWorkerEntryPoint>> WorkerFactories { get; set; } = new List<IntegrationTestWorkerFactory<TWorkerEntryPoint>>();
 
-        private TestContainersService TestContainersService { get; set; }
+        internal TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
 
