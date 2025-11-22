@@ -26,7 +26,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     {
         public static bool IsStarted { get; private set; }
 
-        private readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
+        private static readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
@@ -50,7 +50,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             KafkaContainer?.GetBootstrapAddress()?.Replace("plaintext://", "", StringComparison.OrdinalIgnoreCase)
         ];
 
-        public async Task<bool> UpAndRunningContainersAsync()
+        public static async Task<bool> UpAndRunningContainersAsync()
         {
             using (_semaphoreGuard)
             {

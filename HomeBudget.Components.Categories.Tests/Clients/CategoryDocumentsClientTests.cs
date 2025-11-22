@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-using DotNet.Testcontainers.Builders;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
-using Testcontainers.MongoDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
@@ -23,40 +22,28 @@ namespace HomeBudget.Components.Categories.Tests.Clients
     [TestFixture]
     public class CategoryDocumentsClientTests
     {
-        private MongoDbContainer _mongoContainer;
         private CategoryDocumentsClient _client;
         private IMongoDatabase _database;
 
         [OneTimeSetUp]
         public async Task GlobalSetupAsync()
         {
-            const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
-
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            _mongoContainer = new MongoDbBuilder()
-                .WithImage("mongo:7.0.5-rc0-jammy")
-                .WithName($"{nameof(CategoryDocumentsClientTests)}-mongo-db-container-{Guid.NewGuid()}")
-                .WithHostname("test-mongo-db-host")
-                .WithPortBinding(28117, 28117)
-                .WithAutoRemove(true)
-                .WithCleanUp(true)
-                .WithWaitStrategy(Wait.ForUnixContainer())
-                .WithCreateParameterModifier(config =>
-                {
-                    config.HostConfig.Memory = ContainerMaxMemoryAllocation;
-                })
-                .Build();
+            while (!TestContainersService.IsStarted)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(20));
+            }
 
-            await _mongoContainer.StartAsync();
+            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
 
-            var mongoClient = new MongoClient(_mongoContainer.GetConnectionString());
+            var mongoClient = new MongoClient(dbConnection);
 
             var mongoOptions = Options.Create(new MongoDbOptions
             {
-                ConnectionString = _mongoContainer.GetConnectionString(),
+                ConnectionString = dbConnection,
                 PaymentsHistory = "payments_history_test",
                 HandBooks = "handbooks_test",
                 PaymentAccounts = "payment_accounts_test"
@@ -64,15 +51,6 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             _database = mongoClient.GetDatabase(mongoOptions.Value.HandBooks);
             _client = new CategoryDocumentsClient(mongoOptions);
-        }
-
-        [OneTimeTearDown]
-        public async Task GlobalTeardownAsync()
-        {
-            if (_mongoContainer != null)
-            {
-                await _mongoContainer.DisposeAsync();
-            }
         }
 
         [SetUp]
