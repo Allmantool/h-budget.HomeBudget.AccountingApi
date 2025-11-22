@@ -34,12 +34,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            await _sut.InitAsync();
+            await _sut.InitAsync(5);
             _restClient = _sut.RestHttpClient;
         }
 
         [Test]
-        public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplished()
+        public async Task ApplyTransfer_WithStandardFlow_ThenExpectedOperationWillBeAccomplishedAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
             var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
@@ -58,7 +58,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(
                 createRequest,
-                executionDelayAfterInMs: 2000);
+                executionDelayAfterInMs: 20000);
 
             var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
             var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
@@ -79,7 +79,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeleted()
+        public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeletedAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
             var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
@@ -122,7 +122,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         [Test]
         [Ignore("Not implemented so far")]
-        public async Task UpdateTransfer_WithoutSenderOrRecipientAccountChange_ThenValuesWillBeUpdated()
+        public async Task UpdateTransfer_WithoutSenderOrRecipientAccountChange_ThenValuesWillBeUpdatedAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
             var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;

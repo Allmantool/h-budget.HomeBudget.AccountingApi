@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -25,13 +26,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
     {
         private IntegrationTestWebApplicationFactory<TWebAppEntryPoint> WebFactory { get; set; }
 
-        private IntegrationTestWorkerFactory<TWorkerEntryPoint> WorkerFactory { get; set; }
+        private List<IntegrationTestWorkerFactory<TWorkerEntryPoint>> WorkerFactories { get; set; } = new List<IntegrationTestWorkerFactory<TWorkerEntryPoint>>();
 
         private TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
 
-        public async Task<bool> InitAsync()
+        public async Task<bool> InitAsync(int workersMaxAmount = 1)
         {
             try
             {
@@ -53,15 +54,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
                 await StartContainersAsync();
 
-                WorkerFactory = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
-                    () => new TestContainersConnections
-                    {
-                        KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
-                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                        MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
-                    });
+                for (var i = 0; i < workersMaxAmount; i++)
+                {
+                    var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
+                        () => new TestContainersConnections
+                        {
+                            KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                            EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                        });
 
-                await WorkerFactory.StartAsync();
+                    WorkerFactories.Add(worker);
+                }
+
+                await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
 
                 WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
                     () => new TestContainersConnections
@@ -86,7 +92,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 };
 
                 var baseClient = WebFactory.CreateClient(clientOptions);
-                baseClient.Timeout = TimeSpan.FromMinutes(2);
+                baseClient.Timeout = TimeSpan.FromMinutes(BaseTestWebAppOptions.WebClientTimeoutInMinutes);
 
                 var healthUri = new Uri(baseClient.BaseAddress!, Endpoints.HealthCheckSource);
                 var response = await baseClient.GetAsync(healthUri);
@@ -157,9 +163,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await WebFactory.DisposeAsync();
             }
 
-            if (WorkerFactory is not null)
+            if (WorkerFactories is not null)
             {
-                _ = WorkerFactory.StopAsync();
+                await Task.WhenAll(WorkerFactories.Select(w => w.StopAsync()));
             }
 
             RestHttpClient?.Dispose();

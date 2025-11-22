@@ -9,7 +9,6 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
-using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
@@ -31,7 +30,9 @@ namespace HomeBudget.Components.Operations.Clients
 
             var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
 
-            return await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
+            var records = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
+
+            return records;
         }
 
         public async Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier)
@@ -93,27 +94,13 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-            var bulkOps = new List<WriteModel<PaymentHistoryDocument>>();
-
-            foreach (var record in payload)
-            {
-                var existingDocument = await targetCollection
-                    .Find(Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, record.Record.Key))
-                    .FirstOrDefaultAsync();
-
-                var newDocument = new PaymentHistoryDocument
-                {
-                    Id = existingDocument?.Id ?? record.Record.Key.ToObjectId(),
-                    Payload = record
-                };
-
-                bulkOps.Add(new ReplaceOneModel<PaymentHistoryDocument>(
-                    Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, record.Record.Key),
-                    newDocument)
+            var bulkOps = payload.Select(r =>
+                new ReplaceOneModel<PaymentHistoryDocument>(
+                    Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, r.Record.Key),
+                    new PaymentHistoryDocument { Payload = r })
                 {
                     IsUpsert = true
-                });
-            }
+                }).ToList();
 
             if (bulkOps.Count > 0)
             {

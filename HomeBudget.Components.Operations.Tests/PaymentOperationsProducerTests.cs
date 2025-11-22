@@ -10,6 +10,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Testcontainers.Kafka;
+
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;

@@ -15,8 +15,8 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsHistoryService(
-    IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
-    ICategoryDocumentsClient categoryDocumentsClient)
+        IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
+        ICategoryDocumentsClient categoryDocumentsClient)
     : IPaymentOperationsHistoryService
     {
         public async Task<Result<decimal>> SyncHistoryAsync(
