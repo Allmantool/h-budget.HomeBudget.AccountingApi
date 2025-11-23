@@ -15,7 +15,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     .WithImage("mongo:7.0.5-rc0-jammy")
                     .WithName($"{nameof(TestContainersService)}-mongo-db-container-{Guid.NewGuid()}")
                     .WithHostname("test-mongo-db-host")
-                    .WithPortBinding(55821, 28117)
+                    .WithPortBinding(55821, true)
                     .WithEnvironment("MONGO_INITDB_ROOT_USERNAME", "mongo")
                     .WithEnvironment("MONGO_INITDB_ROOT_PASSWORD", "mongo")
                     .WithAutoRemove(true)

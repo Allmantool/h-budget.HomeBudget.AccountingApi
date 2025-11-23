@@ -30,7 +30,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                          cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
                         .WithName($"{nameof(TestContainersService)}-kafka-test-ui")
                         .WithHostname($"test-kafka-ui")
-                        .WithPortBinding(8080, 8080)
+                        .WithPortBinding(8080, true)
                         .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
 
                         // .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
