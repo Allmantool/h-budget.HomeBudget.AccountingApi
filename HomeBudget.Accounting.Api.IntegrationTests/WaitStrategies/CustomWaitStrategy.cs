@@ -9,6 +9,10 @@ using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 internal class CustomWaitStrategy : IWaitUntil
 {
     private readonly TimeSpan _timeout;
+    private readonly string[] _readyIndicators =
+    {
+        "ready", "started", "listening", "healthy"
+    };
 
     public CustomWaitStrategy(TimeSpan timeout)
     {
@@ -17,35 +21,74 @@ internal class CustomWaitStrategy : IWaitUntil
 
     public async Task<bool> UntilAsync(IContainer container)
     {
-        var startTime = DateTime.UtcNow;
+        var deadline = DateTime.UtcNow + _timeout;
+        var delay = TimeSpan.FromMilliseconds(300);
 
-        while (DateTime.UtcNow - startTime < _timeout)
+        int lastLogLength = 0;
+
+        while (DateTime.UtcNow < deadline)
         {
-            if (await CheckIfContainerIsReadyAsync(container))
+            if (container.Health == TestcontainersHealthStatus.Healthy)
             {
                 return true;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(BaseTestContainerOptions.WaitStrategyInSeconds));
+            var (isReady, updatedLogLength) = await IsContainerReadyFromLogsAsync(container, lastLogLength);
+
+            lastLogLength = updatedLogLength;
+
+            if (isReady)
+            {
+                return true;
+            }
+
+            await Task.Delay(delay);
+            delay = TimeSpan.FromMilliseconds(
+                Math.Min(
+                    delay.TotalMilliseconds * 1.7,
+                    BaseTestContainerOptions.WaitStrategyInSeconds * 1000)
+            );
         }
 
         return false;
     }
 
-    private static async Task<bool> CheckIfContainerIsReadyAsync(IContainer container)
+    private async Task<(bool isReady, int updatedLength)> IsContainerReadyFromLogsAsync(IContainer container, int lastLogLength)
     {
         try
         {
-            var logs = await container.GetLogsAsync();
-            var isHealthStatus = container.Health == TestcontainersHealthStatus.Healthy;
-            var isStartedFromLog = logs.Stdout.Contains("started", StringComparison.OrdinalIgnoreCase)
-                || logs.Stderr.Contains("started", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(container.Id))
+            {
+                return (false, lastLogLength);
+            }
 
-            return isStartedFromLog;
+            var logs = await container.GetLogsAsync();
+
+            var stdout = logs.Stdout ?? string.Empty;
+            var stderr = logs.Stderr ?? string.Empty;
+            var combined = stdout + stderr;
+
+            if (combined.Length <= lastLogLength)
+            {
+                return (false, lastLogLength);
+            }
+
+            var newSegment = combined[lastLogLength..];
+            var updatedLength = combined.Length;
+
+            foreach (var indicator in _readyIndicators)
+            {
+                if (newSegment.Contains(indicator, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (true, updatedLength);
+                }
+            }
+
+            return (false, updatedLength);
         }
-        catch (Exception ex)
+        catch
         {
-            return false;
+            return (false, lastLogLength);
         }
     }
 }

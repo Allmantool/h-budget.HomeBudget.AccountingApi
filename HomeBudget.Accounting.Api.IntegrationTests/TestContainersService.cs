@@ -21,20 +21,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     internal class TestContainersService() : IAsyncDisposable
     {
-        public static bool IsStarted { get; private set; }
+        private static bool IsStarted { get; set; }
         private static bool Inizialized { get; set; }
 
-        private static readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
+        private static readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1000));
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
         public static MongoDbContainer MongoDbContainer { get; private set; }
 
+        public static bool IsReadyForUse => IsStarted && Inizialized;
+
         public static async Task<bool> UpAndRunningContainersAsync()
         {
             using (_semaphoreGuard)
             {
-                if (IsStarted && Inizialized)
+                if (IsReadyForUse)
                 {
                     return true;
                 }
@@ -60,7 +62,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         Inizialized = true;
                     }
 
-                    return IsStarted && Inizialized;
+                    return IsReadyForUse;
                 }
                 catch (Exception ex)
                 {
@@ -177,35 +179,29 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 if (EventSourceDbContainer is not null)
                 {
-                    await EventSourceDbContainer.StartAsync();
+                    await EventSourceDbContainer.SafeStartContainerAsync();
                 }
 
                 if (MongoDbContainer is not null)
                 {
-                    await MongoDbContainer.StartAsync();
+                    await MongoDbContainer.SafeStartContainerAsync();
                 }
 
                 if (KafkaContainer is not null)
                 {
-                    try
-                    {
-                        await KafkaContainer.StartAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        if (!ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw;
-                        }
-                    }
+                    await KafkaContainer.SafeStartContainerAsync(swallowBusyError: true);
                 }
 
                 if (KafkaUIContainer is not null)
                 {
-                    await KafkaUIContainer.StartAsync();
+                    await KafkaUIContainer.SafeStartContainerAsync();
                 }
 
-                await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
+                if (KafkaContainer is not null)
+                {
+                    await KafkaContainer.WaitForKafkaReadyAsync(
+                        TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
+                }
 
                 Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
             }
@@ -214,16 +210,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 IsStarted = false;
                 Inizialized = false;
 
+                Console.WriteLine("Container startup failed:");
                 Console.WriteLine(ex);
 
-                var mongoDbLogs = await MongoDbContainer.GetLogsAsync();
-                Console.WriteLine($"Mongo db container logs: {mongoDbLogs}");
-
-                var eventSourceDbLogs = await EventSourceDbContainer.GetLogsAsync();
-                Console.WriteLine($"Event store db container logs: {eventSourceDbLogs}");
-
-                var kafkaLobs = await KafkaContainer.GetLogsAsync();
-                Console.WriteLine($"Kafka container logs: {kafkaLobs}");
+                await MongoDbContainer.DumpContainerLogsSafelyAsync("MongoDB");
+                await EventSourceDbContainer.DumpContainerLogsSafelyAsync("EventStoreDB");
+                await KafkaContainer.DumpContainerLogsSafelyAsync("Kafka");
 
                 throw;
             }

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
@@ -27,10 +28,10 @@ namespace HomeBudget.Components.Operations.Tests
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            var maxWait = TimeSpan.FromMinutes(3);
+            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsStarted)
+            while (!TestContainersService.IsReadyForUse)
             {
                 await TestContainersService.UpAndRunningContainersAsync();
 

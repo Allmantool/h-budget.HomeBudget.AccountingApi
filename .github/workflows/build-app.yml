@@ -70,7 +70,7 @@ jobs:
   #     test_timeout_minutes: 30
 
   app-tests:
-    name: Unit Tests Coverage
+    name: App Tests Coverage
     needs: [build-api]
     uses: ./.github/workflows/app-tests.yml
     with:

@@ -37,7 +37,7 @@ namespace HomeBudget.Components.Categories.Tests.Clients
             var maxWait = TimeSpan.FromMinutes(3);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsStarted)
+            while (!TestContainersService.IsReadyForUse)
             {
                 await TestContainersService.UpAndRunningContainersAsync();
 

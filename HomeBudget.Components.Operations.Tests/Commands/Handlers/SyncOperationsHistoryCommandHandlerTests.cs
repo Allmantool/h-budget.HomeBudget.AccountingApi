@@ -15,6 +15,7 @@ using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Commands.Models;
@@ -48,10 +49,10 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
                 BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-                var maxWait = TimeSpan.FromMinutes(3);
+                var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 var sw = Stopwatch.StartNew();
 
-                while (!TestContainersService.IsStarted)
+                while (!TestContainersService.IsReadyForUse)
                 {
                     await TestContainersService.UpAndRunningContainersAsync();
 
