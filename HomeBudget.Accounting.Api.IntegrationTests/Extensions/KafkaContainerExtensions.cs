@@ -16,13 +16,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
     {
         private static readonly string[] StaticBootstrapCandidates =
         {
-            "127.0.0.1:9092","localhost:9092",
-            "127.0.0.1:29092", "localhost:29092",
+            "127.0.0.1:9092",
+            "localhost:9092",
+            "127.0.0.1:29092",
+            "localhost:29092",
             "test-kafka:9092",
-            "127.0.0.1:9093", "localhost:9093",
-            "127.0.0.1:9094", "localhost:9094",
+            "127.0.0.1:9093",
+            "localhost:9093",
+            "127.0.0.1:9094",
+            "localhost:9094",
             "test-kafka:9094",
-            "172.18.0.3:9093", "172.18.0.3:9092"
+            "172.18.0.3:9093",
+            "172.18.0.3:9092"
         };
 
         public static async Task WaitForKafkaReadyAsync(this KafkaContainer kafkaContainer, TimeSpan timeout)
