@@ -1,7 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
-
 using FluentAssertions;
+
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
@@ -11,6 +12,7 @@ using NUnit.Framework;
 using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Tests.Constants;
 
 namespace HomeBudget.Components.Operations.Tests.Providers
 {
@@ -23,10 +25,24 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
+            var maxWait = TimeSpan.FromMinutes(3);
+            var sw = Stopwatch.StartNew();
+
             while (!TestContainersService.IsStarted)
             {
-                await Task.Delay(TimeSpan.FromSeconds(20));
+                _ = Task.Run(() => TestContainersService.UpAndRunningContainersAsync());
+
+                if (sw.Elapsed > maxWait)
+                {
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
             }
+
+            sw.Stop();
         }
 
         [Test]

@@ -7,7 +7,7 @@ namespace HomeBudget.Accounting.Infrastructure
         where T : class
     {
         [BsonId]
-        public ObjectId Id { get; init; }
+        public ObjectId Id { get; init; } = ObjectId.GenerateNewId();
 
         public T Payload { get; init; }
     }

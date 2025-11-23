@@ -16,9 +16,10 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Components.Operations.Clients
 {
     internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
-    : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory),
-        IPaymentsHistoryDocumentsClient
+    : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory), IPaymentsHistoryDocumentsClient
     {
+        public MongoDbOptions DbOptions { get; } = dbOptions?.Value;
+
         public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null)
         {
             if (period != null)
@@ -97,14 +98,25 @@ namespace HomeBudget.Components.Operations.Clients
             var bulkOps = payload.Select(r =>
                 new ReplaceOneModel<PaymentHistoryDocument>(
                     Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, r.Record.Key),
-                    new PaymentHistoryDocument { Payload = r })
+                    new PaymentHistoryDocument
+                    {
+                        Payload = r
+                    })
                 {
-                    IsUpsert = true
+                    IsUpsert = true,
                 }).ToList();
 
             if (bulkOps.Count > 0)
             {
-                await targetCollection.BulkWriteAsync(bulkOps);
+                foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
+                {
+                    await targetCollection.BulkWriteAsync(
+                    bulkOps,
+                    new BulkWriteOptions
+                    {
+                        IsOrdered = false
+                    });
+                }
             }
         }
 

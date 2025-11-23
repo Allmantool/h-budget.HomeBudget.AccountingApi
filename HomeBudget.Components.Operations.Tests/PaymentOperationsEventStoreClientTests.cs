@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -19,6 +20,7 @@ using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -37,10 +39,24 @@ namespace HomeBudget.Components.Operations.Tests
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
+            var maxWait = TimeSpan.FromMinutes(3);
+            var sw = Stopwatch.StartNew();
+
             while (!TestContainersService.IsStarted)
             {
-                await Task.Delay(TimeSpan.FromSeconds(20));
+                _ = Task.Run(() => TestContainersService.UpAndRunningContainersAsync());
+
+                if (sw.Elapsed > maxWait)
+                {
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
             }
+
+            sw.Stop();
 
             _paymentOperationsHistoryServiceMock
                 .Setup(s => s.SyncHistoryAsync(It.IsAny<string>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))

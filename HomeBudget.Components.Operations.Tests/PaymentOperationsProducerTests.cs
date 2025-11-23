@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,6 +12,7 @@ using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
@@ -25,10 +27,24 @@ namespace HomeBudget.Components.Operations.Tests
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
+            var maxWait = TimeSpan.FromMinutes(3);
+            var sw = Stopwatch.StartNew();
+
             while (!TestContainersService.IsStarted)
             {
-                await Task.Delay(TimeSpan.FromSeconds(20));
+                _ = Task.Run(() => TestContainersService.UpAndRunningContainersAsync());
+
+                if (sw.Elapsed > maxWait)
+                {
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
             }
+
+            sw.Stop();
         }
 
         [Test]

@@ -1,12 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
-
-using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Driver;
-using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Constants;
@@ -15,7 +9,15 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Categories.Models;
+using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Options;
+
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Driver;
+using NUnit.Framework;
 
 namespace HomeBudget.Components.Categories.Tests.Clients
 {
@@ -32,11 +34,24 @@ namespace HomeBudget.Components.Categories.Tests.Clients
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
+            var maxWait = TimeSpan.FromMinutes(3);
+            var sw = Stopwatch.StartNew();
+
             while (!TestContainersService.IsStarted)
             {
-                await Task.Delay(TimeSpan.FromSeconds(20));
+                _ = Task.Run(() => TestContainersService.UpAndRunningContainersAsync());
+
+                if (sw.Elapsed > maxWait)
+                {
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
             }
 
+            sw.Stop();
             var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
 
             var mongoClient = new MongoClient(dbConnection);
