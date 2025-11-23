@@ -44,7 +44,7 @@ namespace HomeBudget.Components.Operations.Tests
 
             while (!TestContainersService.IsStarted)
             {
-                _ = Task.Run(() => TestContainersService.UpAndRunningContainersAsync());
+                await TestContainersService.UpAndRunningContainersAsync();
 
                 if (sw.Elapsed > maxWait)
                 {

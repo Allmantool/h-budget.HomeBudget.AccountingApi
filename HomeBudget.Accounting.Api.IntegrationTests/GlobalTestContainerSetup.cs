@@ -18,7 +18,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             _webAppSut = new GlobalWebApp();
             _workerSut = new GlobalWorker();
 
-            await Task.WhenAll(_webAppSut.StartContainersAsync(), _workerSut.StartContainersAsync());
+            await Task.WhenAll(BaseTestWebApp<Program, Workers.OperationsConsumer.Program>.StartContainersAsync(), BaseTestWebApp<Program, Workers.OperationsConsumer.Program>.StartContainersAsync());
         }
 
         [OneTimeTearDown]

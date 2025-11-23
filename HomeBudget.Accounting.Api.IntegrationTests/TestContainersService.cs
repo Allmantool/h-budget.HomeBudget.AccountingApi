@@ -44,7 +44,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     EventSourceDbContainer = EventStoreDbContainerFactory.Build(ContainerMaxMemoryAllocation);
 
-                    var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync("test-kafka-net");
+                    var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
+
+                    var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
 
                     KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork, ContainerMaxMemoryAllocation);
 
