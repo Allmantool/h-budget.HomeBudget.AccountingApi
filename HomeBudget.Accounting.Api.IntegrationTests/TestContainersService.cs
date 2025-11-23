@@ -180,6 +180,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await EventSourceDbContainer.StartAsync();
                 }
 
+                if (MongoDbContainer is not null)
+                {
+                    await MongoDbContainer.StartAsync();
+                }
+
                 if (KafkaContainer is not null)
                 {
                     try
@@ -193,11 +198,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                             throw;
                         }
                     }
-                }
-
-                if (MongoDbContainer is not null)
-                {
-                    await MongoDbContainer.StartAsync();
                 }
 
                 if (KafkaUIContainer is not null)
