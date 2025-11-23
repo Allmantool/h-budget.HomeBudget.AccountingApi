@@ -22,6 +22,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     internal class TestContainersService() : IAsyncDisposable
     {
         public static bool IsStarted { get; private set; }
+        private static bool Inizialized { get; set; }
 
         private static readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
@@ -33,9 +34,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             using (_semaphoreGuard)
             {
-                if (IsStarted)
+                if (IsStarted && Inizialized)
                 {
-                    return IsStarted;
+                    return true;
                 }
 
                 IsStarted = true;
@@ -59,11 +60,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
 
-                    return IsStarted;
+                    Inizialized = true;
+
+                    return IsStarted && Inizialized;
                 }
                 catch (Exception ex)
                 {
                     IsStarted = false;
+                    Inizialized = false;
                     Console.WriteLine(ex);
 
                     throw;
@@ -183,14 +187,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await KafkaContainer.StartAsync();
                 }
 
-                if (KafkaUIContainer is not null)
-                {
-                    await KafkaUIContainer.StartAsync();
-                }
-
                 if (MongoDbContainer is not null)
                 {
                     await MongoDbContainer.StartAsync();
+                }
+
+                if (KafkaUIContainer is not null)
+                {
+                    await KafkaUIContainer.StartAsync();
                 }
             }
             catch (Exception ex)
@@ -202,6 +206,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 }
 
                 IsStarted = false;
+                Inizialized = false;
+
                 Console.WriteLine(ex);
 
                 var mongoDbLogs = await MongoDbContainer.GetLogsAsync();

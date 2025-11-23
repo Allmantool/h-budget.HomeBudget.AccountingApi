@@ -120,11 +120,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 return false;
             }
 
-            if (TestContainersService.IsStarted)
-            {
-                return true;
-            }
-
             return await TestContainersService.UpAndRunningContainersAsync();
         }
 
