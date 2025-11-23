@@ -8,7 +8,7 @@ jobs:
 
     steps:
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "9.0.x"
 
@@ -18,13 +18,13 @@ jobs:
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Download Unit Coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: unit-coverage-xml
           path: test-results/unit
 
       - name: Download Integration Coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: integration-coverage-xml
           path: test-results/integration
@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload Merged Coverage Artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: merged-coverage-report
           path: test-results/merged/

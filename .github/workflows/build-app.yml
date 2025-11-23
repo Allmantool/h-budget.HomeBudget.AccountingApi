@@ -49,27 +49,35 @@ jobs:
           tag=$(echo $tag_v | sed 's/v//')
           echo "Generated tag: $tag"
           echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
+
   build-api:
     name: Build app artifact
     needs: [get-tag]
     uses: ./.github/workflows/build-api.yml
 
-  unit-tests:
+  # unit-tests:
+  #   name: Unit Tests Coverage
+  #   needs: [build-api]
+  #   uses: ./.github/workflows/unit-tests.yml
+  #   with:
+  #     test_timeout_minutes: 10
+
+  # integration-tests:
+  #   needs: [build-api]
+  #   name: Integration Tests Coverage
+  #   uses: ./.github/workflows/integration-tests.yml
+  #   with:
+  #     test_timeout_minutes: 30
+
+  app-tests:
     name: Unit Tests Coverage
     needs: [build-api]
-    uses: ./.github/workflows/unit-tests.yml
-    with:
-      test_timeout_minutes: 10
-
-  integration-tests:
-    needs: [build-api]
-    name: Integration Tests Coverage
-    uses: ./.github/workflows/integration-tests.yml
+    uses: ./.github/workflows/app-tests.yml
     with:
       test_timeout_minutes: 30
 
   merge-coverage:
-    needs: [unit-tests, integration-tests]
+    needs: [app-tests]
     name: Merge Coverage Reports
     uses: ./.github/workflows/merge-coverage.yml
 
