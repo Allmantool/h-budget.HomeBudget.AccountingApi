@@ -55,12 +55,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     MongoDbContainer = MongoDbContainerFactory.Build();
 
-                    await TryToStartContainerAsync();
-                    await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
-
-                    Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
-
-                    Inizialized = true;
+                    if (await TryToStartContainerAsync())
+                    {
+                        Inizialized = true;
+                    }
 
                     return IsStarted && Inizialized;
                 }
@@ -184,7 +182,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 if (KafkaContainer is not null)
                 {
-                    await KafkaContainer.StartAsync();
+                    try
+                    {
+                        await KafkaContainer.StartAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw;
+                        }
+                    }
                 }
 
                 if (MongoDbContainer is not null)
@@ -196,15 +204,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     await KafkaUIContainer.StartAsync();
                 }
+
+                await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
+
+                Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
             }
             catch (Exception ex)
             {
-                // Ignore "device or resource busy" as a false positive
-                if (ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-
                 IsStarted = false;
                 Inizialized = false;
 

@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+
 internal class CustomWaitStrategy : IWaitUntil
 {
     private readonly TimeSpan _timeout;
@@ -24,8 +26,7 @@ internal class CustomWaitStrategy : IWaitUntil
                 return true;
             }
 
-            // Avoid hammering logs too fast
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            await Task.Delay(TimeSpan.FromSeconds(BaseTestContainerOptions.WaitStrategyInSeconds));
         }
 
         return false;
