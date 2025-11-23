@@ -10,6 +10,7 @@ using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Infrastructure;
@@ -39,23 +40,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 IsStarted = true;
 
-                const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
                 try
                 {
-                    EventSourceDbContainer = EventStoreDbContainerFactory.Build(ContainerMaxMemoryAllocation);
+                    EventSourceDbContainer = EventStoreDbContainerFactory.Build();
 
                     var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
 
                     var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
 
-                    KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork, ContainerMaxMemoryAllocation);
+                    KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork);
 
-                    KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(testKafkaNetwork, ContainerMaxMemoryAllocation);
+                    KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(testKafkaNetwork);
 
-                    MongoDbContainer = MongoDbContainerFactory.Build(ContainerMaxMemoryAllocation);
+                    MongoDbContainer = MongoDbContainerFactory.Build();
 
                     await TryToStartContainerAsync();
-                    await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(5));
+                    await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
 
                     Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
 
@@ -173,11 +173,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             try
             {
-                await Task.WhenAll(
-                    EventSourceDbContainer.StartAsync(),
-                    KafkaContainer.StartAsync(),
-                    KafkaUIContainer.StartAsync(),
-                    MongoDbContainer.StartAsync());
+                if (EventSourceDbContainer is not null)
+                {
+                    await EventSourceDbContainer.StartAsync();
+                }
+
+                if (KafkaContainer is not null)
+                {
+                    await KafkaContainer.StartAsync();
+                }
+
+                if (KafkaUIContainer is not null)
+                {
+                    await KafkaUIContainer.StartAsync();
+                }
+
+                if (MongoDbContainer is not null)
+                {
+                    await MongoDbContainer.StartAsync();
+                }
             }
             catch (Exception ex)
             {

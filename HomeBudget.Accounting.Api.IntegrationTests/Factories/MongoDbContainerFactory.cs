@@ -3,11 +3,13 @@
 using DotNet.Testcontainers.Builders;
 using Testcontainers.MongoDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class MongoDbContainerFactory
     {
-        public static MongoDbContainer Build(long containerMaxMemoryAllocation)
+        public static MongoDbContainer Build()
         {
             return new MongoDbBuilder()
                     .WithImage("mongo:7.0.5-rc0-jammy")
@@ -21,12 +23,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     .WithWaitStrategy(
                         Wait.ForUnixContainer()
                             .AddCustomWaitStrategy(
-                                new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                new CustomWaitStrategy(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes))
                             ))
                     .WithCreateParameterModifier(config =>
                     {
-                        config.HostConfig.Memory = containerMaxMemoryAllocation;
-                        config.StopTimeout = TimeSpan.FromMinutes(5);
+                        config.HostConfig.Memory = BaseTestContainerOptions.Memory;
+                        config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                     })
                     .Build();
         }

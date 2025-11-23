@@ -6,13 +6,16 @@ using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Networks;
 using Testcontainers.Kafka;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class KafkaContainerFactory
     {
-        public static KafkaContainer Build(INetwork network, long containerMaxMemoryAllocation)
+        public static KafkaContainer Build(INetwork network)
         {
-            var testcontainersScriptPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Scripts/testcontainers.sh"))
+            var testcontainersScriptPath = Path
+                .GetFullPath(Path.Combine(AppContext.BaseDirectory, "Scripts/testcontainers.sh"))
                 .Replace('\\', '/');
 
             if (!File.Exists(testcontainersScriptPath))
@@ -20,7 +23,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 throw new FileNotFoundException($"Missing script: {testcontainersScriptPath}");
             }
 
-            var kafkaConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/server.properties")).Replace('\\', '/');
+            var kafkaConfigPath = Path
+                .GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/server.properties"))
+                .Replace('\\', '/');
 
             if (!File.Exists(kafkaConfigPath))
             {
@@ -87,9 +92,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                         ))
                 .WithCreateParameterModifier(config =>
                 {
-                    config.HostConfig.Memory = containerMaxMemoryAllocation;
-                    config.HostConfig.NanoCPUs = 1500000000;
-                    config.StopTimeout = TimeSpan.FromMinutes(5);
+                    config.HostConfig.Memory = BaseTestContainerOptions.Memory;
+                    config.HostConfig.NanoCPUs = BaseTestContainerOptions.NanoCPUs;
+                    config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 })
                 .WithAutoRemove(true)
                 .WithCleanUp(true)

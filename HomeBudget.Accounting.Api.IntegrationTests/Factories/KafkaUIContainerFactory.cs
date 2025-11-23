@@ -7,15 +7,18 @@ using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Test.Core.Factories;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class KafkaUIContainerFactory
     {
-        public static async Task<IContainer> BuildAsync(INetwork network, long containerMaxMemoryAllocation)
+        public static async Task<IContainer> BuildAsync(INetwork network)
         {
-            var testContainersConfigPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml")).Replace('\\', '/');
+            var testContainersConfigPath = Path
+                .GetFullPath(Path.Combine(AppContext.BaseDirectory, "Configs/dynamic_config.yaml"))
+                .Replace('\\', '/');
 
             if (!File.Exists(testContainersConfigPath))
             {
@@ -40,7 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                         .WithWaitStrategy(
                             Wait.ForUnixContainer()
                                 .AddCustomWaitStrategy(
-                                    new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                                    new CustomWaitStrategy(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes))
                                 ))
                         .WithNetwork(network)
                         .WithStartupCallback((kafkaContainer, cancelToken) =>

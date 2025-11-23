@@ -3,13 +3,13 @@
 using DotNet.Testcontainers.Builders;
 using Testcontainers.EventStoreDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+
 namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class EventStoreDbContainerFactory
     {
-        private static int containerStopTimeoutInMinutes = 5;
-
-        public static EventStoreDbContainer Build(long containerMaxMemoryAllocation)
+        public static EventStoreDbContainer Build()
         {
             return new EventStoreDbBuilder()
                     .WithImage("eventstore/eventstore:24.10.4-jammy")
@@ -38,12 +38,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     .WithWaitStrategy(
                         Wait.ForUnixContainer()
                             .AddCustomWaitStrategy(
-                                new CustomWaitStrategy(TimeSpan.FromMinutes(containerStopTimeoutInMinutes))
+                                new CustomWaitStrategy(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes))
                             ))
                     .WithCreateParameterModifier(config =>
                     {
-                        config.HostConfig.Memory = containerMaxMemoryAllocation;
-                        config.StopTimeout = TimeSpan.FromMinutes(containerStopTimeoutInMinutes);
+                        config.HostConfig.Memory = BaseTestContainerOptions.Memory;
+                        config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                     })
                     .Build();
         }

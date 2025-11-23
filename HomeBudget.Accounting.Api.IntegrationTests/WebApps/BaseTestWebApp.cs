@@ -128,7 +128,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             return await TestContainersService.UpAndRunningContainersAsync();
         }
 
-        public async Task ResetAsync()
+        public static async Task ResetAsync()
         {
             if (TestContainersService == null)
             {
@@ -138,7 +138,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.ResetContainersAsync();
         }
 
-        public async Task StopAsync()
+        public static async Task StopAsync()
         {
             if (TestContainersService == null)
             {
