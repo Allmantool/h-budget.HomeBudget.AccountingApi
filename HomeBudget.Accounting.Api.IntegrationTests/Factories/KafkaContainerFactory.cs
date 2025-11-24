@@ -36,11 +36,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithImage("confluentinc/cp-kafka:8.1.0")
                 .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                 .WithHostname("test-kafka")
-                .WithPortBinding(29092, true)
-                .WithPortBinding(9092, true)
-                .WithPortBinding(9093, true)
-                .WithPortBinding(9094, true)
-                .WithPortBinding(9997, true)
+
+                // .WithPortBinding(29092, true)
+                // .WithPortBinding(9092, true)
+                // .WithPortBinding(9093, true)
+                // .WithPortBinding(9094, true)
+                // .WithPortBinding(9997, true)
+                .WithPortBinding(29092, 29092)
+                .WithPortBinding(9092, 9092)
+                .WithPortBinding(9093, 9093)
+                .WithPortBinding(9094, 9094)
+                .WithPortBinding(9997, 9997)
 
                 // v8+ KRAFT_MODE
                 .WithEnvironment("KAFKA_KRAFT_MODE", "true")

@@ -187,11 +187,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await MongoDbContainer.SafeStartContainerAsync();
                 }
 
-                if (KafkaContainer is not null)
-                {
-                    await KafkaContainer.SafeStartContainerAsync(swallowBusyError: true);
-                }
-
                 if (KafkaUIContainer is not null)
                 {
                     await KafkaUIContainer.SafeStartContainerAsync();
@@ -199,8 +194,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 if (KafkaContainer is not null)
                 {
-                    await KafkaContainer.WaitForKafkaReadyAsync(
-                        TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
+                    await KafkaContainer.SafeStartContainerAsync(swallowBusyError: true);
+                    await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
                 }
 
                 Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");

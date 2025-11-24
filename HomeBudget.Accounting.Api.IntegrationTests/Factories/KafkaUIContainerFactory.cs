@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
             return await DockerContainerFactory.GetOrCreateDockerContainerAsync(
                          $"{nameof(TestContainersService)}-kafka-test-ui",
                          cb => cb.WithImage("provectuslabs/kafka-ui:v0.7.2")
-                        .WithName($"{nameof(TestContainersService)}-kafka-test-ui")
+                        .WithName($"{nameof(TestContainersService)}-kafka-test-ui-{Guid.NewGuid()}")
                         .WithHostname($"test-kafka-ui")
                         .WithPortBinding(8080, true)
                         .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
