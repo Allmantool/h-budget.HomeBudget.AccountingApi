@@ -2,6 +2,6 @@
 {
     public static class ComponentTestOptions
     {
-        public static int TestContainersWaitingInSeconds { get; set; } = 20;
+        public static int TestContainersWaitingInSeconds { get; set; } = 30;
     }
 }

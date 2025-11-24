@@ -23,8 +23,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     {
         private static bool IsStarted { get; set; }
         private static bool Inizialized { get; set; }
-
-        private static readonly SemaphoreGuard _semaphoreGuard = new(new SemaphoreSlim(1));
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
@@ -34,8 +32,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public static async Task<bool> UpAndRunningContainersAsync()
         {
-            using (_semaphoreGuard)
+            await using (await SemaphoreGuard.WaitAsync(new SemaphoreSlim(1)))
             {
+                if (IsStarted && !Inizialized)
+                {
+                    return false;
+                }
+
                 if (IsReadyForUse)
                 {
                     return true;

@@ -24,7 +24,13 @@ namespace HomeBudget.Test.Core.Factories
                 {
                     Filters = new Dictionary<string, IDictionary<string, bool>>
                     {
-                        { "name", new Dictionary<string, bool> { { networkName, true } } }
+                        {
+                            "name",
+                            new Dictionary<string, bool>
+                            {
+                                { networkName, true }
+                            }
+                        }
                     }
                 });
 
