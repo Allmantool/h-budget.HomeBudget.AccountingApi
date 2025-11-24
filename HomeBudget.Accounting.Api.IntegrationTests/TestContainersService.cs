@@ -23,6 +23,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     {
         private static bool IsStarted { get; set; }
         private static bool Inizialized { get; set; }
+
+        private static readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
         public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public static IContainer KafkaUIContainer { get; private set; }
         public static KafkaContainer KafkaContainer { get; private set; }
@@ -32,7 +34,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public static async Task<bool> UpAndRunningContainersAsync()
         {
-            await using (await SemaphoreGuard.WaitAsync(new SemaphoreSlim(1)))
+            await using (await SemaphoreGuard.WaitAsync(_semaphoreSlim))
             {
                 if (IsStarted && !Inizialized)
                 {
@@ -173,7 +175,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await MongoDbContainer.DisposeAsync();
             }
 
-            _semaphoreGuard?.Dispose();
+            _semaphoreSlim?.Dispose();
         }
 
         private static async Task<bool> TryToStartContainerAsync()
