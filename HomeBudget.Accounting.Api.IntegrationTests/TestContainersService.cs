@@ -19,142 +19,114 @@ using HomeBudget.Test.Core.Factories;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
-    internal class TestContainersService() : IAsyncDisposable
+    internal sealed class TestContainersService : IAsyncDisposable
     {
-        private static bool IsStarted { get; set; }
-        private static bool Inizialized { get; set; }
+        private static readonly SemaphoreSlim _lock = new(1, 1);
+        private static TestContainersService? _instance;
+        private bool _isDisposed;
 
-        private static readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
-        public static EventStoreDbContainer EventSourceDbContainer { get; private set; }
-        public static IContainer KafkaUIContainer { get; private set; }
-        public static KafkaContainer KafkaContainer { get; private set; }
-        public static MongoDbContainer MongoDbContainer { get; private set; }
+        public bool IsReadyForUse { get; private set; }
 
-        public static bool IsReadyForUse => IsStarted && Inizialized;
+        public EventStoreDbContainer EventSourceDbContainer { get; private set; }
+        public IContainer KafkaUIContainer { get; private set; }
+        public KafkaContainer KafkaContainer { get; private set; }
+        public MongoDbContainer MongoDbContainer { get; private set; }
 
-        public static async Task<bool> UpAndRunningContainersAsync()
+        protected TestContainersService()
         {
-            await using (await SemaphoreGuard.WaitAsync(_semaphoreSlim))
+        }
+
+        public static async Task<TestContainersService> InitAsync()
+        {
+            if (_instance is not null)
             {
-                if (IsStarted && !Inizialized)
-                {
-                    return false;
-                }
+                return _instance;
+            }
 
-                if (IsReadyForUse)
-                {
-                    return true;
-                }
-
-                IsStarted = true;
-
+            await using (await SemaphoreGuard.WaitAsync(_lock))
+            {
                 try
                 {
-                    EventSourceDbContainer = EventStoreDbContainerFactory.Build();
-
-                    var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
-
-                    var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
-
-                    KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork);
-
-                    KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(testKafkaNetwork);
-
-                    MongoDbContainer = MongoDbContainerFactory.Build();
-
-                    if (await TryToStartContainerAsync())
+                    if (_instance is null)
                     {
-                        Inizialized = true;
+                        var svc = new TestContainersService();
+                        await svc.UpAndRunningContainersAsync();
+                        _instance = svc;
                     }
 
-                    return IsReadyForUse;
+                    return _instance;
+                }
+                finally
+                {
+                    _lock.Release();
+                }
+            }
+        }
+
+        public async Task ResetContainersAsync()
+        {
+            await using (await SemaphoreGuard.WaitAsync(_lock))
+            {
+                try
+                {
+                    using var mongoClient = new MongoClient(MongoDbContainer.GetConnectionString());
+                    var databases = await mongoClient.ListDatabaseNamesAsync();
+                    foreach (var dbName in databases.ToList())
+                    {
+                        if (dbName != "admin" && dbName != "local" && dbName != "config")
+                        {
+                            await mongoClient.DropDatabaseAsync(dbName);
+                        }
+                    }
+
+                    var config = new AdminClientConfig
+                    {
+                        BootstrapServers = KafkaContainer.GetBootstrapAddress(),
+                    };
+                    using var adminClient = new AdminClientBuilder(config).Build();
+                    var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
+                    foreach (var topic in metadata.Topics)
+                    {
+                        if (!topic.Topic.StartsWith('_'))
+                        {
+                            await adminClient.DeleteTopicsAsync([topic.Topic]);
+                        }
+                    }
+
+                    var settings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
+                    using var eventStoreClient = new EventStoreClient(settings);
+                    await foreach (var stream in eventStoreClient.ReadAllAsync(Direction.Forwards, Position.Start))
+                    {
+                        var streamId = stream.Event.EventStreamId;
+
+                        if (!streamId.StartsWith('$'))
+                        {
+                            try
+                            {
+                                await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
+                            }
+                            catch (StreamDeletedException)
+                            {
+                                Console.WriteLine($"Stream {streamId} is already deleted.");
+                            }
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    IsStarted = false;
-                    Inizialized = false;
                     Console.WriteLine(ex);
-
                     throw;
                 }
             }
         }
 
-        public static async Task ResetContainersAsync()
-        {
-            try
-            {
-                using var mongoClient = new MongoClient(MongoDbContainer.GetConnectionString());
-                var databases = await mongoClient.ListDatabaseNamesAsync();
-                foreach (var dbName in databases.ToList())
-                {
-                    if (dbName != "admin" && dbName != "local" && dbName != "config")
-                    {
-                        await mongoClient.DropDatabaseAsync(dbName);
-                    }
-                }
-
-                var config = new AdminClientConfig
-                {
-                    BootstrapServers = KafkaContainer.GetBootstrapAddress(),
-                };
-                using var adminClient = new AdminClientBuilder(config).Build();
-                var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
-                foreach (var topic in metadata.Topics)
-                {
-                    if (!topic.Topic.StartsWith('_'))
-                    {
-                        await adminClient.DeleteTopicsAsync([topic.Topic]);
-                    }
-                }
-
-                var settings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
-                using var eventStoreClient = new EventStoreClient(settings);
-                await foreach (var stream in eventStoreClient.ReadAllAsync(Direction.Forwards, Position.Start))
-                {
-                    var streamId = stream.Event.EventStreamId;
-
-                    if (!streamId.StartsWith('$'))
-                    {
-                        try
-                        {
-                            await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
-                        }
-                        catch (StreamDeletedException)
-                        {
-                            Console.WriteLine($"Stream {streamId} is already deleted.");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                throw;
-            }
-        }
-
-        public static async Task StopAsync()
-        {
-            try
-            {
-                await EventSourceDbContainer?.StopAsync();
-                await KafkaContainer?.StopAsync();
-                await KafkaUIContainer?.StopAsync();
-                await MongoDbContainer?.StopAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                throw;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(10));
-            IsStarted = false;
-        }
-
         public async ValueTask DisposeAsync()
         {
+            if (_isDisposed)
+            {
+                return;
+            }
+
             if (EventSourceDbContainer != null)
             {
                 await EventSourceDbContainer.DisposeAsync();
@@ -175,10 +147,46 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await MongoDbContainer.DisposeAsync();
             }
 
-            _semaphoreSlim?.Dispose();
+            _isDisposed = true;
         }
 
-        private static async Task<bool> TryToStartContainerAsync()
+        private async Task<bool> UpAndRunningContainersAsync()
+        {
+            if (IsReadyForUse)
+            {
+                return true;
+            }
+
+            try
+            {
+                EventSourceDbContainer = EventStoreDbContainerFactory.Build();
+
+                var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
+
+                var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
+
+                KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork);
+
+                KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(testKafkaNetwork);
+
+                MongoDbContainer = MongoDbContainerFactory.Build();
+
+                await TryToStartContainerAsync();
+
+                IsReadyForUse = true;
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                IsReadyForUse = false;
+
+                throw;
+            }
+        }
+
+        private async Task<bool> TryToStartContainerAsync()
         {
             try
             {
@@ -207,9 +215,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
             catch (Exception ex)
             {
-                IsStarted = false;
-                Inizialized = false;
-
                 Console.WriteLine("Container startup failed:");
                 Console.WriteLine(ex);
 

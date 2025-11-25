@@ -37,16 +37,18 @@ namespace HomeBudget.Components.Operations.Tests
 
         private PaymentOperationsEventStoreClient _sut;
 
+        private TestContainersService _testContainers;
+
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsReadyForUse)
-            {
-                await TestContainersService.UpAndRunningContainersAsync();
+            _testContainers = await TestContainersService.InitAsync();
 
+            while (!_testContainers.IsReadyForUse)
+            {
                 if (sw.Elapsed > maxWait)
                 {
                     Assert.Fail(
@@ -86,7 +88,7 @@ namespace HomeBudget.Components.Operations.Tests
             var paymentAccountIdA = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43");
             var paymentAccountIdB = Guid.Parse("91c3d1bc-ce45-415a-a97d-2a9d834c7e02");
 
-            var dbConnectionString = TestContainersService.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
 
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
@@ -181,7 +183,7 @@ namespace HomeBudget.Components.Operations.Tests
             var paymentAccountId = Guid.NewGuid();
             var totalEvents = 2_000;
 
-            var dbConnectionString = TestContainersService.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(
@@ -241,7 +243,7 @@ namespace HomeBudget.Components.Operations.Tests
             var accountB = Guid.NewGuid();
             var totalEvents = 1_000;
 
-            var dbConnectionString = TestContainersService.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(

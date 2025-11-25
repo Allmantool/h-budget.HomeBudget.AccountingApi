@@ -294,7 +294,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var paymentHistoryRequestResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(
                 getPaymentByIdRequest,
-                executionDelayBeforeInMs: 1500);
+                executionDelayBeforeInMs: 5500);
 
             var paymentHistoryResult = paymentHistoryRequestResponse.Data;
             var paymentHistory = paymentHistoryResult.Payload;

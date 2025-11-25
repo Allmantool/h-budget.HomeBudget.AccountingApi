@@ -25,16 +25,18 @@ namespace HomeBudget.Components.Operations.Tests
     {
         private PaymentOperationsProducer _sut;
 
+        private TestContainersService _testContainers;
+
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsReadyForUse)
-            {
-                await TestContainersService.UpAndRunningContainersAsync();
+            _testContainers = await TestContainersService.InitAsync();
 
+            while (!_testContainers.IsReadyForUse)
+            {
                 if (sw.Elapsed > maxWait)
                 {
                     Assert.Fail(
@@ -56,11 +58,11 @@ namespace HomeBudget.Components.Operations.Tests
                 {
                     AdminSettings = new AdminSettings
                     {
-                        BootstrapServers = TestContainersService.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = _testContainers.KafkaContainer.GetBootstrapAddress()
                     },
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = TestContainersService.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = _testContainers.KafkaContainer.GetBootstrapAddress()
                     }
                 });
 

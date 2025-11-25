@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         private List<IntegrationTestWorkerFactory<TWorkerEntryPoint>> WorkerFactories { get; set; } = new List<IntegrationTestWorkerFactory<TWorkerEntryPoint>>();
 
-        internal static TestContainersService TestContainersService { get; } = new TestContainersService();
+        internal static TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
 
@@ -50,6 +50,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     return false;
                 }
 
+                TestContainersService = await TestContainersService.InitAsync();
                 await StartContainersAsync();
 
                 for (var i = 0; i < workersMaxAmount; i++)
@@ -120,7 +121,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 return false;
             }
 
-            return await TestContainersService.UpAndRunningContainersAsync();
+            return TestContainersService.IsReadyForUse;
         }
 
         public static async Task ResetAsync()
@@ -133,21 +134,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.ResetContainersAsync();
         }
 
-        public static async Task StopAsync()
-        {
-            if (TestContainersService == null)
-            {
-                return;
-            }
-
-            await TestContainersService.StopAsync();
-        }
-
         protected override async ValueTask DisposeAsyncCoreAsync()
         {
             if (TestContainersService != null)
             {
-                await TestContainersService.StopAsync();
                 await TestContainersService.DisposeAsync();
             }
 

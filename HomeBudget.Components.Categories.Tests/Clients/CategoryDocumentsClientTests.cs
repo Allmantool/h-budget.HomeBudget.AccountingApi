@@ -37,10 +37,10 @@ namespace HomeBudget.Components.Categories.Tests.Clients
             var maxWait = TimeSpan.FromMinutes(3);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsReadyForUse)
-            {
-                await TestContainersService.UpAndRunningContainersAsync();
+            var testContainers = await TestContainersService.InitAsync();
 
+            while (!testContainers.IsReadyForUse)
+            {
                 if (sw.Elapsed > maxWait)
                 {
                     Assert.Fail(
@@ -52,7 +52,7 @@ namespace HomeBudget.Components.Categories.Tests.Clients
             }
 
             sw.Stop();
-            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
+            var dbConnection = testContainers.MongoDbContainer.GetConnectionString();
 
             var mongoClient = new MongoClient(dbConnection);
 

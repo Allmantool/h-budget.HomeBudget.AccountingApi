@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Infrastructure
             }
 
             _released = true;
-            _semaphore.Release();
+            _semaphore?.Release();
         }
 
         public ValueTask DisposeAsync()

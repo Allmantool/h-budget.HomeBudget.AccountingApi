@@ -21,6 +21,8 @@ namespace HomeBudget.Components.Operations.Tests.Providers
     [TestFixture]
     public class OperationsHistoryProviderTests
     {
+        private TestContainersService _testContainers;
+
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
@@ -30,10 +32,10 @@ namespace HomeBudget.Components.Operations.Tests.Providers
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();
 
-            while (!TestContainersService.IsReadyForUse)
-            {
-                await TestContainersService.UpAndRunningContainersAsync();
+            _testContainers = await TestContainersService.InitAsync();
 
+            while (!_testContainers.IsReadyForUse)
+            {
                 if (sw.Elapsed > maxWait)
                 {
                     Assert.Fail(
@@ -50,7 +52,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
         [Test]
         public async Task Should_InsertOneAsync_PaymentRecordsSuccessfully()
         {
-            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
+            var dbConnection = _testContainers.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 
@@ -89,7 +91,7 @@ namespace HomeBudget.Components.Operations.Tests.Providers
         [Test]
         public async Task Should_InsertManyAsync_PaymentRecordsSuccessfully()
         {
-            var dbConnection = TestContainersService.MongoDbContainer.GetConnectionString();
+            var dbConnection = _testContainers.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 

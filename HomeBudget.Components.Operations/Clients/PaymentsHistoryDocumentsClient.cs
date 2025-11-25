@@ -100,7 +100,7 @@ namespace HomeBudget.Components.Operations.Clients
                     Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, r.Record.Key),
                     new PaymentHistoryDocument
                     {
-                        Payload = r
+                        Payload = r,
                     })
                 {
                     IsUpsert = true,
@@ -111,7 +111,7 @@ namespace HomeBudget.Components.Operations.Clients
                 foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
                 {
                     await targetCollection.BulkWriteAsync(
-                    bulkOps,
+                    chunk,
                     new BulkWriteOptions
                     {
                         IsOrdered = false

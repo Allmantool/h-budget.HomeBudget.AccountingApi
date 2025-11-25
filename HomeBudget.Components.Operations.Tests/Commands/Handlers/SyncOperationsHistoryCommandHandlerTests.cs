@@ -52,10 +52,10 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 var sw = Stopwatch.StartNew();
 
-                while (!TestContainersService.IsReadyForUse)
-                {
-                    await TestContainersService.UpAndRunningContainersAsync();
+                var testContainers = await TestContainersService.InitAsync();
 
+                while (!testContainers.IsReadyForUse)
+                {
                     if (sw.Elapsed > maxWait)
                     {
                         Assert.Fail(
@@ -81,7 +81,7 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 dbOptions.PaymentAccounts = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentAccounts)}";
                 dbOptions.PaymentsHistory = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentsHistory)}";
                 dbOptions.HandBooks = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.HandBooks)}";
-                dbOptions.ConnectionString = TestContainersService.MongoDbContainer.GetConnectionString();
+                dbOptions.ConnectionString = testContainers.MongoDbContainer.GetConnectionString();
 
                 var mongoDbOptions = Options.Create(dbOptions);
 
