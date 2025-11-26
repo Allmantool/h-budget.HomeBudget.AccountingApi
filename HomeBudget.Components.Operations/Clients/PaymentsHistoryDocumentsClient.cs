@@ -96,15 +96,16 @@ namespace HomeBudget.Components.Operations.Clients
             var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
             var bulkOps = payload.Select(r =>
-                new ReplaceOneModel<PaymentHistoryDocument>(
-                    Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, r.Record.Key),
-                    new PaymentHistoryDocument
+                new UpdateOneModel<PaymentHistoryDocument>(
+                    Builders<PaymentHistoryDocument>.Filter
+                        .Eq(d => d.Payload.Record.Key, r.Record.Key),
+                    Builders<PaymentHistoryDocument>.Update
+                        .Set(d => d.Payload, r)
+                    )
                     {
-                        Payload = r,
-                    })
-                {
-                    IsUpsert = true,
-                }).ToList();
+                        IsUpsert = true
+                    }
+                ).ToList();
 
             if (bulkOps.Count > 0)
             {

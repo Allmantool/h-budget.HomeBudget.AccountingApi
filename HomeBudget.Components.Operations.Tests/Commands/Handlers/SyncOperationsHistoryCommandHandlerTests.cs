@@ -42,6 +42,8 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
 
         private SyncOperationsHistoryCommandHandler _sut;
 
+        private TestContainersService _testContainers;
+
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
@@ -52,9 +54,9 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 var sw = Stopwatch.StartNew();
 
-                var testContainers = await TestContainersService.InitAsync();
+                _testContainers = await TestContainersService.InitAsync();
 
-                while (!testContainers.IsReadyForUse)
+                while (!_testContainers.IsReadyForUse)
                 {
                     if (sw.Elapsed > maxWait)
                     {
@@ -75,33 +77,37 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 _sender
                     .Setup(x => x.Send(It.IsAny<UpdatePaymentAccountBalanceCommand>(), _ct))
                     .ReturnsAsync(Result<Guid>.Succeeded(Guid.Empty));
-
-                var dbOptions = new MongoDbOptions();
-                dbOptions.LedgerDatabase = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.LedgerDatabase)}";
-                dbOptions.PaymentAccounts = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentAccounts)}";
-                dbOptions.PaymentsHistory = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentsHistory)}";
-                dbOptions.HandBooks = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.HandBooks)}";
-                dbOptions.ConnectionString = testContainers.MongoDbContainer.GetConnectionString();
-
-                var mongoDbOptions = Options.Create(dbOptions);
-
-                var paymentAccountDocumentsClient = new PaymentAccountDocumentClient(mongoDbOptions);
-                var paymentsHistoryDocumentsClient = new PaymentsHistoryDocumentsClient(mongoDbOptions);
-                var categoryDocumentsClient = new CategoryDocumentsClient(mongoDbOptions);
-
-                _sut = new SyncOperationsHistoryCommandHandler(
-                    _sender.Object,
-                    _logger.Object,
-                    new PaymentAccountService(paymentAccountDocumentsClient),
-                    new PaymentsHistoryDocumentsClient(mongoDbOptions),
-                    new PaymentOperationsHistoryService(paymentsHistoryDocumentsClient, categoryDocumentsClient));
             }
         }
 
         [Test]
         public async Task HighLoad_ProcessUpTo50kEvents_ShouldCompleteWithinReason()
         {
-            const int count = 25_000;
+            var dbOptions = new MongoDbOptions();
+            dbOptions.LedgerDatabase = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.LedgerDatabase)}";
+            dbOptions.PaymentAccounts = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentAccounts)}";
+            dbOptions.PaymentsHistory = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentsHistory)}";
+            dbOptions.HandBooks = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.HandBooks)}";
+            dbOptions.BulkInsertChunkSize = 5000;
+            dbOptions.ConnectionString = _testContainers.MongoDbContainer.GetConnectionString();
+
+            var mongoDbOptions = Options.Create(dbOptions);
+
+            using var paymentAccountDocumentsClient = new PaymentAccountDocumentClient(mongoDbOptions);
+            using var paymentsHistoryDocumentsClient = new PaymentsHistoryDocumentsClient(mongoDbOptions);
+            using var categoryDocumentsClient = new CategoryDocumentsClient(mongoDbOptions);
+
+            var paymentAccountService = new PaymentAccountService(paymentAccountDocumentsClient);
+            var paymentOperationsHistoryService = new PaymentOperationsHistoryService(paymentsHistoryDocumentsClient, categoryDocumentsClient);
+
+            _sut = new SyncOperationsHistoryCommandHandler(
+                _sender.Object,
+                _logger.Object,
+                paymentAccountService,
+                paymentsHistoryDocumentsClient,
+                paymentOperationsHistoryService);
+
+            const int count = 30_000;
             const double maxSeconds = 30.0;
 
             var accountId = Guid.NewGuid();
@@ -127,7 +133,7 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
 
             var command = new SyncOperationsHistoryCommand(accountId, events);
 
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
             var result = await _sut.Handle(command, _ct);
             sw.Stop();
 
