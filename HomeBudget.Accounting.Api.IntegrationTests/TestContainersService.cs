@@ -22,7 +22,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
     internal sealed class TestContainersService : IAsyncDisposable
     {
         private static readonly SemaphoreSlim _lock = new(1, 1);
-        private static TestContainersService? _instance;
+        private static TestContainersService _instance;
         private bool _isDisposed;
 
         public bool IsReadyForUse { get; private set; }
@@ -47,9 +47,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 if (_instance is null)
                 {
-                    var svc = new TestContainersService();
-                    await svc.UpAndRunningContainersAsync();
-                    _instance = svc;
+                    _instance = new TestContainersService();
+                    await _instance.UpAndRunningContainersAsync();
                 }
 
                 return _instance;

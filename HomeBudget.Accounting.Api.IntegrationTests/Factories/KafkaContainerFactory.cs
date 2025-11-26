@@ -102,8 +102,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     config.HostConfig.NanoCPUs = BaseTestContainerOptions.NanoCPUs;
                     config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 })
-                .WithAutoRemove(true)
+
+                // .WithAutoRemove(true)
                 .WithCleanUp(true)
+                .WithReuse(true)
                 .Build();
         }
     }
