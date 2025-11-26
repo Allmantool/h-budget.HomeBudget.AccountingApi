@@ -45,21 +45,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
             await using (await SemaphoreGuard.WaitAsync(_lock))
             {
-                try
+                if (_instance is null)
                 {
-                    if (_instance is null)
-                    {
-                        var svc = new TestContainersService();
-                        await svc.UpAndRunningContainersAsync();
-                        _instance = svc;
-                    }
+                    var svc = new TestContainersService();
+                    await svc.UpAndRunningContainersAsync();
+                    _instance = svc;
+                }
 
-                    return _instance;
-                }
-                finally
-                {
-                    _lock.Release();
-                }
+                return _instance;
             }
         }
 
