@@ -12,5 +12,8 @@ namespace HomeBudget.Accounting.Api.Extensions
 
         public static bool IsUnderDevelopment(this IHostEnvironment environment)
             => environment.IsDevelopment() || environment.IsEnvironment(HostEnvironments.Docker);
+
+        public static bool IsIntegrationTesting(this IWebHostEnvironment environment)
+            => environment.IsEnvironment(HostEnvironments.Integration);
     }
 }

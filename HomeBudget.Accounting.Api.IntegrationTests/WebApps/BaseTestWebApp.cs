@@ -93,7 +93,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 var baseClient = WebFactory.CreateClient(clientOptions);
                 baseClient.Timeout = TimeSpan.FromMinutes(BaseTestWebAppOptions.WebClientTimeoutInMinutes);
 
-                var healthUri = new Uri(baseClient.BaseAddress!, Endpoints.HealthCheckSource);
+                var healthUri = new Uri(baseClient.BaseAddress, Endpoints.HealthCheckSource);
                 var response = await baseClient.GetAsync(healthUri);
                 response.EnsureSuccessStatusCode();
 

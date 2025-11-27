@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Networks;
 using EventStore.Client;
 using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
@@ -30,6 +31,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         public EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public IContainer KafkaUIContainer { get; private set; }
         public KafkaContainer KafkaContainer { get; private set; }
+        public INetwork KafkaNetwork { get; private set; }
         public MongoDbContainer MongoDbContainer { get; private set; }
 
         protected TestContainersService()
@@ -134,6 +136,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await KafkaUIContainer.DisposeAsync();
             }
 
+            if (KafkaNetwork != null)
+            {
+                await KafkaNetwork.DisposeAsync();
+            }
+
             if (MongoDbContainer != null)
             {
                 await MongoDbContainer.DisposeAsync();
@@ -155,11 +162,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
 
-                var testKafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
+                KafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
 
-                KafkaContainer = KafkaContainerFactory.Build(testKafkaNetwork);
+                KafkaContainer = KafkaContainerFactory.Build(KafkaNetwork);
 
-                KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(testKafkaNetwork);
+                KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(KafkaNetwork);
 
                 MongoDbContainer = MongoDbContainerFactory.Build();
 

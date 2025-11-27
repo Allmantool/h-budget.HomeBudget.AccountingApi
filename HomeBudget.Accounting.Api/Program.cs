@@ -37,7 +37,7 @@ services
 services
     .SetUpDi(configuration, environment)
     .AddEndpointsApiExplorer()
-    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"), environment)
     .AddResponseCaching()
     .AddSwaggerGen()
     .SetupSwaggerGen();

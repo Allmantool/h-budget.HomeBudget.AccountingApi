@@ -1,19 +1,25 @@
 ﻿using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions.Logs;
+using HomeBudget.Accounting.Api.Middlewares;
+using HomeBudget.Accounting.Api.Extensions;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
     internal static class HealthCheckConfiguration
     {
-        public static IServiceCollection SetUpHealthCheck(this IServiceCollection services, IConfiguration configuration, string hostUrls)
+        public static IServiceCollection SetUpHealthCheck(
+            this IServiceCollection services,
+            IConfiguration configuration,
+            string hostUrls,
+            IWebHostEnvironment webHostEnvironment)
         {
             services
                 .AddHealthChecks()
@@ -22,13 +28,13 @@ namespace HomeBudget.Accounting.Api.Configuration
 
             services.AddHealthChecksUI(setupSettings: setup =>
             {
-                setup.AddHealthCheckEndpoint("[Currency rates endpoint]", configuration.GetHealthCheckEndpoint(hostUrls));
+                setup.AddHealthCheckEndpoint("[Accounting endpoint]", configuration.GetHealthCheckEndpoint(hostUrls));
             }).AddInMemoryStorage();
 
             return services;
         }
 
-        public static IApplicationBuilder SetUpHealthCheckEndpoints(this IApplicationBuilder builder)
+        public static IApplicationBuilder SetUpHealthCheckEndpoints(this IApplicationBuilder builder, IWebHostEnvironment webHostEnvironment)
         {
             return builder.UseEndpoints(config =>
             {

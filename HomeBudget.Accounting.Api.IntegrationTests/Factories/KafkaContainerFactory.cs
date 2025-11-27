@@ -103,9 +103,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 })
 
-                // .WithAutoRemove(true)
+                .WithAutoRemove(true)
                 .WithCleanUp(true)
-                .WithReuse(true)
+
+                // .WithReuse(true)
                 .Build();
         }
     }
