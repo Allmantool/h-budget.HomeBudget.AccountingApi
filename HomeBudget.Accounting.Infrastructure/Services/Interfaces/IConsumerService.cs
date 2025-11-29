@@ -6,9 +6,9 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Infrastructure.Services.Interfaces
 {
-    internal interface IConsumerService
+    public interface IConsumerService
     {
-        Task ConsumeKafkaMessagesLoopAsync(CancellationToken stoppingToken);
+        Task ConsumeKafkaMessagesLoopAsync(IKafkaConsumer consumer, CancellationToken stoppingToken);
 
         IKafkaConsumer CreateAndSubscribe(SubscriptionTopic topic);
     }

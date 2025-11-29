@@ -1,62 +1,64 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
-using DotNet.Testcontainers.Builders;
-using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Driver;
-using NUnit.Framework;
-using Testcontainers.MongoDb;
-
+using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Categories.Models;
+using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Options;
+
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Driver;
+using NUnit.Framework;
 
 namespace HomeBudget.Components.Categories.Tests.Clients
 {
     [TestFixture]
     public class CategoryDocumentsClientTests
     {
-        private MongoDbContainer _mongoContainer;
         private CategoryDocumentsClient _client;
         private IMongoDatabase _database;
 
         [OneTimeSetUp]
         public async Task GlobalSetupAsync()
         {
-            const long ContainerMaxMemoryAllocation = 1024 * 1024 * 1024;
-
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            _mongoContainer = new MongoDbBuilder()
-                .WithImage("mongo:7.0.5-rc0-jammy")
-                .WithName($"{nameof(CategoryDocumentsClientTests)}-mongo-db-container")
-                .WithHostname("test-mongo-db-host")
-                .WithPortBinding(28117, 28117)
-                .WithAutoRemove(true)
-                .WithCleanUp(true)
-                .WithWaitStrategy(Wait.ForUnixContainer())
-                .WithCreateParameterModifier(config =>
+            var maxWait = TimeSpan.FromMinutes(3);
+            var sw = Stopwatch.StartNew();
+
+            var testContainers = await TestContainersService.InitAsync();
+
+            while (!testContainers.IsReadyForUse)
+            {
+                if (sw.Elapsed > maxWait)
                 {
-                    config.HostConfig.Memory = ContainerMaxMemoryAllocation;
-                })
-                .Build();
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
 
-            await _mongoContainer.StartAsync();
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
+            }
 
-            var mongoClient = new MongoClient(_mongoContainer.GetConnectionString());
+            sw.Stop();
+            var dbConnection = testContainers.MongoDbContainer.GetConnectionString();
+
+            var mongoClient = new MongoClient(dbConnection);
 
             var mongoOptions = Options.Create(new MongoDbOptions
             {
-                ConnectionString = _mongoContainer.GetConnectionString(),
+                ConnectionString = dbConnection,
                 PaymentsHistory = "payments_history_test",
                 HandBooks = "handbooks_test",
                 PaymentAccounts = "payment_accounts_test"
@@ -64,15 +66,6 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             _database = mongoClient.GetDatabase(mongoOptions.Value.HandBooks);
             _client = new CategoryDocumentsClient(mongoOptions);
-        }
-
-        [OneTimeTearDown]
-        public async Task GlobalTeardownAsync()
-        {
-            if (_mongoContainer != null)
-            {
-                await _mongoContainer.DisposeAsync();
-            }
         }
 
         [SetUp]

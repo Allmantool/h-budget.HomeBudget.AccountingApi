@@ -114,6 +114,39 @@ internal sealed class KafkaTopicManager(
         return totalLag;
     }
 
+    public bool IsBrokerReady(TimeSpan? timeout = null)
+    {
+        try
+        {
+            timeout ??= TimeSpan.FromSeconds(settings.RequestTimeoutInSeconds);
+
+            var metadata = adminClient.GetMetadata(timeout.Value);
+
+            if (metadata.Brokers is null || metadata.Brokers.Count == 0)
+            {
+                logger.LogWarning("Kafka broker readiness check: no brokers found.");
+                return false;
+            }
+
+            logger.LogDebug(
+                "Kafka broker readiness check successful. Found {BrokerCount} broker(s), controller: {ControllerId}.",
+                metadata.Brokers.Count,
+                metadata.OriginatingBrokerId);
+
+            return true;
+        }
+        catch (KafkaException ex)
+        {
+            logger.LogWarning(ex, "Kafka broker not ready (KafkaException).");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error while checking Kafka broker readiness.");
+            return false;
+        }
+    }
+
     public async Task<bool> HasActiveConsumerAsync(string topic, string consumerGroupId)
     {
         var groups = await adminClient.ListConsumerGroupsAsync();

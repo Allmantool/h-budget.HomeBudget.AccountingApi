@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -10,41 +11,55 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
-using Testcontainers.EventStoreDb;
 
+using HomeBudget.Accounting.Api.IntegrationTests;
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Tests
 {
     [TestFixture]
-    public class PaymentOperationsEventStoreClientTests : IAsyncDisposable
+    public class PaymentOperationsEventStoreClientTests
     {
         private readonly Mock<IServiceScope> _serviceScopeMock = new();
         private readonly Mock<IServiceScopeFactory> _serviceScopeFactoryMock = new();
         private readonly Mock<IServiceProvider> _serviceProviderMock = new();
         private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
 
-        private EventStoreDbContainer _eventSourceDbContainer;
         private PaymentOperationsEventStoreClient _sut;
+
+        private TestContainersService _testContainers;
 
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            _eventSourceDbContainer = new EventStoreDbBuilder()
-                .WithImage("eventstore/eventstore:24.10.6-jammy")
-                .WithName($"{nameof(PaymentOperationsEventStoreClientTests)}-container")
-                .WithHostname("test-event-store-db-host")
-                .WithAutoRemove(true)
-                .WithCleanUp(true)
-                .WithPortBinding(3113, 2113)
-                .Build();
+            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
+            var sw = Stopwatch.StartNew();
+
+            _testContainers = await TestContainersService.InitAsync();
+
+            while (!_testContainers.IsReadyForUse)
+            {
+                if (sw.Elapsed > maxWait)
+                {
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
+            }
+
+            sw.Stop();
 
             _paymentOperationsHistoryServiceMock
                 .Setup(s => s.SyncHistoryAsync(It.IsAny<string>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))
@@ -65,8 +80,6 @@ namespace HomeBudget.Components.Operations.Tests
             _serviceProviderMock
                 .Setup(sp => sp.GetService(typeof(IPaymentOperationsHistoryService)))
                 .Returns(_paymentOperationsHistoryServiceMock.Object);
-
-            await _eventSourceDbContainer.StartAsync();
         }
 
         [Test]
@@ -75,7 +88,7 @@ namespace HomeBudget.Components.Operations.Tests
             var paymentAccountIdA = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43");
             var paymentAccountIdB = Guid.Parse("91c3d1bc-ce45-415a-a97d-2a9d834c7e02");
 
-            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
 
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
@@ -170,7 +183,7 @@ namespace HomeBudget.Components.Operations.Tests
             var paymentAccountId = Guid.NewGuid();
             var totalEvents = 2_000;
 
-            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(
@@ -230,7 +243,7 @@ namespace HomeBudget.Components.Operations.Tests
             var accountB = Guid.NewGuid();
             var totalEvents = 1_000;
 
-            var dbConnectionString = _eventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(
@@ -277,12 +290,6 @@ namespace HomeBudget.Components.Operations.Tests
             var resultB = await _sut.ReadAsync(accountB.ToString()).ToListAsync();
             resultB.Should().NotBeEmpty();
             resultB.Count.Should().Be(totalEvents / 2);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            _eventSourceDbContainer?.StopAsync();
-            _eventSourceDbContainer?.DisposeAsync();
         }
     }
 }

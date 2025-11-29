@@ -24,12 +24,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.PaymentOperationsControllerTests)]
     public class PaymentOperationsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
 
         private readonly OperationsTestWebApp _sut = new();
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
+        }
 
         [Test]
         public async Task CreateNewOperation_WhenCreateAnOperation_ShouldAddExtraPaymentOperationEvent()

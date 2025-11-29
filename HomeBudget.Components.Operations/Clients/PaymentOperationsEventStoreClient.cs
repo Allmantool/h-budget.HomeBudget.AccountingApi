@@ -7,7 +7,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using EventStore.Client;
-using EventStoreDbClient;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,11 +14,14 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
 
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Factories;
+using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
@@ -47,11 +49,11 @@ namespace HomeBudget.Components.Operations.Clients
             IDateTimeProvider dateTimeProvider,
             EventStoreClient client,
             IOptions<EventStoreDbOptions> options)
-            : base(client, logger)
+            : base(client, options.Value, logger)
         {
-            _opts = options.Value ?? throw new ArgumentNullException(nameof(options));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
+            _opts = options.Value;
+            _logger = logger;
+            _serviceScopeFactory = serviceScopeFactory;
             _dateTimeProvider = dateTimeProvider;
             _paymentEventChannel = PaymentOperationEventChannelFactory.CreateChannel(_opts);
             _retryPolicy = EventStoreRetryPolicies.BuildRetryPolicy(_opts, _logger);
@@ -73,16 +75,12 @@ namespace HomeBudget.Components.Operations.Clients
                 await requestRateLimiter.WaitAsync(ctx);
 
                 return await _retryPolicy.ExecuteAsync(
-                    async retryCtx =>
-                    {
-                        var result = await base.SendBatchAsync(eventsForSending, streamName, eventType, ctx);
-
-                        return result;
-                    },
+                    async retryCtx => await base.SendBatchAsync(eventsForSending, streamName, eventType, ctx),
                     ctx);
             }
             catch (Exception ex)
             {
+                PaymentOperationsEventStoreClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
                 await SendToDeadLetterQueueAsync(eventsForSending, ex);
                 throw;
             }

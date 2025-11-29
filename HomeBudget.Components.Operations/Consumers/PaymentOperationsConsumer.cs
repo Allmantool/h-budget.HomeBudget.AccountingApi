@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
@@ -55,7 +56,7 @@ namespace HomeBudget.Components.Operations.Consumers
 
                         message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
 
-                        logger.LogInformation("Payment operation message has been consumed: {MessageId}", message.Key);
+                        PaymentOperationsConsumerLogs.PaymentConsumed(logger, message.Key);
 
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
@@ -65,11 +66,11 @@ namespace HomeBudget.Components.Operations.Consumers
                     }
                     catch (JsonException ex)
                     {
-                        logger.LogError(ex, "Failed to deserialize message: {Message}. Error: {Error}", payload.Message.Value, ex.Message);
+                        logger.DeserializationFailed(payload.Message.Value, ex.Message, ex);
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "{PaymentOperationsConsumer} failed to consume with error: {Exception}", nameof(PaymentOperationsConsumer), ex.Message);
+                        logger.ConsumerFailed(nameof(PaymentOperationsConsumer), ex.Message, ex);
                     }
                 },
                 cancellationToken);

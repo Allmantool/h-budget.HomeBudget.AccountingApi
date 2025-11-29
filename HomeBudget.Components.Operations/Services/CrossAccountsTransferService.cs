@@ -51,26 +51,36 @@ namespace HomeBudget.Components.Operations.Services
                     removeTransferPayload.PaymentAccountId,
                     removeTransferPayload.TransferOperationId);
 
-            var operationForRemove = transferOperationDocumentForRemove.Payload.Record;
+            if (transferOperationDocumentForRemove is null)
+            {
+                return Result<IEnumerable<Guid>>.Failure("Sender transfer operation hasn't been found");
+            }
+
+            var transferSenderOperationForRemove = transferOperationDocumentForRemove.Payload.Record;
 
             var linkTransferOperationDocumentForRemove = await documentsClient
                 .GetByIdAsync(
-                    operationForRemove.ContractorId,
+                    transferSenderOperationForRemove.ContractorId,
                     removeTransferPayload.TransferOperationId);
 
-            var linkOperationForRemove = linkTransferOperationDocumentForRemove.Payload.Record;
+            if (linkTransferOperationDocumentForRemove is null)
+            {
+                return Result<IEnumerable<Guid>>.Failure("Sender transfer operation hasn't been found");
+            }
+
+            var transferRecipientOperationForRemove = linkTransferOperationDocumentForRemove.Payload.Record;
 
             var transferOperation = await crossAccountsTransferBuilder
-                .WithSender(operationForRemove)
-                .WithRecipient(linkOperationForRemove)
+                .WithSender(transferSenderOperationForRemove)
+                .WithRecipient(transferRecipientOperationForRemove)
                 .WithTransferId(removeTransferPayload.TransferOperationId)
                 .BuildAsync();
 
             await mediator.Send(new RemoveTransferCommand(transferOperation.Payload), token);
 
             return Result<IEnumerable<Guid>>.Succeeded([
-                operationForRemove.PaymentAccountId,
-                linkOperationForRemove.PaymentAccountId
+                transferSenderOperationForRemove.PaymentAccountId,
+                transferRecipientOperationForRemove.PaymentAccountId
             ]);
         }
 

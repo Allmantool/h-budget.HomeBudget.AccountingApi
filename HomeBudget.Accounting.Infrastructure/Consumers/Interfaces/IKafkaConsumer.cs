@@ -12,5 +12,6 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers.Interfaces
         void Subscribe(string topic);
         void UnSubscribe();
         Task ConsumeAsync(CancellationToken stoppingToken);
+        bool IsAlive();
     }
 }

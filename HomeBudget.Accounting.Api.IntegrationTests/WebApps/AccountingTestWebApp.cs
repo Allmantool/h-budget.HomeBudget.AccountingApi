@@ -1,6 +1,6 @@
 ﻿namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
-    internal class AccountingTestWebApp : BaseTestWebApp<Program>
+    internal class AccountingTestWebApp : BaseTestWebApp<Program, Workers.OperationsConsumer.Program>
     {
     }
 }

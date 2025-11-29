@@ -25,12 +25,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.PaymentsHistoryControllerTests)]
     public class PaymentsHistoryControllerTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
 
         private readonly OperationsTestWebApp _sut = new();
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
+        }
 
         [Test]
         public async Task GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()
@@ -288,7 +301,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var paymentHistoryRequestResponse = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(
                 getPaymentByIdRequest,
-                executionDelayBeforeInMs: 1000);
+                executionDelayBeforeInMs: 5500);
 
             var paymentHistoryResult = paymentHistoryRequestResponse.Data;
             var paymentHistory = paymentHistoryResult.Payload;

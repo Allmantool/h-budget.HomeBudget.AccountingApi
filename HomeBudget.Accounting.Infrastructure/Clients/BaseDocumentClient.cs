@@ -20,6 +20,15 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 return;
             }
 
+            var databaseName = string.IsNullOrWhiteSpace(database)
+                ? options.LedgerDatabase
+                : database;
+
+            if (string.IsNullOrWhiteSpace(databaseName))
+            {
+                return;
+            }
+
             var settings = MongoClientSettings.FromConnectionString(options.ConnectionString);
             settings.MaxConnectionPoolSize = options.MaxConnectionPoolSize;
             settings.MinConnectionPoolSize = options.MinConnectionPoolSize;
@@ -32,7 +41,8 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             settings.WaitQueueTimeout = TimeSpan.FromSeconds(options.WaitQueueTimeoutInSeconds);
 
             _client = new MongoClient(settings);
-            MongoDatabase = _client.GetDatabase(string.IsNullOrWhiteSpace(database) ? options.LedgerDatabase : database);
+
+            MongoDatabase = _client.GetDatabase(databaseName);
         }
 
         protected virtual void Dispose(bool disposing)

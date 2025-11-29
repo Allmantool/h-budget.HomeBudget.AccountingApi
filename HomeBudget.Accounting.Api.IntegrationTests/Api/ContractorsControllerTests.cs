@@ -17,12 +17,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.ContractorsControllerTests)]
     public class ContractorsControllerTests
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";
 
         private readonly ContractorsTestWebApp _sut = new();
+
+        [OneTimeSetUp]
+        public async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
+        }
 
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
