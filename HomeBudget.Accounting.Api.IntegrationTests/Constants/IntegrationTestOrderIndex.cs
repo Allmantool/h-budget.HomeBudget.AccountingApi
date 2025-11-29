@@ -8,10 +8,10 @@
 
         public const int ContractorsControllerTests = 3;
 
-        public const int CrossAccountTransferControllerTests = 4;
+        public const int PaymentOperationsControllerTests = 4;
 
-        public const int PaymentOperationsControllerTests = 5;
+        public const int PaymentsHistoryControllerTests = 5;
 
-        public const int PaymentsHistoryControllerTests = 6;
+        public const int CrossAccountTransferControllerTests = 6;
     }
 }

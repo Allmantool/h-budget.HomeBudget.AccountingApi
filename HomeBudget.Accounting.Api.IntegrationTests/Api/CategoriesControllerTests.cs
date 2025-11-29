@@ -18,6 +18,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.CategoriesControllerTests)]
     public class CategoriesControllerTests
     {
@@ -29,6 +30,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         public async Task SetupAsync()
         {
             await _sut.InitAsync();
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
         }
 
         [Test]

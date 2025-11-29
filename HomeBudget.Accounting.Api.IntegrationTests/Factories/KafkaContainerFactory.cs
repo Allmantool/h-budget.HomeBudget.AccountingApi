@@ -43,6 +43,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 // .WithPortBinding(9094, true)
                 // .WithPortBinding(9997, true)
                 .WithPortBinding(29092, 29092)
+
+                // .WithPortBinding(9092, 39092)
                 .WithPortBinding(9092, 9092)
                 .WithPortBinding(9093, 9093)
                 .WithPortBinding(9094, 9094)
@@ -56,21 +58,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
                 .WithEnvironment(
                     "KAFKA_LISTENERS",
-                    "PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,BROKER://0.0.0.0:9094")
-                    .WithEnvironment(
+                    "PLAINTEXT://0.0.0.0:29092," +
+                    "PLAINTEXT_HOST://0.0.0.0:9092," +
+                    "CONTROLLER://0.0.0.0:9093," +
+                    "BROKER://0.0.0.0:9094")
+                .WithEnvironment(
                     "KAFKA_ADVERTISED_LISTENERS",
-                    "PLAINTEXT://test-kafka:29092,PLAINTEXT_HOST://localhost:9092,BROKER://test-kafka:9094")
-                    .WithEnvironment(
+                    "PLAINTEXT://test-kafka:29092," +
+
+                    // "PLAINTEXT_HOST://localhost:39092," +
+                    "PLAINTEXT_HOST://localhost:9092," +
+                    "BROKER://test-kafka:9094")
+                .WithEnvironment(
                     "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
-                    "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT")
+                    "PLAINTEXT:PLAINTEXT," +
+                    "PLAINTEXT_HOST:PLAINTEXT," +
+                    "CONTROLLER:PLAINTEXT," +
+                    "BROKER:PLAINTEXT")
 
                 // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
                 .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
                 .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
-                .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "PLAINTEXT")
+                .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
                 .WithEnvironment("JMX_PORT", "9997")
                 .WithEnvironment("KAFKA_JMX_PORT", "9997")
-                .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
+
+                // .WithEnvironment("KAFKA_JMX_HOSTNAME", "test-kafka")
                 .WithEnvironment("KAFKA_LOG_DIRS", "/tmp/kraft-combined-logs")
                 .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
                 .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")

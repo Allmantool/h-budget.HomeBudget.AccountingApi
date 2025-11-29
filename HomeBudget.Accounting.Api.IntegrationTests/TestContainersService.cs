@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,6 +7,7 @@ using Confluent.Kafka;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using EventStore.Client;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
@@ -63,52 +65,89 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 try
                 {
-                    using var mongoClient = new MongoClient(MongoDbContainer.GetConnectionString());
-                    var databases = await mongoClient.ListDatabaseNamesAsync();
-                    foreach (var dbName in databases.ToList())
+                    using var mongo = new MongoClient(MongoDbContainer.GetConnectionString());
+                    var dbNames = await mongo.ListDatabaseNamesAsync();
+
+                    await foreach (var dbName in dbNames.ToAsyncEnumerable())
                     {
-                        if (dbName != "admin" && dbName != "local" && dbName != "config")
+                        if (dbName is "admin" or "local" or "config")
                         {
-                            await mongoClient.DropDatabaseAsync(dbName);
+                            continue;
+                        }
+
+                        var db = mongo.GetDatabase(dbName);
+                        var collections = await db.ListCollectionNamesAsync();
+
+                        await foreach (var collection in collections.ToAsyncEnumerable())
+                        {
+                            // Deletes all documents without dropping structure
+                            await db.GetCollection<BsonDocument>(collection)
+                                    .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty);
                         }
                     }
 
-                    var config = new AdminClientConfig
+                    var adminConfig = new AdminClientConfig
                     {
                         BootstrapServers = KafkaContainer.GetBootstrapAddress(),
                     };
-                    using var adminClient = new AdminClientBuilder(config).Build();
-                    var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
-                    foreach (var topic in metadata.Topics)
+
+                    using var admin = new AdminClientBuilder(adminConfig).Build();
+
+                    var meta = admin.GetMetadata(TimeSpan.FromSeconds(10));
+
+                    foreach (var topic in meta.Topics)
                     {
-                        if (!topic.Topic.StartsWith('_'))
+                        // Skip internal Kafka topics
+                        if (topic.Topic.StartsWith("_"))
                         {
-                            await adminClient.DeleteTopicsAsync([topic.Topic]);
+                            continue;
+                        }
+
+                        var deleteSpec = topic.Partitions
+                            .Select(p => new TopicPartitionOffset(topic.Topic, p.PartitionId, Offset.End))
+                            .ToList();
+
+                        try
+                        {
+                            await admin.DeleteRecordsAsync(deleteSpec);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Kafka purge failed for {topic.Topic}: {ex}");
                         }
                     }
 
-                    var settings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
-                    using var eventStoreClient = new EventStoreClient(settings);
-                    await foreach (var stream in eventStoreClient.ReadAllAsync(Direction.Forwards, Position.Start))
-                    {
-                        var streamId = stream.Event.EventStreamId;
+                    var esSettings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
+                    using var es = new EventStoreClient(esSettings);
 
-                        if (!streamId.StartsWith('$'))
+                    var allEvents = es.ReadAllAsync(Direction.Forwards, Position.Start);
+
+                    await foreach (var record in allEvents)
+                    {
+                        var stream = record.Event.EventStreamId;
+
+                        if (stream.StartsWith("$"))
                         {
-                            try
-                            {
-                                await eventStoreClient.TombstoneAsync(streamId, StreamState.Any);
-                            }
-                            catch (StreamDeletedException)
-                            {
-                                Console.WriteLine($"Stream {streamId} is already deleted.");
-                            }
+                            continue;
+                        }
+
+                        try
+                        {
+                            await es.SetStreamMetadataAsync(
+                                stream,
+                                StreamState.Any,
+                                new StreamMetadata(truncateBefore: record.Event.EventNumber + 1)
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"EventStore cleanup failed for stream {stream}: {ex}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex);
+                    Console.WriteLine($"Reset failed: {ex}");
                     throw;
                 }
             }

@@ -22,6 +22,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.CrossAccountTransferControllerTests)]
     public class CrossAccountTransferControllerTests
     {
@@ -36,6 +37,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             await _sut.InitAsync(5);
             _restClient = _sut.RestHttpClient;
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
         }
 
         [Test]

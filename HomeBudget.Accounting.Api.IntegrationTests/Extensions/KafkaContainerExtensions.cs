@@ -3,12 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Confluent.Kafka;
-using Confluent.Kafka.Admin;
 using Testcontainers.Kafka;
 
-using HomeBudget.Core.Constants;
-using HomeBudget.Core.Exceptions;
+using HomeBudget.Accounting.Api.IntegrationTests.Clients;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
@@ -16,6 +13,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
     {
         private static readonly string[] StaticBootstrapCandidates =
         {
+            "localhost:39092",
+            "127.0.0.1:39092",
             "localhost:9092",
             "127.0.0.1:9092",
             "localhost:9093",
@@ -70,23 +69,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
                 dynamicCandidates.Add($"{container.Hostname}:{mapped[portMap]}");
             }
 
-            var staticAdjusted = StaticBootstrapCandidates.Select(original =>
+            var staticAdjusted = StaticBootstrapCandidates.Select(bootstrapCandidate =>
             {
-                var parts = original.Split(':');
+                var parts = bootstrapCandidate.Split(':');
                 if (parts.Length != 2)
                 {
-                    return original;
+                    return bootstrapCandidate;
                 }
 
                 var host = parts[0];
                 if (!int.TryParse(parts[1], out var port))
                 {
-                    return original;
+                    return bootstrapCandidate;
                 }
 
                 return mapped.TryGetValue(port, out var mappedPort)
                     ? $"{host}:{mappedPort}"
-                    : original;
+                    : bootstrapCandidate;
             });
 
             return dynamicCandidates
@@ -103,7 +102,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
         {
             foreach (var bootstrap in bootstraps)
             {
-                if (await TryInitializeKafkaAsync(bootstrap, connectionLog))
+                if (await KafkaAdminClient.TryInitializeKafkaAsync(bootstrap, connectionLog))
                 {
                     return true;
                 }
@@ -111,72 +110,5 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 
             return false;
         }
-
-        private static async Task<bool> TryInitializeKafkaAsync(
-            string bootstrap,
-            IDictionary<string, string> connectionLog)
-        {
-            var clientDefaultTimeoutInSeconds = TimeSpan.FromSeconds(15);
-
-            try
-            {
-                using var adminClient = CreateAdminClient(bootstrap);
-                var metadata = adminClient.GetMetadata(clientDefaultTimeoutInSeconds);
-
-                if (metadata.Brokers.IsNullOrEmpty())
-                {
-                    return false;
-                }
-
-                var existingTopics = metadata.Topics.Select(t => t.Topic).ToHashSet();
-
-                var missingTopics = new List<TopicSpecification>();
-
-                if (!existingTopics.Contains(BaseTopics.AccountingAccounts))
-                {
-                    missingTopics.Add(new TopicSpecification
-                    {
-                        Name = BaseTopics.AccountingAccounts,
-                        NumPartitions = 1,
-                        ReplicationFactor = 1
-                    });
-                }
-
-                if (!existingTopics.Contains(BaseTopics.AccountingPayments))
-                {
-                    missingTopics.Add(new TopicSpecification
-                    {
-                        Name = BaseTopics.AccountingPayments,
-                        NumPartitions = 5,
-                        ReplicationFactor = 1
-                    });
-                }
-
-                if (missingTopics.Count > 0)
-                {
-                    await adminClient.CreateTopicsAsync(missingTopics, new CreateTopicsOptions
-                    {
-                        OperationTimeout = clientDefaultTimeoutInSeconds,
-                        RequestTimeout = clientDefaultTimeoutInSeconds
-                    });
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                connectionLog.TryAdd(bootstrap, ex.Message);
-                return false;
-            }
-        }
-
-        private static IAdminClient CreateAdminClient(string bootstrap) =>
-            new AdminClientBuilder(new AdminClientConfig
-            {
-                BootstrapServers = bootstrap,
-                SocketTimeoutMs = 50_000,
-                ConnectionsMaxIdleMs = 10_000,
-                MessageMaxBytes = 1_000_000_000
-            }).Build();
     }
 }

@@ -45,6 +45,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                                 .AddCustomWaitStrategy(
                                     new CustomWaitStrategy(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes))
                                 ))
+                        .WithCreateParameterModifier(config =>
+                        {
+                            config.HostConfig.Memory = BaseTestContainerOptions.Memory;
+                            config.HostConfig.NanoCPUs = BaseTestContainerOptions.NanoCPUs;
+                            config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
+                        })
                         .WithNetwork(network)
                         .WithStartupCallback((kafkaContainer, cancelToken) =>
                         {
