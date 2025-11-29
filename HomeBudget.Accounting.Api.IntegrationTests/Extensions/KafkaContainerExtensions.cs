@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Confluent.Kafka;
 using Testcontainers.Kafka;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Clients;
@@ -24,6 +25,40 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             "localhost:29092",
             "127.0.0.1:29092",
         };
+
+        public static async Task ResetContainersAsync(this KafkaContainer container)
+        {
+            var adminConfig = new AdminClientConfig
+            {
+                BootstrapServers = container.GetBootstrapAddress(),
+            };
+
+            using var admin = new AdminClientBuilder(adminConfig).Build();
+
+            var meta = admin.GetMetadata(TimeSpan.FromSeconds(10));
+
+            foreach (var topic in meta.Topics)
+            {
+                // Skip internal Kafka topics
+                if (topic.Topic.StartsWith("_"))
+                {
+                    continue;
+                }
+
+                var deleteSpec = topic.Partitions
+                    .Select(p => new TopicPartitionOffset(topic.Topic, p.PartitionId, Offset.End))
+                    .ToList();
+
+                try
+                {
+                    await admin.DeleteRecordsAsync(deleteSpec);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Kafka purge failed for {topic.Topic}: {ex}");
+                }
+            }
+        }
 
         public static async Task WaitForKafkaReadyAsync(this KafkaContainer kafkaContainer, TimeSpan timeout)
         {

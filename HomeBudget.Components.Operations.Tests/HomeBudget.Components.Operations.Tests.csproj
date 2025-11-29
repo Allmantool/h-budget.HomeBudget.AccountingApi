@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <OutputType>Library</OutputType>
+    <ParallelizeTestCollections>false</ParallelizeTestCollections>
   </PropertyGroup>
 
   <ItemGroup>

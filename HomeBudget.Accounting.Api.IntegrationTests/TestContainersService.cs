@@ -1,14 +1,9 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Confluent.Kafka;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
-using EventStore.Client;
-using MongoDB.Bson;
-using MongoDB.Driver;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
@@ -65,85 +60,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 try
                 {
-                    using var mongo = new MongoClient(MongoDbContainer.GetConnectionString());
-                    var dbNames = await mongo.ListDatabaseNamesAsync();
+                    await MongoDbContainer.ResetContainersAsync();
 
-                    await foreach (var dbName in dbNames.ToAsyncEnumerable())
-                    {
-                        if (dbName is "admin" or "local" or "config")
-                        {
-                            continue;
-                        }
+                    await KafkaContainer.ResetContainersAsync();
 
-                        var db = mongo.GetDatabase(dbName);
-                        var collections = await db.ListCollectionNamesAsync();
-
-                        await foreach (var collection in collections.ToAsyncEnumerable())
-                        {
-                            // Deletes all documents without dropping structure
-                            await db.GetCollection<BsonDocument>(collection)
-                                    .DeleteManyAsync(FilterDefinition<BsonDocument>.Empty);
-                        }
-                    }
-
-                    var adminConfig = new AdminClientConfig
-                    {
-                        BootstrapServers = KafkaContainer.GetBootstrapAddress(),
-                    };
-
-                    using var admin = new AdminClientBuilder(adminConfig).Build();
-
-                    var meta = admin.GetMetadata(TimeSpan.FromSeconds(10));
-
-                    foreach (var topic in meta.Topics)
-                    {
-                        // Skip internal Kafka topics
-                        if (topic.Topic.StartsWith("_"))
-                        {
-                            continue;
-                        }
-
-                        var deleteSpec = topic.Partitions
-                            .Select(p => new TopicPartitionOffset(topic.Topic, p.PartitionId, Offset.End))
-                            .ToList();
-
-                        try
-                        {
-                            await admin.DeleteRecordsAsync(deleteSpec);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Kafka purge failed for {topic.Topic}: {ex}");
-                        }
-                    }
-
-                    var esSettings = EventStoreClientSettings.Create(EventSourceDbContainer.GetConnectionString());
-                    using var es = new EventStoreClient(esSettings);
-
-                    var allEvents = es.ReadAllAsync(Direction.Forwards, Position.Start);
-
-                    await foreach (var record in allEvents)
-                    {
-                        var stream = record.Event.EventStreamId;
-
-                        if (stream.StartsWith("$"))
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            await es.SetStreamMetadataAsync(
-                                stream,
-                                StreamState.Any,
-                                new StreamMetadata(truncateBefore: record.Event.EventNumber + 1)
-                            );
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"EventStore cleanup failed for stream {stream}: {ex}");
-                        }
-                    }
+                    await EventSourceDbContainer.ResetContainersAsync();
                 }
                 catch (Exception ex)
                 {

@@ -5,7 +5,7 @@ using DotNet.Testcontainers.Containers;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
-    internal static class TestContainerExtentions
+    internal static class TestContainerExtensions
     {
         public static async Task DumpContainerLogsSafelyAsync(this IContainer container, string name)
         {
