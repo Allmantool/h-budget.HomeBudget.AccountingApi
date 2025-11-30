@@ -48,6 +48,12 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
+      - name: Clean Docker space
+        if: matrix.project == 'HomeBudget.Accounting.Api.IntegrationTests'
+        run: |
+          docker system prune -af
+          docker network prune -f
+
       - name: Restore
         run: dotnet restore HomeBudgetAccountingApi.sln
 
@@ -57,9 +63,19 @@ jobs:
       - name: Run tests for ${{ matrix.project }}
         run: |
           mkdir -p test-results coverage
+
+          # Only limit CPU for integration tests to avoid Docker layer issues
+          if [ "${{ matrix.project }}" = "HomeBudget.Accounting.Api.IntegrationTests" ]; then
+            DOTNET_TEST_ARGS="--maxcpucount 1"
+          else
+            DOTNET_TEST_ARGS=""
+          fi
+
           dotnet test ${{ matrix.project }}/${{ matrix.project }}.csproj \
             --configuration Release \
             --no-build \
+            --verbosity normal \
+            $DOTNET_TEST_ARGS \
             --logger "trx;LogFileName=test_results.trx" \
             --results-directory "test-results" \
             --collect:"XPlat Code Coverage"
