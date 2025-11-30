@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 
+using Docker.DotNet;
 using DotNet.Testcontainers.Containers;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
@@ -32,24 +34,72 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             }
         }
 
-        public static async Task SafeStartContainerAsync(
+        public static async Task SafeStartWithRetryAsync(
             this IContainer container,
+            int maxRetries = 3,
+            int baseDelaySeconds = 5,
             bool swallowBusyError = false)
+        {
+            ArgumentNullException.ThrowIfNull(container);
+
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    await container.StartAsync();
+                    return;
+                }
+                catch (DockerApiException ex) when (IsRetryableDockerError(ex) && attempt < maxRetries)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(baseDelaySeconds * attempt));
+                    await CleanupDockerResourcesAsync();
+                }
+                catch (DockerApiException ex) when (
+                    swallowBusyError &&
+                    ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+
+            await container.StartAsync();
+        }
+
+        private static bool IsRetryableDockerError(DockerApiException ex)
+            => ex.Message.Contains("RWLayer", StringComparison.OrdinalIgnoreCase);
+
+        private static async Task CleanupDockerResourcesAsync()
         {
             try
             {
-                await container.StartAsync();
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "docker",
+                        Arguments = "system prune -f",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+
+                var stdout = await process.StandardOutput.ReadToEndAsync();
+                var stderr = await process.StandardError.ReadToEndAsync();
+
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    Console.WriteLine($"Docker cleanup failed. ExitCode={process.ExitCode}, stdout={stdout}, stderr={stderr}");
+                }
             }
             catch (Exception ex)
             {
-                if (swallowBusyError &&
-                    ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine("Kafka container busy warning ignored.");
-                    return;
-                }
-
-                throw;
+                Console.WriteLine($"Failed to cleanup Docker resources: {ex}");
             }
         }
     }

@@ -152,22 +152,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 if (EventSourceDbContainer is not null)
                 {
-                    await EventSourceDbContainer.SafeStartContainerAsync();
+                    await EventSourceDbContainer.SafeStartWithRetryAsync();
                 }
 
                 if (MongoDbContainer is not null)
                 {
-                    await MongoDbContainer.SafeStartContainerAsync();
+                    await MongoDbContainer.SafeStartWithRetryAsync();
                 }
 
                 if (KafkaUIContainer is not null)
                 {
-                    await KafkaUIContainer.SafeStartContainerAsync();
+                    await KafkaUIContainer.SafeStartWithRetryAsync();
                 }
 
                 if (KafkaContainer is not null)
                 {
-                    await KafkaContainer.SafeStartContainerAsync(swallowBusyError: true);
+                    await KafkaContainer.SafeStartWithRetryAsync(swallowBusyError: true);
                     await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
                 }
 
