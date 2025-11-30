@@ -2,7 +2,13 @@
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-using HomeBudget.Accounting.Api.IntegrationTests;
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Driver;
+using NUnit.Framework;
+
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
@@ -12,14 +18,7 @@ using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Options;
 
-using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Driver;
-using NUnit.Framework;
-
-namespace HomeBudget.Components.Categories.Tests.Clients
+namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
     public class CategoryDocumentsClientTests
@@ -39,7 +38,7 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             var testContainers = await TestContainersService.InitAsync();
 
-            while (!testContainers.IsReadyForUse)
+            while (!TestContainersService.GetInstance.IsReadyForUse)
             {
                 if (sw.Elapsed > maxWait)
                 {
@@ -66,6 +65,12 @@ namespace HomeBudget.Components.Categories.Tests.Clients
 
             _database = mongoClient.GetDatabase(mongoOptions.Value.HandBooks);
             _client = new CategoryDocumentsClient(mongoOptions);
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await TestContainersService.GetInstance.ResetContainersAsync();
         }
 
         [SetUp]

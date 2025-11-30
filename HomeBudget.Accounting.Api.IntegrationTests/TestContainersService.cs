@@ -25,6 +25,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public bool IsReadyForUse { get; private set; }
 
+        public static TestContainersService GetInstance { get; private set; } = _instance;
         public EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public IContainer KafkaUIContainer { get; private set; }
         public KafkaContainer KafkaContainer { get; private set; }

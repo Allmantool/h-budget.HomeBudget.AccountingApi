@@ -12,7 +12,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
@@ -25,7 +24,7 @@ using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Components.Operations.Tests
+namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
     public class PaymentOperationsEventStoreClientTests

@@ -8,7 +8,6 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Clients;
@@ -17,8 +16,9 @@ using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Components.Operations;
 
-namespace HomeBudget.Components.Operations.Tests
+namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
     public class PaymentOperationsProducerTests

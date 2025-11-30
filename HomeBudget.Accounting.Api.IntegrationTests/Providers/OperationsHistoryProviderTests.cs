@@ -16,7 +16,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Tests.Constants;
 
-namespace HomeBudget.Components.Operations.Tests.Providers
+namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
 {
     [TestFixture]
     public class OperationsHistoryProviderTests

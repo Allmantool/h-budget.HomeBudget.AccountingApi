@@ -14,7 +14,6 @@ using MongoDB.Bson.Serialization.Serializers;
 using Moq;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients;
@@ -30,7 +29,7 @@ using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
+namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
 {
     [TestFixture]
     public class SyncOperationsHistoryCommandHandlerTests
