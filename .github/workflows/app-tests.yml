@@ -57,7 +57,7 @@ jobs:
       - name: Run tests for ${{ matrix.project }}
         run: |
           mkdir -p test-results coverage
-          dotnet test Tests/${{ matrix.project }}/${{ matrix.project }}.csproj \
+          dotnet test ${{ matrix.project }}/${{ matrix.project }}.csproj \
             --configuration Release \
             --no-build \
             --logger "trx;LogFileName=test_results.trx" \
