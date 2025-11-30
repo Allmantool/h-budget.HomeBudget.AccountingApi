@@ -38,9 +38,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public static async Task<TestContainersService> InitAsync()
         {
-            if (_instance is not null)
+            if (GetInstance is not null)
             {
-                return _instance;
+                return GetInstance;
             }
 
             await using (await SemaphoreGuard.WaitAsync(_lock))
@@ -51,7 +51,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await _instance.UpAndRunningContainersAsync();
                 }
 
-                return _instance;
+                GetInstance = _instance;
+
+                return GetInstance;
             }
         }
 
