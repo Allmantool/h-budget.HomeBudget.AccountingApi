@@ -55,20 +55,6 @@ jobs:
     needs: [get-tag]
     uses: ./.github/workflows/build-api.yml
 
-  # unit-tests:
-  #   name: Unit Tests Coverage
-  #   needs: [build-api]
-  #   uses: ./.github/workflows/unit-tests.yml
-  #   with:
-  #     test_timeout_minutes: 10
-
-  # integration-tests:
-  #   needs: [build-api]
-  #   name: Integration Tests Coverage
-  #   uses: ./.github/workflows/integration-tests.yml
-  #   with:
-  #     test_timeout_minutes: 30
-
   app-tests:
     name: App Tests Coverage
     needs: [build-api]
@@ -76,13 +62,8 @@ jobs:
     with:
       test_timeout_minutes: 30
 
-  merge-coverage:
-    needs: [app-tests]
-    name: Merge Coverage Reports
-    uses: ./.github/workflows/merge-coverage.yml
-
   sonar-analysis:
-    needs: [merge-coverage, build-api]
+    needs: [app-tests, build-api]
     name: Run sonar scanning
     uses: ./.github/workflows/sonar-analysis.yml
     with:
@@ -92,7 +73,7 @@ jobs:
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api, merge-coverage, get-tag]
+    needs: [build-api, get-tag]
     uses: ./.github/workflows/build-docker.yml
     with:
       last_tag: ${{ needs.get-tag.outputs.target_tag }}
