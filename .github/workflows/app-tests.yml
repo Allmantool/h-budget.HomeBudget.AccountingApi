@@ -64,21 +64,22 @@ jobs:
         run: |
           mkdir -p test-results coverage
 
-          # Only limit CPU for integration tests to avoid Docker layer issues
+          TEST_ARGS=(
+            --configuration Release
+            --no-build
+            --verbosity normal
+            --logger "trx;LogFileName=test_results.trx"
+            --results-directory "test-results"
+            --collect:"XPlat Code Coverage"
+          )
+
+          # Only limit CPU for integration tests
           if [ "${{ matrix.project }}" = "HomeBudget.Accounting.Api.IntegrationTests" ]; then
-            DOTNET_TEST_ARGS="--maxcpucount 1"
-          else
-            DOTNET_TEST_ARGS=""
+            TEST_ARGS+=(--maxcpucount 1)
           fi
 
-          dotnet test ${{ matrix.project }}/${{ matrix.project }}.csproj \
-            --configuration Release \
-            --no-build \
-            --verbosity normal \
-            $DOTNET_TEST_ARGS \
-            --logger "trx;LogFileName=test_results.trx" \
-            --results-directory "test-results" \
-            --collect:"XPlat Code Coverage"
+          dotnet test "${{ matrix.project }}/${{ matrix.project }}.csproj" "${TEST_ARGS[@]}"
+        shell: bash
         timeout-minutes: ${{ inputs.test_timeout_minutes }}
 
       - uses: actions/upload-artifact@v5
