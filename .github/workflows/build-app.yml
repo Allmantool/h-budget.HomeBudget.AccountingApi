@@ -73,7 +73,7 @@ jobs:
 
   build-docker:
     name: Build and Push Docker Image
-    needs: [build-api, get-tag]
+    needs: [build-api, get-tag, app-tests]
     uses: ./.github/workflows/build-docker.yml
     with:
       last_tag: ${{ needs.get-tag.outputs.target_tag }}
