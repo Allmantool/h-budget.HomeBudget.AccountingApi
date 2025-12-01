@@ -8,9 +8,6 @@ using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
 using Moq;
 using NUnit.Framework;
 
@@ -46,37 +43,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
+            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
+            var sw = Stopwatch.StartNew();
+
+            _testContainers = await TestContainersService.InitAsync();
+
+            while (!_testContainers.IsReadyForUse)
             {
-                BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-                BsonSerializer.TryRegisterSerializer(new Test.Core.Serializers.MongoDb.DateOnlySerializer());
-
-                var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
-                var sw = Stopwatch.StartNew();
-
-                _testContainers = await TestContainersService.InitAsync();
-
-                while (!_testContainers.IsReadyForUse)
+                if (sw.Elapsed > maxWait)
                 {
-                    if (sw.Elapsed > maxWait)
-                    {
-                        Assert.Fail(
-                            $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                        );
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
+                    Assert.Fail(
+                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
+                    );
                 }
 
-                sw.Stop();
-
-                _ct = CancellationToken.None;
-
-                _logger = new Mock<ILogger<SyncOperationsHistoryCommandHandler>>();
-                _sender = new Mock<ISender>();
-                _sender
-                    .Setup(x => x.Send(It.IsAny<UpdatePaymentAccountBalanceCommand>(), _ct))
-                    .ReturnsAsync(Result<Guid>.Succeeded(Guid.Empty));
+                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
             }
+
+            sw.Stop();
+
+            _ct = CancellationToken.None;
+
+            _logger = new Mock<ILogger<SyncOperationsHistoryCommandHandler>>();
+            _sender = new Mock<ISender>();
+            _sender
+                .Setup(x => x.Send(It.IsAny<UpdatePaymentAccountBalanceCommand>(), _ct))
+                .ReturnsAsync(Result<Guid>.Succeeded(Guid.Empty));
         }
 
         [Test]

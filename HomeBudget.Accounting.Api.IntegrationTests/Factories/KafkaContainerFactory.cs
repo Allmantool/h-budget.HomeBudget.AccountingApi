@@ -106,12 +106,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
                 .WithWaitStrategy(
                     Wait.ForUnixContainer()
+                        .UntilExternalTcpPortIsAvailable(9092)
                         .AddCustomWaitStrategy(
-                            new CustomWaitStrategy(TimeSpan.FromMinutes(5))
+                            new CustomWaitStrategy(TimeSpan.FromMinutes(10))
                         ))
                 .WithCreateParameterModifier(config =>
                 {
-                    config.HostConfig.Memory = BaseTestContainerOptions.Memory;
+                    config.HostConfig.Memory = BaseTestContainerOptions.Memory1Gb * 2;
                     config.HostConfig.NanoCPUs = BaseTestContainerOptions.NanoCPUs;
                     config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 })
