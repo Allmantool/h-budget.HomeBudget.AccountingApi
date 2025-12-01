@@ -87,7 +87,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
             dbOptions.PaymentAccounts = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentAccounts)}";
             dbOptions.PaymentsHistory = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentsHistory)}";
             dbOptions.HandBooks = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.HandBooks)}";
-            dbOptions.BulkInsertChunkSize = 5000;
+            dbOptions.BulkInsertChunkSize = 500;
             dbOptions.ConnectionString = _testContainers.MongoDbContainer.GetConnectionString();
 
             var mongoDbOptions = Options.Create(dbOptions);
@@ -106,7 +106,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
                 paymentsHistoryDocumentsClient,
                 paymentOperationsHistoryService);
 
-            const int count = 30_000;
+            const int count = 50_000;
             const double maxSeconds = 30.0;
 
             var accountId = Guid.NewGuid();

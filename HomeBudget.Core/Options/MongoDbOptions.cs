@@ -18,6 +18,6 @@
         public long ServerSelectionTimeoutInSeconds { get; set; } = 45;
         public long SocketTimeoutInSeconds { get; set; } = 90;
         public long WaitQueueTimeoutInSeconds { get; set; } = 60;
-        public int BulkInsertChunkSize { get; set; } = 3000;
+        public int BulkInsertChunkSize { get; set; } = 1000;
     }
 }

@@ -10,13 +10,13 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Operations;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Components.Operations;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
