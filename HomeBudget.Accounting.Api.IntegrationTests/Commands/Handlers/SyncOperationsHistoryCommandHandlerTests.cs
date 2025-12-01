@@ -48,7 +48,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
         {
             {
                 BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-                BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
+                BsonSerializer.TryRegisterSerializer(new Test.Core.Serializers.MongoDb.DateOnlySerializer());
 
                 var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 var sw = Stopwatch.StartNew();

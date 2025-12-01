@@ -10,7 +10,6 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
@@ -27,7 +26,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
         public async Task SetupAsync()
         {
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
+            BsonSerializer.TryRegisterSerializer(new Test.Core.Serializers.MongoDb.DateOnlySerializer());
 
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();

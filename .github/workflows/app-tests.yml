@@ -41,6 +41,14 @@ jobs:
           - HomeBudget.Components.Operations.Tests
           - HomeBudget.Accounting.Api.IntegrationTests
 
+    services:
+      docker:
+        image: docker:24.0-dind
+        options: >-
+          --privileged
+          --mount type=tmpfs,destination=/var/lib/docker
+          --tmpfs /tmp
+
     steps:
       - uses: actions/checkout@v5
 
