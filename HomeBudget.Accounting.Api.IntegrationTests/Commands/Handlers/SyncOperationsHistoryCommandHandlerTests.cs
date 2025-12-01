@@ -11,7 +11,6 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Commands.Models;
@@ -22,14 +21,13 @@ using HomeBudget.Components.Operations.Commands.Handlers;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
-using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
 {
     [TestFixture]
-    public class SyncOperationsHistoryCommandHandlerTests
+    public class SyncOperationsHistoryCommandHandlerTests : BaseIntegrationTests
     {
         private Mock<ISender> _sender;
         private Mock<ILogger<SyncOperationsHistoryCommandHandler>> _logger;
@@ -38,30 +36,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
 
         private SyncOperationsHistoryCommandHandler _sut;
 
-        private TestContainersService _testContainers;
-
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
-            var sw = Stopwatch.StartNew();
-
-            _testContainers = await TestContainersService.InitAsync();
-
-            while (!_testContainers.IsReadyForUse)
-            {
-                if (sw.Elapsed > maxWait)
-                {
-                    Assert.Fail(
-                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                    );
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
-            }
-
-            sw.Stop();
-
             _ct = CancellationToken.None;
 
             _logger = new Mock<ILogger<SyncOperationsHistoryCommandHandler>>();
@@ -80,7 +57,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
             dbOptions.PaymentsHistory = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.PaymentsHistory)}";
             dbOptions.HandBooks = $"{nameof(SyncOperationsHistoryCommandHandlerTests)}-{nameof(dbOptions.HandBooks)}";
             dbOptions.BulkInsertChunkSize = 500;
-            dbOptions.ConnectionString = _testContainers.MongoDbContainer.GetConnectionString();
+            dbOptions.ConnectionString = TestContainers.MongoDbContainer.GetConnectionString();
 
             var mongoDbOptions = Options.Create(dbOptions);
 

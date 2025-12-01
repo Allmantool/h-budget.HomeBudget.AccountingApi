@@ -1,57 +1,23 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 using FluentAssertions;
 
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
 
-using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Tests.Constants;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
 {
     [TestFixture]
-    public class OperationsHistoryProviderTests
+    public class OperationsHistoryProviderTests : BaseIntegrationTests
     {
-        private TestContainersService _testContainers;
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            BsonSerializer.TryRegisterSerializer(new Test.Core.Serializers.MongoDb.DateOnlySerializer());
-
-            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
-            var sw = Stopwatch.StartNew();
-
-            _testContainers = await TestContainersService.InitAsync();
-
-            while (!_testContainers.IsReadyForUse)
-            {
-                if (sw.Elapsed > maxWait)
-                {
-                    Assert.Fail(
-                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                    );
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
-            }
-
-            sw.Stop();
-        }
-
         [Test]
         public async Task Should_InsertOneAsync_PaymentRecordsSuccessfully()
         {
-            var dbConnection = _testContainers.MongoDbContainer.GetConnectionString();
+            var dbConnection = TestContainers.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 
@@ -90,7 +56,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
         [Test]
         public async Task Should_InsertManyAsync_PaymentRecordsSuccessfully()
         {
-            var dbConnection = _testContainers.MongoDbContainer.GetConnectionString();
+            var dbConnection = TestContainers.MongoDbContainer.GetConnectionString();
 
             using var client = new MongoClient(dbConnection);
 
