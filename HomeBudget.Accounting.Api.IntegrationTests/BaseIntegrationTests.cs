@@ -33,7 +33,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
             TestContainers = await TestContainersService.InitAsync();
 
-            while (!TestContainers.IsReadyForUse)
+            while (TestContainers is null || !TestContainers.IsReadyForUse)
             {
                 if (sw.Elapsed > maxWait)
                 {
@@ -46,6 +46,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             sw.Stop();
+
+            await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
 
             _initialized = true;
         }

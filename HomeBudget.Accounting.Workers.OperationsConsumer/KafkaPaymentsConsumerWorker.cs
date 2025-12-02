@@ -48,7 +48,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                         await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
                     }
 
-                    if (_consumer is not null || _consumer.IsAlive())
+                    if (_consumer is not null && _consumer.IsAlive())
                     {
                         await consumerService.ConsumeKafkaMessagesLoopAsync(_consumer, stoppingToken);
                     }

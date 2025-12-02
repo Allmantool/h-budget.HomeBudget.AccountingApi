@@ -24,6 +24,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             "127.0.0.1:9094",
             "localhost:29092",
             "127.0.0.1:29092",
+            "localhost:29093",
+            "127.0.0.1:29093",
         };
 
         public static async Task ResetContainersAsync(this KafkaContainer container)
@@ -83,10 +85,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
         {
             var mapped = new Dictionary<int, int>
             {
+                // [9093] = container.GetMappedPublicPort(9093),
+                // [9094] = container.GetMappedPublicPort(9094),
                 [9092] = container.GetMappedPublicPort(9092),
-                [9093] = container.GetMappedPublicPort(9093),
-                [9094] = container.GetMappedPublicPort(9094),
-                [29092] = container.GetMappedPublicPort(29092)
+                [29092] = container.GetMappedPublicPort(29092),
+                [29093] = container.GetMappedPublicPort(29093),
             };
 
             var dynamicCandidates = new List<string>();

@@ -42,13 +42,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 // .WithPortBinding(9093, true)
                 // .WithPortBinding(9094, true)
                 // .WithPortBinding(9997, true)
-                .WithPortBinding(29092, 29092)
 
                 // .WithPortBinding(9092, 39092)
+                .WithPortBinding(29092, 29092)
+                .WithPortBinding(29093, 29093)
                 .WithPortBinding(9092, 9092)
                 .WithPortBinding(9093, 9093)
-                .WithPortBinding(9094, 9094)
-                .WithPortBinding(9997, 9997)
+
+                // .WithPortBinding(9094, 9094)
+                // .WithPortBinding(9997, 9997)
+                .WithExposedPort(29093)
+                .WithExposedPort(29092)
+                .WithExposedPort(9093)
+                .WithExposedPort(9092)
 
                 // v8+ KRAFT_MODE
                 .WithEnvironment("KAFKA_KRAFT_MODE", "true")
@@ -56,25 +62,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                 .WithEnvironment("KAFKA_CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                 .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
-                .WithEnvironment(
-                    "KAFKA_LISTENERS",
-                    "PLAINTEXT://0.0.0.0:29092," +
-                    "PLAINTEXT_HOST://0.0.0.0:9092," +
-                    "CONTROLLER://0.0.0.0:9093," +
-                    "BROKER://0.0.0.0:9094")
-                .WithEnvironment(
-                    "KAFKA_ADVERTISED_LISTENERS",
-                    "PLAINTEXT://test-kafka:29092," +
 
-                    // "PLAINTEXT_HOST://localhost:39092," +
-                    "PLAINTEXT_HOST://localhost:9092," +
-                    "BROKER://test-kafka:9094")
-                .WithEnvironment(
-                    "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
-                    "PLAINTEXT:PLAINTEXT," +
-                    "PLAINTEXT_HOST:PLAINTEXT," +
-                    "CONTROLLER:PLAINTEXT," +
-                    "BROKER:PLAINTEXT")
+                // .WithEnvironment(
+                //    "KAFKA_LISTENERS",
+                //    "PLAINTEXT://0.0.0.0:29092," +
+                //    "PLAINTEXT_HOST://0.0.0.0:9092," +
+                //    "CONTROLLER://0.0.0.0:9093," +
+                //    "BROKER://0.0.0.0:9094")
+                // .WithEnvironment(
+                //    "KAFKA_ADVERTISED_LISTENERS",
+                //    "PLAINTEXT://test-kafka:29092," +
+                //    // "PLAINTEXT_HOST://localhost:39092," +
+                //    "PLAINTEXT_HOST://localhost:9092," +
+                //    "BROKER://test-kafka:9094")
+                // .WithEnvironment(
+                //    "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
+                //    "PLAINTEXT:PLAINTEXT," +
+                //    "PLAINTEXT_HOST:PLAINTEXT," +
+                //    "CONTROLLER:PLAINTEXT," +
+                //    "BROKER:PLAINTEXT")
 
                 // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
                 .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
