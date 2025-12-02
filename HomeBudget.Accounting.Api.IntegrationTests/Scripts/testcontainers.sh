@@ -57,8 +57,8 @@ sed -i '/^inter.broker.listener.name=/d' "$CONFIG"
 sed -i '/^controller.quorum.voters=/d' "$CONFIG"
 
 cat <<EOF >> "$CONFIG"
-listeners=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:29093,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT://test-kafka:29092,PLAINTEXT_HOST://localhost:29093
+listeners=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+advertised.listeners=PLAINTEXT://test-kafka:29092,PLAINTEXT_HOST://localhost:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
 controller.quorum.voters=1@test-kafka:9093
 inter.broker.listener.name=PLAINTEXT
