@@ -62,6 +62,9 @@ jobs:
           docker system prune -af
           docker network prune -f
 
+      - name: Add coverlet collector
+        run: dotnet add ${{ matrix.project }}/${{ matrix.project }}.csproj package coverlet.collector
+
       - name: Restore
         run: dotnet restore HomeBudgetAccountingApi.sln
 

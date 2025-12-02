@@ -36,21 +36,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithImage("confluentinc/cp-kafka:8.1.0")
                 .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
                 .WithHostname("test-kafka")
-
-                // .WithPortBinding(29092, true)
-                // .WithPortBinding(9092, true)
-                // .WithPortBinding(9093, true)
-                // .WithPortBinding(9094, true)
-                // .WithPortBinding(9997, true)
-
-                // .WithPortBinding(9092, 39092)
                 .WithPortBinding(29092, 29092)
                 .WithPortBinding(29093, 29093)
                 .WithPortBinding(9092, 9092)
                 .WithPortBinding(9093, 9093)
-
-                // .WithPortBinding(9094, 9094)
-                // .WithPortBinding(9997, 9997)
                 .WithExposedPort(29093)
                 .WithExposedPort(29092)
                 .WithExposedPort(9093)
@@ -112,7 +101,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 // .WithBindMount(kafkaConfigPath, "/etc/kafka/server.properties", AccessMode.ReadOnly)
                 .WithWaitStrategy(
                     Wait.ForUnixContainer()
-                        .UntilExternalTcpPortIsAvailable(9092)
+
+                        // .UntilExternalTcpPortIsAvailable(9092)
                         .AddCustomWaitStrategy(
                             new CustomWaitStrategy(TimeSpan.FromMinutes(10))
                         ))
