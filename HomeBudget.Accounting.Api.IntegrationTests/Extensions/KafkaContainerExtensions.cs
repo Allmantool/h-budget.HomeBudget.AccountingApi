@@ -1,76 +1,49 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using Testcontainers.Kafka;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Clients;
+using HomeBudget.Test.Core.Helpers;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 {
     internal static class KafkaContainerExtensions
     {
-        private static readonly string[] StaticBootstrapCandidates =
-        {
-            "localhost:39092",
-            "127.0.0.1:39092",
-            "localhost:9092",
-            "127.0.0.1:9092",
-            "localhost:9093",
-            "127.0.0.1:9093",
-            "localhost:9094",
-            "127.0.0.1:9094",
-            "localhost:29092",
-            "127.0.0.1:29092",
-            "localhost:29093",
-            "127.0.0.1:29093",
-        };
-
         public static async Task ResetContainersAsync(this KafkaContainer container)
         {
             var adminConfig = new AdminClientConfig
             {
-                BootstrapServers = container.GetBootstrapAddress(),
+                BootstrapServers = await container.GetReachableBootstrapAsync()
             };
 
-            using var admin = new AdminClientBuilder(adminConfig).Build();
+            using var adminClient = new AdminClientBuilder(adminConfig).Build();
 
-            var meta = admin.GetMetadata(TimeSpan.FromSeconds(10));
-
-            foreach (var topic in meta.Topics)
+            var metadata = KafkaAdminOperationsClient.GetMetadataSafe(adminClient);
+            if (metadata is null)
             {
-                // Skip internal Kafka topics
-                if (topic.Topic.StartsWith("_"))
-                {
-                    continue;
-                }
+                return;
+            }
 
-                var deleteSpec = topic.Partitions
-                    .Select(p => new TopicPartitionOffset(topic.Topic, p.PartitionId, Offset.End))
-                    .ToList();
-
-                try
-                {
-                    await admin.DeleteRecordsAsync(deleteSpec);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Kafka purge failed for {topic.Topic}: {ex}");
-                }
+            foreach (var topic in KafkaAdminOperationsClient.FilterUserTopics(metadata.Topics))
+            {
+                await KafkaAdminOperationsClient.TryDeleteTopicRecordsAsync(adminClient, topic);
             }
         }
 
-        public static async Task WaitForKafkaReadyAsync(this KafkaContainer kafkaContainer, TimeSpan timeout)
+        public static async Task WaitForKafkaReadyAsync(this KafkaContainer container, TimeSpan timeout)
         {
-            var candidates = GetAllBootstrapCandidates(kafkaContainer);
-            var start = DateTime.UtcNow;
-            var connectionLog = new Dictionary<string, string>();
+            var providers = new BootstrapCandidateProvider(container);
+            var candidates = providers.BuildCandidates();
 
-            while (!TimedOut(start, timeout))
+            var start = DateTime.UtcNow;
+            var log = new Dictionary<string, string>();
+
+            while (!TimeoutHelper.IsTimedOut(start, timeout))
             {
-                if (await TryConnectToAnyBootstrapAsync(candidates, connectionLog))
+                if (await KafkaAdminOperationsClient.TryConnectToAnyAsync(candidates, log))
                 {
                     return;
                 }
@@ -81,72 +54,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             throw new TimeoutException("Kafka did not become ready in time.");
         }
 
-        private static IEnumerable<string> GetAllBootstrapCandidates(KafkaContainer container)
+        public static async Task<string> GetReachableBootstrapAsync(this KafkaContainer container)
         {
-            var mapped = new Dictionary<int, int>
-            {
-                // [9093] = container.GetMappedPublicPort(9093),
-                // [9094] = container.GetMappedPublicPort(9094),
-                [9092] = container.GetMappedPublicPort(9092),
-                [29092] = container.GetMappedPublicPort(29092),
-                [29093] = container.GetMappedPublicPort(29093),
-            };
+            var provider = new BootstrapCandidateProvider(container);
+            var candidates = provider.BuildCandidates();
 
-            var dynamicCandidates = new List<string>();
-            var bootstrap = container?.GetBootstrapAddress();
-
-            if (!string.IsNullOrWhiteSpace(bootstrap))
+            foreach (var candidate in candidates)
             {
-                dynamicCandidates.Add(bootstrap);
-                dynamicCandidates.Add(bootstrap.Replace("plaintext://", "", StringComparison.OrdinalIgnoreCase));
-            }
-
-            foreach (var portMap in mapped.Keys)
-            {
-                dynamicCandidates.Add($"{container.IpAddress}:{mapped[portMap]}");
-                dynamicCandidates.Add($"{container.Hostname}:{mapped[portMap]}");
-            }
-
-            var staticAdjusted = StaticBootstrapCandidates.Select(bootstrapCandidate =>
-            {
-                var parts = bootstrapCandidate.Split(':');
-                if (parts.Length != 2)
+                if (KafkaAdminOperationsClient.CanConnect(candidate))
                 {
-                    return bootstrapCandidate;
+                    return candidate;
                 }
 
-                var host = parts[0];
-                if (!int.TryParse(parts[1], out var port))
-                {
-                    return bootstrapCandidate;
-                }
-
-                return mapped.TryGetValue(port, out var mappedPort)
-                    ? $"{host}:{mappedPort}"
-                    : bootstrapCandidate;
-            });
-
-            return dynamicCandidates
-                .Concat(staticAdjusted)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct();
-        }
-
-        private static bool TimedOut(DateTime start, TimeSpan timeout) => DateTime.UtcNow - start > timeout;
-
-        private static async Task<bool> TryConnectToAnyBootstrapAsync(
-            IEnumerable<string> bootstraps,
-            IDictionary<string, string> connectionLog)
-        {
-            foreach (var bootstrap in bootstraps)
-            {
-                if (await KafkaAdminClient.TryInitializeKafkaAsync(bootstrap, connectionLog))
-                {
-                    return true;
-                }
+                await Task.Delay(300);
             }
 
-            return false;
+            return container.GetBootstrapAddress();
         }
     }
 }

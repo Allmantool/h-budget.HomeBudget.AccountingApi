@@ -14,6 +14,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Test.Core;
@@ -53,12 +54,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 TestContainersService = await TestContainersService.InitAsync();
                 await StartContainersAsync();
 
+                var kafkaContainerConnection = await TestContainersService.KafkaContainer.GetReachableBootstrapAsync();
+
                 for (var i = 0; i < workersMaxAmount; i++)
                 {
                     var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
                         () => new TestContainersConnections
                         {
-                            KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                            KafkaContainer = kafkaContainerConnection,
                             EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
                             MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                         });
@@ -71,7 +74,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
                     () => new TestContainersConnections
                     {
-                        KafkaContainer = TestContainersService.KafkaContainer.GetBootstrapAddress(),
+                        KafkaContainer = kafkaContainerConnection,
                         EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
                         MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                     });
