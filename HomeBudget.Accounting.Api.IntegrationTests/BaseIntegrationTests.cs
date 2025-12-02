@@ -25,7 +25,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 return;
             }
 
-            BsonSerializer.TryRegisterSerializer(new GuidSerializer(BsonType.String));
+            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);

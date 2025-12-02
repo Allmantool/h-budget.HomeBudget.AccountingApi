@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Commands.Models;
@@ -27,6 +28,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
 {
     [TestFixture]
+    [Order(IntegrationTestOrderIndex.SyncOperationsHistoryHighLoadTests)]
     public class SyncOperationsHistoryCommandHandlerTests : BaseIntegrationTests
     {
         private Mock<ISender> _sender;

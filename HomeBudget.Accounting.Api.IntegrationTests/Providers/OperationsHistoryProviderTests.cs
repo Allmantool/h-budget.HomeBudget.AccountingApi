@@ -24,7 +24,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
             var database = client.GetDatabase("Test-Db");
             var operationsHistoryCollection = database.GetCollection<PaymentHistoryDocument>("PaymentsHistory");
 
-            var paymentAccount = Guid.Parse("7a9b408e-efab-4134-920c-b4734580ce14");
+            var paymentAccount = Guid.Parse("7a9b408e-efab-4134-920c-b4734580ce19");
 
             var historyDocument = new PaymentHistoryDocument
             {

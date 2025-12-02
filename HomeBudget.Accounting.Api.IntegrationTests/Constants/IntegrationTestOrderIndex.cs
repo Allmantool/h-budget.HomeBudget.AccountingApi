@@ -2,6 +2,8 @@
 {
     internal static class IntegrationTestOrderIndex
     {
+        public const int SyncOperationsHistoryHighLoadTests = 0;
+
         public const int AccountingControllerTests = 1;
 
         public const int CategoriesControllerTests = 2;

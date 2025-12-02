@@ -54,15 +54,33 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
                     await Task.Delay(TimeSpan.FromSeconds(baseDelaySeconds * attempt));
                     await CleanupDockerResourcesAsync();
                 }
-                catch (DockerApiException ex) when (
-                    swallowBusyError &&
-                    ex.Message.Contains("testcontainers.sh: device or resource busy", StringComparison.OrdinalIgnoreCase))
+                catch (DockerContainerNotFoundException ex) when (attempt < maxRetries)
                 {
-                    return;
+                    LogRetry("Container not found (likely crashed on startup)", ex, attempt);
+                    await CleanupDockerResourcesAsync();
+                    await Task.Delay(TimeSpan.FromSeconds(baseDelaySeconds * (attempt + 1)));
+                }
+                catch (DockerApiException ex) when (
+                    ex.Message.Contains("device or resource busy", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("[TESTCONTAINERS] Resource busy detected!");
+                    if (swallowBusyError)
+                    {
+                        return;
+                    }
+
+                    throw;
                 }
             }
 
             await container.StartAsync();
+        }
+
+        private static void LogRetry(string title, Exception ex, int attempt)
+        {
+            Console.WriteLine($"[TESTCONTAINERS RETRY] Attempt #{attempt + 1}");
+            Console.WriteLine($"Reason: {title}");
+            Console.WriteLine($"Exception: {ex.GetType().Name}: {ex.Message}");
         }
 
         private static bool IsRetryableDockerError(DockerApiException ex)

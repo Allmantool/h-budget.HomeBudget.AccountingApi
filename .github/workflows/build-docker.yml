@@ -24,7 +24,7 @@ on:
         required: true
 
 jobs:
-  build-docker:
+  build-web-app-docker:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,7 +47,7 @@ jobs:
             .
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -56,3 +56,36 @@ jobs:
         shell: bash
         run: |
           docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ inputs.last_tag }}"
+
+  build-payments-consumer-docker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .\HomeBudget.Accounting.Workers.OperationsConsumers
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Build Docker Image
+        env:
+          BUILD_VERSION: ${{ inputs.last_tag }}
+        shell: bash
+        run: |
+          docker build \
+            --target 'final' \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-payments-consumer-worker:${{ inputs.last_tag }}" \
+            .
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Docker Image
+        shell: bash
+        run: |
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-payments-consumer-worker:${{ inputs.last_tag }}"
