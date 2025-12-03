@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -e
 
 echo ">> [Testcontainers] testcontainers.sh executed successfully."
@@ -14,6 +14,11 @@ echo ">> Host IP: $HOST_IP"
 echo ">> Config file: $CONFIG"
 echo ">> Log dirs: $LOG_DIRS"
 echo "------------------------------------------------------------"
+echo
+
+echo
+echo "=== Intial Kafka configuration ==="
+grep -E "^(listeners|advertised.listeners|listener\.security\.protocol\.map|controller\.quorum\.voters|inter\.broker\.listener\.name)" "$CONFIG" || echo "(no key params found)"
 echo
 
 # --- Cluster ID handling ---
@@ -57,11 +62,11 @@ sed -i '/^inter.broker.listener.name=/d' "$CONFIG"
 sed -i '/^controller.quorum.voters=/d' "$CONFIG"
 
 cat <<EOF >> "$CONFIG"
-listeners=PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT://test-kafka:29092,PLAINTEXT_HOST://localhost:9092
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
-controller.quorum.voters=1@test-kafka:9093
-inter.broker.listener.name=PLAINTEXT
+listeners=PLAINTEXT_INTERNAL://0.0.0.0:29092,PLAINTEXT_EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+advertised.listeners=PLAINTEXT_INTERNAL://test-kafka:29092,PLAINTEXT_EXTERNAL://127.0.0.1:9092
+listener.security.protocol.map=PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+controller.quorum.voters=$INITIAL_CONTROLLERS
+inter.broker.listener.name=PLAINTEXT_INTERNAL
 EOF
 
 echo
@@ -90,6 +95,7 @@ echo "Process Roles: $(grep ^process.roles "$CONFIG" | cut -d'=' -f2)"
 echo "Listeners: $(grep ^listeners "$CONFIG" | cut -d'=' -f2)"
 echo "Advertised Listeners: $(grep ^advertised.listeners "$CONFIG" | cut -d'=' -f2)"
 echo "Controller Quorum Voters: $(grep ^controller.quorum.voters "$CONFIG" | cut -d'=' -f2)"
+echo "Inter Broker listener: $(grep ^inter.broker.listener.name "$CONFIG" | cut -d'=' -f2)"
 grep -E "^(node\.id|process\.roles|listeners|advertised.listeners|controller\.quorum\.voters)" "$CONFIG" || true
 echo
 

@@ -66,7 +66,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
                     return candidate;
                 }
 
-                await Task.Delay(300);
+                await Task.Delay(500);
             }
 
             return container.GetBootstrapAddress();

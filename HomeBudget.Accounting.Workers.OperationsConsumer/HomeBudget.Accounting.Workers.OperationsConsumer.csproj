@@ -1,9 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
     <UserSecretsId>dotnet-HomeBudget.Accounting.Workers.OperationsConsumer-eb1959f1-55df-4110-96b2-655b7ecc4f8d</UserSecretsId>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
   <ItemGroup>
