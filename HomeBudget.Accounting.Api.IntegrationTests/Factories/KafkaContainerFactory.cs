@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
@@ -46,6 +48,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithExposedPort(9092)
 
                 // v8+ KRAFT_MODE
+                .WithEnvironment("TC_HOST", GetLocalIPAddress())
+                .WithEnvironment("C_HOST_NAME", "test-kafka")
                 .WithEnvironment("KAFKA_KRAFT_MODE", "true")
                 .WithEnvironment("KAFKA_NODE_ID", "1")
                 .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
@@ -118,6 +122,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 
                 // .WithReuse(true)
                 .Build();
+        }
+
+        private static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+
+            return "localhost";
         }
     }
 }
