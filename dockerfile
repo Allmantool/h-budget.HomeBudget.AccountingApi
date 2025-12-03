@@ -66,7 +66,12 @@ RUN dotnet sln HomeBudgetAccountingApi.sln remove \
     HomeBudget.Components.Categories.Tests/HomeBudget.Components.Categories.Tests.csproj \
     HomeBudget.Components.Operations.Tests/HomeBudget.Components.Operations.Tests.csproj
 
-RUN dotnet build HomeBudgetAccountingApi.sln -c Release --no-incremental  --framework:net9.0 -maxcpucount:1 -o /app/build
+RUN dotnet build HomeBudgetAccountingApi.sln \
+    -c Release \
+    --no-incremental \
+    --framework:net10.0 \
+    -maxcpucount:1 \
+    -o /app/build
 
 # Not compatible with .net 9.0 (will be updated later)
 # RUN /tools/snitch
