@@ -63,7 +63,7 @@ sed -i '/^controller.quorum.voters=/d' "$CONFIG"
 
 cat <<EOF >> "$CONFIG"
 listeners=PLAINTEXT_INTERNAL://0.0.0.0:29092,PLAINTEXT_EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT_INTERNAL://test-kafka:29092,PLAINTEXT_EXTERNAL://127.0.0.1:9092
+advertised.listeners=PLAINTEXT_INTERNAL://test-kafka:29092,PLAINTEXT_EXTERNAL://test-kafka:9092
 listener.security.protocol.map=PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
 controller.quorum.voters=$INITIAL_CONTROLLERS
 inter.broker.listener.name=PLAINTEXT_INTERNAL

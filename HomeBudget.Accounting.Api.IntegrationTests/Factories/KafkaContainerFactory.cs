@@ -51,6 +51,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithEnvironment("CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                 .WithEnvironment("KAFKA_CLUSTER_ID", "5Y7pZQq4Td6Jv4n3z2Z8Zg")
                 .WithEnvironment("KAFKA_PROCESS_ROLES", "broker,controller")
+                .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
 
                 // .WithEnvironment(
                 //    "KAFKA_LISTENERS",
@@ -72,9 +73,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 //    "BROKER:PLAINTEXT")
 
                 // .WithEnvironment("INITIAL_CONTROLLERS", "1@test-kafka:9093")
-                .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
-                .WithEnvironment("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
-                .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
+                // .WithEnvironment("KAFKA_CONTROLLER_QUORUM_VOTERS", "1@test-kafka:9093")
+                // .WithEnvironment("KAFKA_INTER_BROKER_LISTENER_NAME", "BROKER")
                 .WithEnvironment("JMX_PORT", "9997")
                 .WithEnvironment("KAFKA_JMX_PORT", "9997")
 
