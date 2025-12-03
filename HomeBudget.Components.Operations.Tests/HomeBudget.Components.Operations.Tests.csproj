@@ -21,6 +21,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="System.Linq.Async" />
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.EventStoreDb" />
     <PackageReference Include="Testcontainers.Kafka" />
