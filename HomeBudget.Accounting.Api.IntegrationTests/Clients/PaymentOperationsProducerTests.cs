@@ -21,7 +21,9 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
-    public class PaymentOperationsProducerTests
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.PaymentOperationsProducerTests)]
+    public class PaymentOperationsProducerTests : BaseIntegrationTests
     {
         private PaymentOperationsProducer _sut;
 
@@ -30,24 +32,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
-            var sw = Stopwatch.StartNew();
-
-            _testContainers = await TestContainersService.InitAsync();
-
-            while (!_testContainers.IsReadyForUse)
-            {
-                if (sw.Elapsed > maxWait)
-                {
-                    Assert.Fail(
-                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                    );
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
-            }
-
-            sw.Stop();
+            await base.SetupAsync();
         }
 
         [Test]

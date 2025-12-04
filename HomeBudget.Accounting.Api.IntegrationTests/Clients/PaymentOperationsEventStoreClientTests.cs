@@ -20,14 +20,15 @@ using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
-    public class PaymentOperationsEventStoreClientTests
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.PaymentOperationsEventStoreClientTests)]
+    public class PaymentOperationsEventStoreClientTests : BaseIntegrationTests
     {
         private readonly Mock<IServiceScope> _serviceScopeMock = new();
         private readonly Mock<IServiceScopeFactory> _serviceScopeFactoryMock = new();
@@ -41,24 +42,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
-            var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
-            var sw = Stopwatch.StartNew();
-
-            _testContainers = await TestContainersService.InitAsync();
-
-            while (!_testContainers.IsReadyForUse)
-            {
-                if (sw.Elapsed > maxWait)
-                {
-                    Assert.Fail(
-                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                    );
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
-            }
-
-            sw.Stop();
+            await base.SetupAsync();
 
             _paymentOperationsHistoryServiceMock
                 .Setup(s => s.SyncHistoryAsync(It.IsAny<string>(), It.IsAny<IEnumerable<PaymentOperationEvent>>()))

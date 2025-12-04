@@ -13,6 +13,8 @@ using HomeBudget.Components.Operations.Models;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
 {
     [TestFixture]
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.OperationsHistoryProviderTests)]
     public class OperationsHistoryProviderTests : BaseIntegrationTests
     {
         [Test]

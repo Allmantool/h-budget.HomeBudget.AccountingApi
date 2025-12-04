@@ -24,7 +24,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category(TestTypes.Integration)]
     [NonParallelizable]
     [Order(IntegrationTestOrderIndex.CrossAccountTransferControllerTests)]
-    public class CrossAccountTransferControllerTests
+    public class CrossAccountTransferControllerTests : BaseIntegrationTests
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
@@ -33,16 +33,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private RestClient _restClient;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
-            await _sut.InitAsync(5);
-            _restClient = _sut.RestHttpClient;
-        }
+            await _sut.InitAsync();
+            await base.SetupAsync();
 
-        [OneTimeTearDown]
-        public async Task TerminateAsync()
-        {
-            await OperationsTestWebApp.ResetAsync();
+            _restClient = _sut.RestHttpClient;
         }
 
         [Test]

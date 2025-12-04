@@ -20,22 +20,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category(TestTypes.Integration)]
     [NonParallelizable]
     [Order(IntegrationTestOrderIndex.CategoriesControllerTests)]
-    public class CategoriesControllerTests
+    public class CategoriesControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.Categories}";
 
         private readonly CategoriesTestWebApp _sut = new();
+        private RestClient _restClient;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
             await _sut.InitAsync();
-        }
+            await base.SetupAsync();
 
-        [OneTimeTearDown]
-        public async Task TerminateAsync()
-        {
-            await OperationsTestWebApp.ResetAsync();
+            _restClient = _sut.RestHttpClient;
         }
 
         [Test]
@@ -43,7 +41,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest(ApiHost);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<CategoryResponse>>>(getCategoriesRequest);
+            var response = await _restClient.ExecuteAsync<Result<IReadOnlyCollection<CategoryResponse>>>(getCategoriesRequest);
 
             response.IsSuccessful.Should().BeTrue();
         }
@@ -57,7 +55,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/{existedCategoryId}");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
+            var response = await _restClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -69,7 +67,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
+            var response = await _restClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
 
             var payload = response.Data;
 
@@ -105,7 +103,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getCategoriesRequestById = new RestRequest($"{ApiHost}/byId/{result.Payload}");
 
-            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequestById);
+            var getByIdResponse = await _restClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequestById);
 
             var getByIdPayload = getByIdResponse.Data;
 
@@ -127,7 +125,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
                 .AddJsonBody(requestSaveBody);
 
-            var paymentsHistoryResponse = await _sut.RestHttpClient
+            var paymentsHistoryResponse = await _restClient
                 .ExecuteAsync<Result<string>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;

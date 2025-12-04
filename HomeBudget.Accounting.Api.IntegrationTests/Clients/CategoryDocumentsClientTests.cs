@@ -1,59 +1,34 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Categories.Models;
-using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
     [TestFixture]
-    public class CategoryDocumentsClientTests
+    [Category(TestTypes.Integration)]
+    [Order(IntegrationTestOrderIndex.CategoryDocumentsClientTests)]
+    public class CategoryDocumentsClientTests : BaseIntegrationTests
     {
         private CategoryDocumentsClient _client;
         private IMongoDatabase _database;
 
         [OneTimeSetUp]
-        public async Task GlobalSetupAsync()
+        public override async Task SetupAsync()
         {
-            MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
-            BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
+            await base.SetupAsync();
 
-            var maxWait = TimeSpan.FromMinutes(3);
-            var sw = Stopwatch.StartNew();
-
-            var testContainers = await TestContainersService.InitAsync();
-
-            while (!TestContainersService.GetInstance.IsReadyForUse)
-            {
-                if (sw.Elapsed > maxWait)
-                {
-                    Assert.Fail(
-                        $"TestContainersService did not start within the allowed timeout of {maxWait.TotalSeconds} seconds."
-                    );
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
-            }
-
-            sw.Stop();
-            var dbConnection = testContainers.MongoDbContainer.GetConnectionString();
-
-            var mongoClient = new MongoClient(dbConnection);
+            var dbConnection = TestContainers.MongoDbContainer.GetConnectionString();
 
             var mongoOptions = Options.Create(new MongoDbOptions
             {
@@ -63,14 +38,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 PaymentAccounts = "payment_accounts_test"
             });
 
+            var mongoClient = new MongoClient(dbConnection);
+
             _database = mongoClient.GetDatabase(mongoOptions.Value.HandBooks);
             _client = new CategoryDocumentsClient(mongoOptions);
-        }
-
-        [OneTimeTearDown]
-        public async Task TerminateAsync()
-        {
-            await TestContainersService.GetInstance.ResetContainersAsync();
         }
 
         [SetUp]

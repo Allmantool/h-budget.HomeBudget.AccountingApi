@@ -28,6 +28,7 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
 {
     [TestFixture]
+    [Category(TestTypes.Integration)]
     [Order(IntegrationTestOrderIndex.SyncOperationsHistoryHighLoadTests)]
     public class SyncOperationsHistoryCommandHandlerTests : BaseIntegrationTests
     {
@@ -39,8 +40,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
         private SyncOperationsHistoryCommandHandler _sut;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
+            await base.SetupAsync();
+
             _ct = CancellationToken.None;
 
             _logger = new Mock<ILogger<SyncOperationsHistoryCommandHandler>>();

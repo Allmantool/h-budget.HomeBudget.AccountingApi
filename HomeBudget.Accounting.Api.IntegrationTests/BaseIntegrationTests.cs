@@ -9,6 +9,8 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Operations.Tests.Constants;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
@@ -26,6 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 return;
             }
 
+            MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 

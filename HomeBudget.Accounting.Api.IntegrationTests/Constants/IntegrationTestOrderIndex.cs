@@ -17,5 +17,11 @@
         public const int CrossAccountTransferControllerTests = 6;
 
         public const int OperationsHistoryProviderTests = 7;
+
+        public const int CategoryDocumentsClientTests = 8;
+
+        public const int PaymentOperationsEventStoreClientTests = 9;
+
+        public const int PaymentOperationsProducerTests = 10;
     }
 }

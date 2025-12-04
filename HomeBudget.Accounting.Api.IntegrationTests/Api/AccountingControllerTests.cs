@@ -22,22 +22,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category(TestTypes.Integration)]
     [NonParallelizable]
     [Order(IntegrationTestOrderIndex.AccountingControllerTests)]
-    public class AccountingControllerTests
+    public class AccountingControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentAccounts}";
 
         private readonly AccountingTestWebApp _sut = new();
+        private RestClient _restClient;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
             await _sut.InitAsync();
-        }
+            await base.SetupAsync();
 
-        [OneTimeTearDown]
-        public async Task TerminateAsync()
-        {
-            await OperationsTestWebApp.ResetAsync();
+            _restClient = _sut.RestHttpClient;
         }
 
         [Test]
@@ -47,7 +45,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountsRequest = new RestRequest(ApiHost);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentAccountResponse>>>(getPaymentAccountsRequest);
+            var response = await _restClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentAccountResponse>>>(getPaymentAccountsRequest);
 
             Assert.Multiple(() =>
             {
@@ -63,7 +61,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountIdResult.Payload}");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _restClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -78,7 +76,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _restClient.ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
 
             var result = response.Data;
 
@@ -99,7 +97,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
+            var response = await _restClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -121,11 +119,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var createResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
+            var createResponse = await _restClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{createResponse.Data.Payload}");
 
-            var getByIdResponse = await _sut.RestHttpClient.ExecuteAsync<Result<PaymentAccountResponse>>(getPaymentAccountByIdRequest);
+            var getByIdResponse = await _restClient.ExecuteAsync<Result<PaymentAccountResponse>>(getPaymentAccountByIdRequest);
 
             var getAccountById = getByIdResponse.Data.Payload;
 
@@ -159,7 +157,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Guid>>(deletePaymentAccountRequest);
+            var response = await _restClient.ExecuteAsync<Result<Guid>>(deletePaymentAccountRequest);
 
             var result = response.Data;
 
@@ -173,7 +171,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _sut.RestHttpClient.Execute<Result<Guid>>(deletePaymentAccountRequest);
+            var response = _restClient.Execute<Result<Guid>>(deletePaymentAccountRequest);
 
             var result = response.Data;
 
@@ -197,7 +195,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = _sut.RestHttpClient.Execute<Result<string>>(patchUpdatePaymentAccount);
+            var response = _restClient.Execute<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
 
@@ -221,7 +219,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
+            var response = await _restClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
 
             var result = response.Data;
 
@@ -242,7 +240,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var saveCategoryRequest = new RestRequest($"{Endpoints.PaymentAccounts}", Method.Post)
                 .AddJsonBody(requestSaveBody);
 
-            var paymentsHistoryResponse = await _sut.RestHttpClient
+            var paymentsHistoryResponse = await _restClient
                 .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
