@@ -42,10 +42,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                 .WithPortBinding(29093, 29093)
                 .WithPortBinding(9092, 9092)
                 .WithPortBinding(9093, 9093)
-                .WithExposedPort(29093)
-                .WithExposedPort(29092)
-                .WithExposedPort(9093)
-                .WithExposedPort(9092)
+
+                // .WithExposedPort(29093)
+                // .WithExposedPort(29092)
+                // .WithExposedPort(9093)
+                // .WithExposedPort(9092)
 
                 // v8+ KRAFT_MODE
                 .WithEnvironment("TC_HOST", GetLocalIPAddress())
