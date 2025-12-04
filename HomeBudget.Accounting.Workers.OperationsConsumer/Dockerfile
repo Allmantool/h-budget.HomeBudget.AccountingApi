@@ -39,7 +39,7 @@ RUN update-ca-certificates -f
 COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY *.sln ./
-COPY HomeBudget.Accounting.Workers.OperationsConsumer/*.csproj HomeBudget.Accounting.Workers.OperationsConsumer/
+COPY HomeBudget.Accounting.Workers.OperationsConsumer/ HomeBudget.Accounting.Workers.OperationsConsumer/
 COPY HomeBudget.Accounting.Domain/*.csproj HomeBudget.Accounting.Domain/
 COPY HomeBudget.Accounting.Infrastructure/*.csproj HomeBudget.Accounting.Infrastructure/
 COPY HomeBudget.Components.Contractors/*.csproj HomeBudget.Components.Contractors/
