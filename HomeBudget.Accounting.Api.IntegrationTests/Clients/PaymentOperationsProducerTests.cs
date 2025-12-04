@@ -24,11 +24,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
     public class PaymentOperationsProducerTests : BaseIntegrationTests
     {
         private PaymentOperationsProducer _sut;
+        private string _kafkaContainerConnection;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
             await base.SetupAsync();
+            _kafkaContainerConnection = TestContainers.KafkaContainer.GetBootstrapAddress();
         }
 
         [Test]
@@ -39,11 +41,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 {
                     AdminSettings = new AdminSettings
                     {
-                        BootstrapServers = TestContainers.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = _kafkaContainerConnection
                     },
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = TestContainers.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = _kafkaContainerConnection
                     }
                 });
 

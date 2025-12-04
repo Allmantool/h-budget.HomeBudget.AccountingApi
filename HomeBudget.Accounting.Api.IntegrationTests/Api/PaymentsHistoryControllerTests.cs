@@ -129,7 +129,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _restClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 1000);
+            await _restClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 2000);
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
 

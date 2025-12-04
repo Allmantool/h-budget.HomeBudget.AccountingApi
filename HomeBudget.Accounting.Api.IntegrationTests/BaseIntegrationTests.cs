@@ -23,7 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         [OneTimeSetUp]
         public virtual async Task SetupAsync()
         {
-            if (_initialized)
+            if (_initialized && TestContainers is not null && TestContainers.IsReadyForUse)
             {
                 return;
             }

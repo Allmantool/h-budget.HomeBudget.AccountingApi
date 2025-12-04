@@ -38,7 +38,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         private PaymentOperationsEventStoreClient _sut;
 
         [OneTimeSetUp]
-        public async Task SetupAsync()
+        public override async Task SetupAsync()
         {
             await base.SetupAsync();
 
