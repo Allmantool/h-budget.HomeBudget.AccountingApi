@@ -40,13 +40,6 @@ RUN update-ca-certificates -f
 RUN dotnet new tool-manifest
 RUN dotnet tool restore
 
-# -------------------------
-# Copy solution-level config
-# -------------------------
-COPY Directory.Packages.props .
-COPY Directory.Build.props .
-COPY Directory.Build.targets .
-
 COPY HomeBudget.Accounting.Workers.OperationsConsumer/*.csproj HomeBudget.Accounting.Workers.OperationsConsumer/
 
 RUN dotnet restore "HomeBudget.Accounting.Workers.OperationsConsumer/HomeBudget.Accounting.Workers.OperationsConsumer.csproj"
