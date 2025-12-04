@@ -59,6 +59,10 @@ on:
       SONAR_TOKEN:
         required: true
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
 jobs:
   sonarqube-scan:
     name: Sonar scanning
@@ -91,18 +95,19 @@ jobs:
         run: |
           chmod +x ./startsonar.sh
 
+      - name: Set GITHUB_REF_NAME
+        shell: bash
+        run: |
+          echo "GITHUB_REF_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
       - name: Start sonar scanning
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          RUN_NUMBER: ${{ github.run_number }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          pull-request-id: ${{ inputs.pull-request-id }}
+          PULL_REQUEST_ID: ${{ inputs.pull-request-id }}
           PULL_REQUEST_SOURCE_BRANCH: ${{ github.ref }}
           PULL_REQUEST_TARGET_BRANCH: refs/heads/master
-          ACTION: ${{ github.action }}
-          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: ./startsonar.sh
 

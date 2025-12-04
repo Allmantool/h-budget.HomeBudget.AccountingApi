@@ -32,10 +32,12 @@ jobs:
         service:
           - id: "api"
             name: "homebudget-accounting-api"
+            file: "dockerfile"
             context: "."
           - id: "payments-consumer-worker"
             name: "homebudget-accounting-payments-consumer-worker"
-            context: "./HomeBudget.Accounting.Workers.OperationsConsumer"
+            file: "HomeBudget.Accounting.Workers.OperationsConsumer/dockerfile"
+            context: "."
 
     steps:
       - name: Check out code
@@ -53,6 +55,7 @@ jobs:
         run: |
           docker build \
             --target final \
+            -f "${{ matrix.service.file }}" \
             -t "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}:${{ inputs.last_tag }}" \
             "${{ matrix.service.context }}"
 
