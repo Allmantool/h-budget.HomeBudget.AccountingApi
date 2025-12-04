@@ -129,7 +129,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 // TODO: Use Zookeeper instead of KRaft (More Stable for CI)
                 KafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
                 KafkaContainer = KafkaContainerFactory.BuildWithZkMode(KafkaNetwork);
-                ZkContainer = await ZookeperKafkaContainerFactory.BuildWithKraftModeAsync(KafkaNetwork);
+                ZkContainer = await ZookeperKafkaContainerFactory.BuildAsync(KafkaNetwork);
                 KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(KafkaNetwork);
 
                 MongoDbContainer = MongoDbContainerFactory.Build();
@@ -163,9 +163,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await MongoDbContainer.SafeStartWithRetryAsync();
                 }
 
-                if (KafkaUIContainer is not null)
+                if (ZkContainer is not null)
                 {
-                    await KafkaUIContainer.SafeStartWithRetryAsync();
+                    await ZkContainer.SafeStartWithRetryAsync();
                 }
 
                 if (KafkaContainer is not null)
@@ -174,9 +174,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
                 }
 
-                if (ZkContainer is not null)
+                if (KafkaUIContainer is not null)
                 {
-                    await ZkContainer.SafeStartWithRetryAsync();
+                    await KafkaUIContainer.SafeStartWithRetryAsync();
                 }
 
                 Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");

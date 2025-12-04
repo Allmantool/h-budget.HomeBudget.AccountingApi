@@ -32,14 +32,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                         .WithHostname($"test-kafka-ui")
                         .WithPortBinding(8080, true)
                         .WithEnvironment("DYNAMIC_CONFIG_ENABLED", "true")
+                        .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
 
-                        // .WithEnvironment("KAFKA_CLUSTERS_0_NAME", $"test-kafka-cluster")
-                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_BOOTSTRAP_SERVERS", "PLAINTEXT://test-kafka:9092")
-                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP", "use_all_dns_ips")
-                        // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", "test-kafka:9092")
-                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_BOOTSTRAP_SERVERS", $"PLAINTEXT://{TestContainerHostNames.Kafka}:29092")
+                        .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP", "use_all_dns_ips")
+
+                        // .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", $"{TestContainerHostNames.Kafka}:29092")
+                        .WithEnvironment("KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS", $"{TestContainerHostNames.Kafka}:9093")
+                        .WithEnvironment("KAFKA_CLUSTERS_0_PROPERTIES_METADATA_MAX_AGE_MS", "30000")
                         .WithEnvironment("SERVER_SERVLET_CONTEXT_PATH", "/")
-                        .WithBindMount(testContainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
+
+                        // .WithBindMount(testContainersConfigPath, "/etc/kafkaui/dynamic_config.yaml", AccessMode.ReadOnly)
                         .WithWaitStrategy(
                             Wait.ForUnixContainer()
                                 .AddCustomWaitStrategy(

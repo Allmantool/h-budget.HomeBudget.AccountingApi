@@ -12,6 +12,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
         private static readonly string[] StaticCandidates =
         {
+            "test-kafka:9092", "kafka:9092",
             "localhost:39092", "127.0.0.1:39092",
             "localhost:9092",  "127.0.0.1:9092",
             "localhost:9093",  "127.0.0.1:9093",
@@ -39,6 +40,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         {
             var list = new List<string>();
 
+            // Add testcontainers' own bootstrap address if present
             var bootstrap = _container.GetBootstrapAddress();
             if (!string.IsNullOrWhiteSpace(bootstrap))
             {
@@ -46,11 +48,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 list.Add(bootstrap.Replace("plaintext://", "", StringComparison.OrdinalIgnoreCase));
             }
 
-            foreach (var port in PortsToMap)
+            var mappedPorts = ResolveMappedPorts(PortsToMap);
+
+            foreach (var kv in mappedPorts)
             {
-                var mapped = _container.GetMappedPublicPort(port);
-                list.Add($"{_container.IpAddress}:{mapped}");
-                list.Add($"{_container.Hostname}:{mapped}");
+                var mappedPort = kv.Value;
+                list.Add($"{_container.IpAddress}:{mappedPort}");
+                list.Add($"{_container.Hostname}:{mappedPort}");
             }
 
             return list;
@@ -58,26 +62,52 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
         private IEnumerable<string> BuildMappedStaticCandidates()
         {
-            var map = PortsToMap.ToDictionary(
-                port => port,
-                _container.GetMappedPublicPort
-            );
+            var mappedPorts = ResolveMappedPorts(PortsToMap);
 
-            return StaticCandidates.Select(c =>
+            foreach (var candidate in StaticCandidates)
             {
-                var (host, port) = SplitHostPort(c);
-                return map.TryGetValue(port, out var mappedPort)
-                    ? $"{host}:{mappedPort}"
-                    : c;
-            });
+                var (host, port) = SplitHostPort(candidate);
+
+                if (port != -1 && mappedPorts.TryGetValue(port, out var mapped))
+                {
+                    yield return $"{host}:{mapped}";
+                }
+                else
+                {
+                    yield return candidate;
+                }
+            }
+        }
+
+        private IReadOnlyDictionary<int, int> ResolveMappedPorts(IEnumerable<int> ports)
+        {
+            var result = new Dictionary<int, int>();
+
+            foreach (var port in ports)
+            {
+                try
+                {
+                    var mapped = _container.GetMappedPublicPort(port);
+                    result[port] = mapped;
+                }
+                catch
+                {
+                }
+            }
+
+            return result;
         }
 
         private static (string host, int port) SplitHostPort(string candidate)
         {
             var parts = candidate.Split(':');
-            return parts.Length == 2 && int.TryParse(parts[1], out var port)
-                ? (parts[0], port)
-                : (candidate, -1);
+
+            if (parts.Length == 2 && int.TryParse(parts[1], out var port))
+            {
+                return (parts[0], port);
+            }
+
+            return (candidate, -1);
         }
     }
 }
