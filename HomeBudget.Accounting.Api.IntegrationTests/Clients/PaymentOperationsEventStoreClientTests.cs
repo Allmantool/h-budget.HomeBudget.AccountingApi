@@ -37,8 +37,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
         private PaymentOperationsEventStoreClient _sut;
 
-        private TestContainersService _testContainers;
-
         [OneTimeSetUp]
         public async Task SetupAsync()
         {
@@ -71,7 +69,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var paymentAccountIdA = Guid.Parse("3605a215-8100-4bb3-804a-6ae2b39b2e43");
             var paymentAccountIdB = Guid.Parse("91c3d1bc-ce45-415a-a97d-2a9d834c7e02");
 
-            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = TestContainers.EventSourceDbContainer.GetConnectionString();
 
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
@@ -166,7 +164,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var paymentAccountId = Guid.NewGuid();
             var totalEvents = 2_000;
 
-            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = TestContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(
@@ -226,7 +224,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var accountB = Guid.NewGuid();
             var totalEvents = 1_000;
 
-            var dbConnectionString = _testContainers.EventSourceDbContainer.GetConnectionString();
+            var dbConnectionString = TestContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
             _sut = new PaymentOperationsEventStoreClient(

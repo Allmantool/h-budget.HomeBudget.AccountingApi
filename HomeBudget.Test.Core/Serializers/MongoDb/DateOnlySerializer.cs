@@ -1,21 +1,30 @@
 ﻿using System;
 
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 
 namespace HomeBudget.Test.Core.Serializers.MongoDb
 {
-    public class DateOnlySerializer : StructSerializerBase<DateOnly>
+    public sealed class DateOnlySerializer : StructSerializerBase<DateOnly>
     {
-        public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, DateOnly value)
+        public override void Serialize(
+            BsonSerializationContext context,
+            BsonSerializationArgs args,
+            DateOnly value)
         {
-            context.Writer.WriteDateTime(value.ToDateTime(TimeOnly.MinValue).ToUniversalTime().Ticks);
+            // Mongo expects only the VALUE to be written here, NOT the name.
+            var date = value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            context.Writer.WriteDateTime(BsonUtils.ToMillisecondsSinceEpoch(date));
         }
 
-        public override DateOnly Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
+        public override DateOnly Deserialize(
+            BsonDeserializationContext context,
+            BsonDeserializationArgs args)
         {
-            var ticks = context.Reader.ReadDateTime();
-            return DateOnly.FromDateTime(new DateTime(ticks, DateTimeKind.Utc));
+            var milliseconds = context.Reader.ReadDateTime();
+            var date = BsonUtils.ToDateTimeFromMillisecondsSinceEpoch(milliseconds);
+            return DateOnly.FromDateTime(date);
         }
     }
 }

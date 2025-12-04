@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,7 +12,6 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Components.Operations.Tests.Constants;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
@@ -26,8 +24,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
     public class PaymentOperationsProducerTests : BaseIntegrationTests
     {
         private PaymentOperationsProducer _sut;
-
-        private TestContainersService _testContainers;
 
         [OneTimeSetUp]
         public async Task SetupAsync()
@@ -43,11 +39,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 {
                     AdminSettings = new AdminSettings
                     {
-                        BootstrapServers = _testContainers.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = TestContainers.KafkaContainer.GetBootstrapAddress()
                     },
                     ProducerSettings = new ProducerSettings
                     {
-                        BootstrapServers = _testContainers.KafkaContainer.GetBootstrapAddress()
+                        BootstrapServers = TestContainers.KafkaContainer.GetBootstrapAddress()
                     }
                 });
 
