@@ -36,7 +36,7 @@ jobs:
             context: "."
           - id: "payments-consumer-worker"
             name: "homebudget-accounting-payments-consumer-worker"
-            file: "HomeBudget.Accounting.Workers.OperationsConsumer/dockerfile"
+            file: "HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile"
             context: "."
 
     steps:
