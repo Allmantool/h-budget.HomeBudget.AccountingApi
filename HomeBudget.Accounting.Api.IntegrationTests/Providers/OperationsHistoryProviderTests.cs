@@ -6,6 +6,7 @@ using FluentAssertions;
 using MongoDB.Driver;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Operations.Models;
 
@@ -15,6 +16,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Providers
     public class OperationsHistoryProviderTests : BaseIntegrationTests
     {
         [Test]
+        [Order(IntegrationTestOrderIndex.OperationsHistoryProviderTests)]
         public async Task Should_InsertOneAsync_PaymentRecordsSuccessfully()
         {
             var dbConnection = TestContainers.MongoDbContainer.GetConnectionString();

@@ -15,5 +15,7 @@
         public const int PaymentsHistoryControllerTests = 5;
 
         public const int CrossAccountTransferControllerTests = 6;
+
+        public const int OperationsHistoryProviderTests = 7;
     }
 }

@@ -27,23 +27,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     [Category(TestTypes.Integration)]
     [NonParallelizable]
     [Order(IntegrationTestOrderIndex.PaymentsHistoryControllerTests)]
-    public class PaymentsHistoryControllerTests
+    public class PaymentsHistoryControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
 
         private readonly OperationsTestWebApp _sut = new();
-
-        [OneTimeSetUp]
-        public async Task SetupAsync()
-        {
-            await _sut.InitAsync();
-        }
-
-        [OneTimeTearDown]
-        public async Task TerminateAsync()
-        {
-            await OperationsTestWebApp.ResetAsync();
-        }
 
         [Test]
         public async Task GetPaymentOperations_WhenTryToGetAllOperations_ThenIsSuccessStatusCode()

@@ -8,6 +8,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Components.Operations.Tests.Constants;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
@@ -50,6 +51,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
 
             _initialized = true;
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
         }
     }
 }
