@@ -29,6 +29,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         public EventStoreDbContainer EventSourceDbContainer { get; private set; }
         public IContainer KafkaUIContainer { get; private set; }
         public KafkaContainer KafkaContainer { get; private set; }
+        public IContainer ZkContainer { get; private set; }
         public INetwork KafkaNetwork { get; private set; }
         public MongoDbContainer MongoDbContainer { get; private set; }
 
@@ -125,10 +126,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                 var networkName = $"test-kafka-net-{Guid.NewGuid().ToString("N").Substring(0, 6)}";
 
+                // TODO: Use Zookeeper instead of KRaft (More Stable for CI)
                 KafkaNetwork = await DockerNetworkFactory.GetOrCreateDockerNetworkAsync(networkName);
-
-                KafkaContainer = KafkaContainerFactory.Build(KafkaNetwork);
-
+                KafkaContainer = KafkaContainerFactory.BuildWithZkMode(KafkaNetwork);
+                ZkContainer = await ZookeperKafkaContainerFactory.BuildWithKraftModeAsync(KafkaNetwork);
                 KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(KafkaNetwork);
 
                 MongoDbContainer = MongoDbContainerFactory.Build();
@@ -171,6 +172,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     await KafkaContainer.SafeStartWithRetryAsync(swallowBusyError: true);
                     await KafkaContainer.WaitForKafkaReadyAsync(TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes));
+                }
+
+                if (ZkContainer is not null)
+                {
+                    await ZkContainer.SafeStartWithRetryAsync();
                 }
 
                 Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");

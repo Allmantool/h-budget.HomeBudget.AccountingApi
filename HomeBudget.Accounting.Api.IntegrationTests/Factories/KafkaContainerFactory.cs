@@ -14,7 +14,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class KafkaContainerFactory
     {
-        public static KafkaContainer Build(INetwork network)
+        public static KafkaContainer BuildWithKraftMode(INetwork network)
         {
             var testcontainersScriptPath = Path
                 .GetFullPath(Path.Combine(AppContext.BaseDirectory, "Scripts/testcontainers.sh"))
@@ -123,6 +123,56 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 
                 // .WithReuse(true)
                 .Build();
+        }
+
+        public static KafkaContainer BuildWithZkMode(INetwork network)
+        {
+            return new KafkaBuilder()
+                        .WithImage("confluentinc/cp-kafka:7.9.0")
+                        .WithName($"{nameof(TestContainersService)}-kafka-container")
+                        .WithHostname("test-kafka")
+                        .WithPortBinding(9092, 9092)
+                        .WithPortBinding(29092, 29092)
+                        .WithEnvironment("KAFKA_BROKER_ID", "1")
+                        .WithEnvironment(
+                            "KAFKA_ZOOKEEPER_CONNECT",
+                            $"test-zookeper:2181")
+                        .WithEnvironment(
+                            "KAFKA_LISTENERS",
+                            "PLAINTEXT://0.0.0.0:9092," +
+                            "BROKER://0.0.0.0:9093")
+                        .WithEnvironment(
+                            "KAFKA_ADVERTISED_LISTENERS",
+                            "PLAINTEXT://localhost:9092," +
+                            "BROKER://test-kafka:9093")
+                        .WithEnvironment(
+                            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
+                            "PLAINTEXT:PLAINTEXT," +
+                            "BROKER:PLAINTEXT")
+                        .WithEnvironment(
+                            "KAFKA_INTER_BROKER_LISTENER_NAME",
+                            "BROKER")
+                        .WithEnvironment("KAFKA_LOG_RETENTION_BYTES", "1073741824")
+                        .WithEnvironment("KAFKA_LOG_CLEANUP_POLICY", "delete")
+                        .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
+                        .WithEnvironment("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
+                        .WithEnvironment("KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS", "30")
+                        .WithEnvironment("KAFKA_LOG_RETENTION_HOURS", "168")
+                        .WithEnvironment("KAFKA_LOG_SEGMENT_BYTES", "1073741824")
+                        .WithEnvironment("KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS", "300000")
+                        .WithEnvironment("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
+                        .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+                        .WithNetwork(network)
+                        .WithWaitStrategy(Wait.ForUnixContainer())
+                        .WithCreateParameterModifier(config =>
+                        {
+                            config.HostConfig.Memory = BaseTestContainerOptions.Memory1Gb;
+                            config.HostConfig.NanoCPUs = BaseTestContainerOptions.NanoCPUs;
+                        })
+
+                        .WithAutoRemove(false)
+                        .WithCleanUp(true)
+                        .Build();
         }
 
         private static string GetLocalIPAddress()
