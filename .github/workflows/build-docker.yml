@@ -1,4 +1,5 @@
 name: Push to docker hub
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,7 +8,6 @@ on:
         required: false
         type: string
         default: ""
-
   workflow_call:
     inputs:
       last_tag:
@@ -24,27 +24,22 @@ on:
         required: true
 
 jobs:
-  build-web-app-docker:
+  build-and-push:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
+
+    strategy:
+      matrix:
+        service:
+          - id: "api"
+            name: "homebudget-accounting-api"
+            context: "."
+          - id: "payments-consumer-worker"
+            name: "homebudget-accounting-payments-consumer-worker"
+            context: "./HomeBudget.Accounting.Workers.OperationsConsumers"
 
     steps:
       - name: Check out code
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Build Docker Image
-        env:
-          BUILD_VERSION: ${{ inputs.last_tag }}
-        shell: bash
-        run: |
-          docker build \
-            --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ inputs.last_tag }}" \
-            .
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -52,40 +47,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker Image
-        shell: bash
-        run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-api:${{ inputs.last_tag }}"
-
-  build-payments-consumer-docker:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .\HomeBudget.Accounting.Workers.OperationsConsumers
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Build Docker Image
+      - name: Build Docker Image - ${{ matrix.service.id }}
         env:
           BUILD_VERSION: ${{ inputs.last_tag }}
-        shell: bash
         run: |
           docker build \
-            --target 'final' \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-payments-consumer-worker:${{ inputs.last_tag }}" \
-            .
+            --target final \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}:${{ inputs.last_tag }}" \
+            "${{ matrix.service.context }}"
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Docker Image
-        shell: bash
+      - name: Push Docker Image - ${{ matrix.service.id }}
         run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/homebudget-accounting-payments-consumer-worker:${{ inputs.last_tag }}"
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}:${{ inputs.last_tag }}"

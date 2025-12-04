@@ -67,7 +67,7 @@ jobs:
     name: Run sonar scanning
     uses: ./.github/workflows/sonar-analysis.yml
     with:
-      pull_request_id: ${{ github.event.pull_request.number }}
+      pull-request-id: ${{ github.event.pull_request.number }}
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 

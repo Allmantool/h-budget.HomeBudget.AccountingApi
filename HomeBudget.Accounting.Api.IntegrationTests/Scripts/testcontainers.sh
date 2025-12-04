@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# -------------------------------------------------------------------------
+# To work correctly with bash, should be stored like UTF-8 without BOM  (Encoding) + LF (End of line sequence)
+# -------------------------------------------------------------------------
+
 CONFIG="/etc/kafka/server.properties"
 LOG_DIRS="/tmp/kraft-combined-logs"
 

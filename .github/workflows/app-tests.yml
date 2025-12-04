@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Clean Docker space
         if: matrix.project == 'HomeBudget.Accounting.Api.IntegrationTests'
@@ -109,7 +109,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version ${{ inputs.report-generator_version }}
       - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
