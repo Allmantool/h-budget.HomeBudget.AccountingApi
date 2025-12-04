@@ -2,16 +2,21 @@ name: Quality gate - Sonarqube
 on:
   workflow_dispatch:
     inputs:
-      tests-artifact-name:
-        description: "Tests artifact name"
-        required: false
-        type: string
-        default: "merged-coverage"
       pull-request-id:
         description: "Pull request id"
         required: false
         type: number
         default: 0
+      tests-artifact-path:
+        description: "Tests artifact path"
+        required: false
+        type: string
+        default: "merged-coverage"
+      tests-artifact-name:
+        description: "Tests artifact name"
+        required: false
+        type: string
+        default: "merged-test-coverage-html"
       sonar-scanner-version:
         description: "Sonar scanner version"
         required: false
@@ -25,19 +30,28 @@ on:
 
   workflow_call:
     inputs:
+      pull-request-id:
+        description: "Pull request id"
+        required: false
+        type: number
+        default: 0
+      tests-artifact-path:
+        description: "Tests artifact path"
+        required: false
+        type: string
+        default: "merged-coverage"
       tests-artifact-name:
         description: "Tests artifact name"
         required: false
         type: string
-        default: "merged-coverage"
-      pull-request-id:
-        required: false
-        type: number
+        default: "merged-test-coverage-html"
       sonar-scanner-version:
+        description: "Sonar scanner version"
         required: false
         type: string
         default: "5.14.0"
       java-version:
+        description: "Sonar scanner version"
         required: false
         type: string
         default: "21"
@@ -50,7 +64,7 @@ jobs:
     name: Sonar scanning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Java for SonarQube
         uses: actions/setup-java@v5
@@ -66,8 +80,8 @@ jobs:
       - name: Download coverage artifact
         uses: actions/download-artifact@v5
         with:
-          name: coverage-report
-          path: ${{ inputs.tests-artifact-name }}
+          name: ${{ inputs.tests-artifact-name }}
+          path: ${{ inputs.tests-artifact-path }}
 
       - name: Install dotnet tools
         run: |

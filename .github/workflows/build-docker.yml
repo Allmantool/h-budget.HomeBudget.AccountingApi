@@ -35,7 +35,7 @@ jobs:
             context: "."
           - id: "payments-consumer-worker"
             name: "homebudget-accounting-payments-consumer-worker"
-            context: "./HomeBudget.Accounting.Workers.OperationsConsumers"
+            context: "./HomeBudget.Accounting.Workers.OperationsConsumer"
 
     steps:
       - name: Check out code
