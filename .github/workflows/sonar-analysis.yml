@@ -93,8 +93,8 @@ jobs:
 
       - name: Start sonar scanning
         env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -104,7 +104,7 @@ jobs:
           ACTION: ${{ github.action }}
           EVENT_NAME: ${{ github.event_name }}
         shell: bash
-        run: sh ./startsonar.sh
+        run: ./startsonar.sh
 
       - name: Build Solution for Metrics
         shell: bash
