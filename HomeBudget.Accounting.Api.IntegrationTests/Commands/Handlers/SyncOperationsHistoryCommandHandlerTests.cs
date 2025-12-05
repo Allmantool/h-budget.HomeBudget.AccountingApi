@@ -30,7 +30,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
     [TestFixture]
     [Category(TestTypes.Integration)]
     [Order(IntegrationTestOrderIndex.SyncOperationsHistoryHighLoadTests)]
-    [Ignore("Date only serialization for mongo db")]
     public class SyncOperationsHistoryCommandHandlerTests : BaseIntegrationTests
     {
         private Mock<ISender> _sender;

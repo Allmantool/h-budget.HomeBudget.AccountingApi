@@ -61,7 +61,6 @@ services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment,
 webHost.AddAndConfigureSentry();
 
 MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(AccountTypes).Assembly);
-
 var webApp = webAppBuilder.Build();
 
 webApp.SetupHttpLogging();
