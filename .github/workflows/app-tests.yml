@@ -12,7 +12,7 @@ on:
         description: "Report generator version"
         required: false
         type: string
-        default: "5.4.16"
+        default: "5.5.1"
 
   workflow_call:
     inputs:
@@ -25,7 +25,7 @@ on:
         description: "Report generator version"
         required: false
         type: string
-        default: "5.4.16"
+        default: "5.5.1"
 
 jobs:
   run-tests:
@@ -121,14 +121,9 @@ jobs:
           reportgenerator \
             -reports:"artifacts/**/coverage.cobertura.xml" \
             -targetdir:"merged-coverage" \
-            -reporttypes:"Html;Xml"
+            -reporttypes:"Html;Cobertura"
 
       - uses: actions/upload-artifact@v5
         with:
           name: merged-test-coverage-html
           path: merged-coverage/
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: merged-test-coverage-xml
-          path: merged-coverage/Cobertura.xml

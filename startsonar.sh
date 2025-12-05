@@ -3,7 +3,7 @@ set -e
 
 echo ">> Starting Sonar Scanner"
 
-COVERAGE_REPORT_PATH="merged-coverage/coverage.xml"
+COVERAGE_REPORT_PATH="merged-coverage/cobertura.xml"
 
 #
 # Pull Request Mode
@@ -22,7 +22,7 @@ if [ -n "${PULL_REQUEST_ID}" ] && [ "${PULL_REQUEST_ID}" != "0" ]; then
         /d:sonar.pullrequest.branch="${PULL_REQUEST_SOURCE_BRANCH}" \
         /d:sonar.pullrequest.base="${PULL_REQUEST_TARGET_BRANCH}" \
         /d:sonar.coverage.exclusions="**/Test[s]/**/*" \
-        /d:sonar.cs.opencover.reportsPaths="${COVERAGE_REPORT_PATH}" \
+        /d:sonar.cs.cobertura.reportsPaths="${COVERAGE_REPORT_PATH}" \
         /d:sonar.pullrequest.provider="github" \
         /d:sonar.pullrequest.github.repository="Allmantool/h-budget.HomeBudget.AccountingApi" \
         /d:sonar.pullrequest.github.endpoint="https://api.github.com/"
@@ -41,6 +41,6 @@ else
         /d:sonar.branch.name="${GITHUB_REF_NAME}" \
         /d:sonar.login="${SONAR_TOKEN}" \
         /d:sonar.host.url="https://sonarcloud.io" \
-        /d:sonar.cs.opencover.reportsPaths="${COVERAGE_REPORT_PATH}" \
+        /d:sonar.cs.cobertura.reportsPaths="${COVERAGE_REPORT_PATH}" \
         /d:sonar.coverage.exclusions="**/Test[s]/**/*"
 fi
