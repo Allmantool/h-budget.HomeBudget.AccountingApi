@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Components.Categories.Configuration;
@@ -48,10 +49,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
 
             var services = builder.Services;
-            var configuration = builder.Configuration;
             var environment = builder.Environment;
+            var configuration = builder.Configuration
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
+                .Build();
 
             services
+                .SetUpConfigurationOptions(configuration)
                 .RegisterWorkerDependencies(configuration)
                 .RegisterInfrastructureDependencies(configuration)
                 .RegisterContractorsDependencies()
