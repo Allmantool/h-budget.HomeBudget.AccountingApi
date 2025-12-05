@@ -64,7 +64,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                         diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
                     };
                 })
-                .SetUpHealthCheckEndpoints()
+                .SetUpHealthCheckEndpoints(env)
                 .UseEndpoints(endpoints => { endpoints.MapControllers(); });
         }
     }

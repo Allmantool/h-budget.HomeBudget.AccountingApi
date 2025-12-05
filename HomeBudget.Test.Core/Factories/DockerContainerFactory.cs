@@ -9,7 +9,7 @@ using DotNet.Testcontainers.Containers;
 
 using HomeBudget.Test.Core.Models;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
+namespace HomeBudget.Test.Core.Factories
 {
     public static class DockerContainerFactory
     {

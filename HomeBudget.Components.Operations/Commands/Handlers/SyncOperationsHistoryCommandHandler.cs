@@ -40,7 +40,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events),
-                $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events",
+                $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events in scope of account '{accountId}'",
                 logger,
                 new { monthPeriodIdentifier });
 
@@ -59,11 +59,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var syncedStateRecords = monthBalanceHistoryRecords
                 .GroupBy(i => i.Record.Key)
-                .Select(gr => gr
-                    .OrderBy(i => i.Record.OperationDay)
-                    .ThenBy(i => i.Record.OperationUnixTime)
-                    .Last())
-                .ToList();
+                .Select(gr => gr.MaxBy(ev => (ev.Record.OperationDay, ev.Record.OperationUnixTime)));
 
             var totalBalanceForAccount = syncedStateRecords.Sum(r => r.Balance);
 

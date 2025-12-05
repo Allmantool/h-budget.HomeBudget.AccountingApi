@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="MongoDB.Bson" />
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.Kafka" />
     <PackageReference Include="Testcontainers.MongoDb" />

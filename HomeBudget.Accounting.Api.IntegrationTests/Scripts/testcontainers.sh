@@ -1,46 +1,74 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -e
 
-echo ">> [Test] Testcontainers.sh executed successfully."
+# -------------------------------------------------------------------------
+# To work correctly with bash, should be stored like UTF-8 without BOM  (Encoding) + LF (End of line sequence)
+# -------------------------------------------------------------------------
 
-CONFIG=/etc/kafka/server.properties
-LOG_DIRS=/tmp/kraft-combined-logs
+CONFIG="/etc/kafka/server.properties"
+LOG_DIRS="/tmp/kraft-combined-logs"
 
-# Cluster ID: use env if present, otherwise generate a new one
-if [ -n "$KAFKA_CLUSTER_ID" ]; then
-  CLUSTER_ID="$KAFKA_CLUSTER_ID"
-  echo "Using provided KAFKA_CLUSTER_ID: $CLUSTER_ID"
-else
-  CLUSTER_ID=$(kafka-storage random-uuid)
-  echo "Generated random CLUSTER_ID: $CLUSTER_ID"
-fi
+echo "------------------------------------------------------------"
+echo ">> Kafka startup initiated at $(date)"
+echo "------------------------------------------------------------"
 
-# Derive the first controller (fallback to localhost:9092 if unset)
-if [ -n "$KAFKA_CONTROLLER_QUORUM_VOTERS" ]; then
-  IFS=',' read -r FIRST_CONTROLLER _ <<< "$KAFKA_CONTROLLER_QUORUM_VOTERS"
-  INITIAL_CONTROLLERS="$FIRST_CONTROLLER"
-else
-  INITIAL_CONTROLLERS="1@localhost:9092"
-fi
+# -------------------------------------------------------------------------
+# Environment variables from .NET
+# -------------------------------------------------------------------------
+# TC_HOST       -> external host IP (for clients outside Docker network)
+# C_HOST_NAME   -> internal container hostname (for inter-container communication)
+# KAFKA_INTERNAL_PORT / KAFKA_EXTERNAL_PORT -> mapped ports
 
-echo "=== Using Kafka config file at: $CONFIG ==="
-cat "$CONFIG"
+HOST_IP="${TC_HOST:-$(hostname -I | awk '{print $1}')}"
+INTERNAL_HOST="${C_HOST_NAME:-test-kafka}"
+INTERNAL_PORT="${KAFKA_INTERNAL_PORT:-29092}"
+EXTERNAL_PORT="${KAFKA_EXTERNAL_PORT:-9092}"
+CONTROLLER_PORT=9093
 
-echo "=== Checking if storage is formatted ==="
+echo "HOST_IP=$HOST_IP (external)"
+echo "INTERNAL_HOST=$INTERNAL_HOST (internal)"
+echo "Internal port (mapped) : $INTERNAL_PORT"
+echo "External port (mapped) : $EXTERNAL_PORT"
+
+# -------------------------------------------------------------------------
+# Clean existing related config keys
+# -------------------------------------------------------------------------
+sed -i '/^listeners=/d' "$CONFIG"
+sed -i '/^advertised.listeners=/d' "$CONFIG"
+sed -i '/^listener.security.protocol.map=/d' "$CONFIG"
+sed -i '/^controller.quorum.voters=/d' "$CONFIG"
+sed -i '/^inter.broker.listener.name=/d' "$CONFIG"
+
+# -------------------------------------------------------------------------
+# Write dynamic listener configuration
+# -------------------------------------------------------------------------
+cat <<EOF >> "$CONFIG"
+# Listeners binding to all interfaces
+listeners=PLAINTEXT_INTERNAL://0.0.0.0:${INTERNAL_PORT},PLAINTEXT_EXTERNAL://0.0.0.0:${EXTERNAL_PORT},CONTROLLER://0.0.0.0:${CONTROLLER_PORT}
+
+# Advertised listeners
+# INTERNAL -> use container hostname for other containers
+# EXTERNAL -> use host IP for external clients
+advertised.listeners=PLAINTEXT_INTERNAL://${INTERNAL_HOST}:${INTERNAL_PORT},PLAINTEXT_EXTERNAL://${HOST_IP}:${EXTERNAL_PORT}
+
+listener.security.protocol.map=PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+# KRaft requirements
+controller.quorum.voters=1@${INTERNAL_HOST}:${CONTROLLER_PORT}
+inter.broker.listener.name=PLAINTEXT_INTERNAL
+EOF
+
+echo "=== Final Kafka config ==="
+grep -E "^(listeners|advertised.listeners|controller.quorum.voters)" "$CONFIG"
+
+# -------------------------------------------------------------------------
+# Format storage (only once)
+# -------------------------------------------------------------------------
 if [ ! -f "$LOG_DIRS/meta.properties" ]; then
-  echo "=== Formatting storage for controllers: $INITIAL_CONTROLLERS, cluster.id=$CLUSTER_ID ==="
-  kafka-storage format \
-    --ignore-formatted \
-    --cluster-id "$CLUSTER_ID" \
-    --config "$CONFIG" \
-    --initial-controllers "$INITIAL_CONTROLLERS:$CLUSTER_ID" \
-    || echo "⚠️  Storage format failed (maybe already formatted)"
-else
-  echo "=== Storage already formatted (cluster.id=$(grep ^cluster.id "$LOG_DIRS/meta.properties" | cut -d'=' -f2)) ==="
+  CLUSTER_ID="${KAFKA_CLUSTER_ID:-$(kafka-storage random-uuid)}"
+  echo "Formatting storage with cluster ID: $CLUSTER_ID"
+  kafka-storage format --cluster-id "$CLUSTER_ID" --config "$CONFIG" --ignore-formatted
 fi
 
 echo "=== Starting Kafka ==="
-kafka-server-start "$CONFIG" || echo "⚠️  Kafka exited with error, container remains running"
-
-# keep container alive for debugging
-tail -f /dev/null
+exec kafka-server-start "$CONFIG"

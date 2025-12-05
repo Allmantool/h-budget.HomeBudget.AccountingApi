@@ -16,7 +16,7 @@ using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 
-namespace HomeBudget.Accounting.Infrastructure.Services
+namespace HomeBudget.Components.Accounts.Services
 {
     internal class PaymentAccountProducerService(
         ILogger<PaymentAccountProducerService> logger,

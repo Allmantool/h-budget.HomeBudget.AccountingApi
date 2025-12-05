@@ -18,6 +18,13 @@ namespace HomeBudget.Accounting.Domain.Extensions
             };
         }
 
+        public static FinancialPeriod ToFinancialPeriod(this DateTime operationDateTime)
+        {
+            var date = DateOnly.FromDateTime(operationDateTime);
+
+            return date.ToFinancialPeriod();
+        }
+
         public static string ToFinancialMonthIdentifier(this FinancialPeriod period, Guid id)
         {
             return $"{id}" +

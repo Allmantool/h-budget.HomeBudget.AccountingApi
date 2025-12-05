@@ -1,0 +1,40 @@
+{
+  "branches": [
+    "master",
+    {
+      "name": "tech/*",
+      "prerelease": true
+    },
+    {
+      "name": "fix/*",
+      "prerelease": true
+    },
+    {
+      "name": "feature/*",
+      "prerelease": true
+    }
+  ],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits",
+        "releaseRules": [
+          {
+            "type": "fix",
+            "release": "patch"
+          },
+          {
+            "type": "feat",
+            "release": "minor"
+          },
+          {
+            "breaking": true,
+            "release": "major"
+          }
+        ]
+      }
+    ],
+    "@semantic-release/release-notes-generator"
+  ]
+}

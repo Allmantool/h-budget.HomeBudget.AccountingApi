@@ -17,19 +17,36 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     [TestFixture]
     [Category(TestTypes.Integration)]
+    [NonParallelizable]
     [Order(IntegrationTestOrderIndex.ContractorsControllerTests)]
-    public class ContractorsControllerTests
+    public class ContractorsControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.Contractors}";
 
         private readonly ContractorsTestWebApp _sut = new();
+        private RestClient _restClient;
+
+        [OneTimeSetUp]
+        public override async Task SetupAsync()
+        {
+            await _sut.InitAsync();
+            await base.SetupAsync();
+
+            _restClient = _sut.RestHttpClient;
+        }
+
+        [OneTimeTearDown]
+        public async Task TerminateAsync()
+        {
+            await OperationsTestWebApp.ResetAsync();
+        }
 
         [Test]
         public async Task GetContractors_WhenTryToGetAllContractors_ThenIsSuccessStatusCode()
         {
             var getContractorsRequest = new RestRequest(ApiHost);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<IReadOnlyCollection<Contractor>>>(getContractorsRequest);
+            var response = await _restClient.ExecuteAsync<Result<IReadOnlyCollection<Contractor>>>(getContractorsRequest);
 
             response.IsSuccessful.Should().BeTrue();
         }
@@ -45,11 +62,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
                 .AddJsonBody(saveRequestBody);
 
-            var saveResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            var saveResponse = await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
 
             var getContractorsRequest = new RestRequest($"{ApiHost}/byId/{saveResponse.Data.Payload}");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
+            var response = await _restClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
 
             var payload = response.Data;
 
@@ -61,7 +78,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getContractorsRequest = new RestRequest($"{ApiHost}/byId/b4a1bc33-a50f-4c9d-aac4-761dfec063dc");
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
+            var response = await _restClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
 
             var payload = response.Data;
 
@@ -78,7 +95,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            var response = await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
 
             var result = response.Data;
             var payload = result.Payload;
@@ -97,8 +114,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
-            var secondResponse = await _sut.RestHttpClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            var secondResponse = await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
 
             secondResponse.Data.IsSucceeded.Should().BeFalse();
         }

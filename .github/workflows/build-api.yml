@@ -1,0 +1,56 @@
+name: Build API
+on: workflow_call
+
+jobs:
+  build-api:
+    name: Build Web app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Reviewdog
+        uses: reviewdog/action-setup@v1
+        with:
+          reviewdog_version: "v0.20.3"
+
+      - name: Setup Java for SonarQube
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install ReviewDog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b ./bin
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Build
+        run: dotnet build --no-incremental
+
+      - name: StyleCop with ReviewDog
+        run: |
+          dotnet format --severity info | reviewdog -efm="%f(%l,%c): %m" -name="StyleCop" -reporter=github-pr-review || true
+          echo "Format result (dummy): done" # Adjust this for real linting feedback
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache SonarCloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: ./.sonar/scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner

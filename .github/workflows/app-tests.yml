@@ -1,0 +1,129 @@
+name: Tests Coverage
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_timeout_minutes:
+        description: "Timeout test step"
+        required: false
+        type: number
+        default: 10
+      report-generator_version:
+        description: "Report generator version"
+        required: false
+        type: string
+        default: "5.5.1"
+
+  workflow_call:
+    inputs:
+      test_timeout_minutes:
+        description: "Timeout test step"
+        required: false
+        type: number
+        default: 10
+      report-generator_version:
+        description: "Report generator version"
+        required: false
+        type: string
+        default: "5.5.1"
+
+jobs:
+  run-tests:
+    name: Run ${{ matrix.project }} tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - HomeBudget.Accounting.Api.Tests
+          - HomeBudget.Components.Categories.Tests
+          - HomeBudget.Components.Operations.Tests
+          - HomeBudget.Accounting.Api.IntegrationTests
+
+    services:
+      docker:
+        image: docker:24.0-dind
+        options: >-
+          --privileged
+          --mount type=tmpfs,destination=/var/lib/docker
+          --tmpfs /tmp
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Clean Docker space
+        if: matrix.project == 'HomeBudget.Accounting.Api.IntegrationTests'
+        run: |
+          docker system prune -af
+          docker network prune -f
+
+      - name: Add coverlet collector
+        run: dotnet add ${{ matrix.project }}/${{ matrix.project }}.csproj package coverlet.collector
+
+      - name: Restore
+        run: dotnet restore HomeBudgetAccountingApi.sln
+
+      - name: Build
+        run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore
+
+      - name: Run tests for ${{ matrix.project }}
+        run: |
+          mkdir -p test-results coverage
+
+          dotnet test "${{ matrix.project }}/${{ matrix.project }}.csproj" \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --logger "trx;LogFileName=test_results.trx" \
+            --results-directory "test-results" \
+            --collect:"XPlat Code Coverage"
+        shell: bash
+        timeout-minutes: ${{ inputs.test_timeout_minutes }}
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: test-results-${{ matrix.project }}
+          path: test-results/
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: coverage-${{ matrix.project }}
+          path: coverage/
+
+  merge-coverage:
+    name: Merge coverage reports
+    runs-on: ubuntu-latest
+    needs: run-tests
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - run: dotnet tool install -g dotnet-reportgenerator-globaltool --version ${{ inputs.report-generator_version }}
+      - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Merge coverage reports
+        run: |
+          mkdir merged-coverage
+
+          reportgenerator \
+            -reports:"artifacts/**/coverage.cobertura.xml" \
+            -targetdir:"merged-coverage" \
+            -reporttypes:"Html;Cobertura"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: merged-test-coverage-html
+          path: merged-coverage/

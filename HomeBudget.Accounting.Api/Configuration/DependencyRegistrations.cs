@@ -15,7 +15,7 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
-    public static class DependencyRegistrations
+    internal static class DependencyRegistrations
     {
         public static IServiceCollection SetUpDi(
             this IServiceCollection services,

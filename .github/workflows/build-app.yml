@@ -1,0 +1,83 @@
+name: Build Application
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags: ["v*.*.*"]
+
+  pull_request:
+    branches:
+      - master
+      - developed
+      - feature/*
+      - test/*
+      - hotfix/*
+      - fix/*
+      - tech/
+    types: [opened, synchronize, closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  IS_MERGED: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  get-tag:
+    name: Get Latest Git Tag
+    runs-on: ubuntu-latest
+    outputs:
+      target_tag: ${{ steps.last_tag.outputs.TARGET_TAG }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Enquire last git tag
+        id: last_tag
+        shell: bash
+        run: |
+          tag_v=$(git describe --tags $(git rev-list --tags --max-count=1))
+          tag=$(echo $tag_v | sed 's/v//')
+          echo "Generated tag: $tag"
+          echo "TARGET_TAG=${tag}" >> $GITHUB_OUTPUT
+
+  build-api:
+    name: Build app artifact
+    needs: [get-tag]
+    uses: ./.github/workflows/build-api.yml
+
+  app-tests:
+    name: App Tests Coverage
+    needs: [build-api]
+    uses: ./.github/workflows/app-tests.yml
+    with:
+      test_timeout_minutes: 30
+
+  sonar-analysis:
+    needs: [app-tests, build-api]
+    name: Run sonar scanning
+    uses: ./.github/workflows/sonar-analysis.yml
+    with:
+      pull-request-id: ${{ github.event.pull_request.number }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  build-docker:
+    name: Build and Push Docker Image
+    needs: [build-api, get-tag, app-tests]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      last_tag: ${{ needs.get-tag.outputs.target_tag }}
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

@@ -7,6 +7,7 @@ namespace HomeBudget.Accounting.Infrastructure
         where T : class
     {
         [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
         public ObjectId Id { get; init; }
 
         public T Payload { get; init; }
