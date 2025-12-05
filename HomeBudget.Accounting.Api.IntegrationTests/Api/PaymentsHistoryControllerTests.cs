@@ -89,7 +89,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _restClient.ExecuteWithDelayAsync(postCreateRequest, 2000);
+                await _restClient.ExecuteWithDelayAsync(postCreateRequest, 1000);
             }
 
             var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
@@ -333,7 +333,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var paymentsHistoryResponse = await _restClient.ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(
                 getPaymentHistoryRecordsRequest,
-                executionDelayBeforeInMs: 3000);
+                executionDelayBeforeInMs: 4000);
 
             return paymentsHistoryResponse.Data.Payload;
         }
