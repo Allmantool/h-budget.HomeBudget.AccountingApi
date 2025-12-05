@@ -5,13 +5,12 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson.Serialization;
 
-using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
-using HomeBudget.Core.Options;
+using HomeBudget.Accounting.Domain.Configuration;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -32,16 +31,6 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
                 .RegisterCategoriesDependencies()
                 .RegisterInfrastructureDependencies(configuration);
-        }
-
-        private static IServiceCollection SetUpConfigurationOptions(
-            this IServiceCollection services,
-            IConfiguration configuration)
-        {
-            return services
-                .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
-                .Configure<MongoDbOptions>(configuration.GetSection(ConfigurationSectionKeys.MongoDbOptions))
-                .Configure<EventStoreDbOptions>(configuration.GetSection(ConfigurationSectionKeys.EventStoreDb));
         }
     }
 }
