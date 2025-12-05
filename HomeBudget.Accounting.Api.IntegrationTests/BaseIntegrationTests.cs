@@ -29,10 +29,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 return;
             }
 
-            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer(BsonType.DateTime, DateOnlyDocumentFormat.YearMonthDay));
+            // BsonSerializer.TryRegisterSerializer(new DateOnlySerializer(BsonType.DateTime, DateOnlyDocumentFormat.YearMonthDay));
+            BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
+
             var maxWait = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
             var sw = Stopwatch.StartNew();
 
