@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
@@ -49,7 +51,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                     }
                 });
 
-            using var handler = new PaymentOperationsClientHandler(kafkaOptions);
+            using var handler = new PaymentOperationsClientHandler(kafkaOptions, Mock.Of<ILogger<PaymentOperationsClientHandler>>());
 
             _sut = new PaymentOperationsProducer(handler);
 
