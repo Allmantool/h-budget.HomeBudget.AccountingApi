@@ -70,11 +70,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             builder.AddAndConfigureSentry(configuration);
 
-            var workerApp = builder.Build();
-
             configureServices?.Invoke(services);
 
-            return workerApp;
+            return builder.Build();
         }
     }
 }
