@@ -119,7 +119,7 @@ jobs:
           mkdir merged-coverage
 
           reportgenerator \
-            -reports:"artifacts/**/coverage.opencover.xml \
+            -reports:"artifacts/**/coverage.opencover.xml" \
             -targetdir:"merged-coverage" \
             -reporttypes:"Html;Cobertura"
 
