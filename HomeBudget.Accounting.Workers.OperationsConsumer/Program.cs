@@ -5,10 +5,12 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 
 using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
@@ -26,7 +28,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Fatal error: {ex}");
+                Log.Logger.Error($"Fatal error: {ex}");
                 Environment.Exit(1);
             }
         }
@@ -64,9 +66,15 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .RegisterCategoriesDependencies()
                 .AddHostedService<KafkaPaymentsConsumerWorker>();
 
+            services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder));
+
+            builder.AddAndConfigureSentry(configuration);
+
+            var workerApp = builder.Build();
+
             configureServices?.Invoke(services);
 
-            return builder.Build();
+            return workerApp;
         }
     }
 }

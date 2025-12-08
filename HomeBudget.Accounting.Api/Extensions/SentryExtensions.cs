@@ -1,23 +1,22 @@
 ﻿using System;
-using System.Reflection;
 
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Serilog;
 using Sentry;
-using Serilog.Configuration;
-using Serilog.Events;
 using Sentry.Extensibility;
 using Sentry.Infrastructure;
+using Serilog;
+using Serilog.Configuration;
+using Serilog.Events;
 
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.Extensions
 {
-    public static class SentryExtensions
+    internal static class SentryExtensions
     {
         public static LoggerConfiguration AddAndConfigureSentry(
             this LoggerSinkConfiguration loggerConfiguration,
@@ -45,7 +44,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                     return;
                 }
 
-                var version = Assembly.GetExecutingAssembly().GetName().Version;
+                var version = typeof(SentryExtensions).Assembly.GetName().Version;
 
                 if (version != null)
                 {
@@ -60,7 +59,9 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                 sentrySerilogOptions.Environment = environment.EnvironmentName;
                 sentrySerilogOptions.Dsn = verifiedOptions.Dns;
-                sentrySerilogOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
+                sentrySerilogOptions.TracesSampleRate = environment.IsUnderDevelopment()
+                    ? SentryBaseOptions.TracesSampleRateForDevelopment
+                    : SentryBaseOptions.TracesSampleRateForProduction;
                 sentrySerilogOptions.IsGlobalModeEnabled = true;
                 sentrySerilogOptions.AttachStacktrace = true;
                 sentrySerilogOptions.SendDefaultPii = environment.IsUnderDevelopment(); // Disable sending PII for security (e.g., user emails)
@@ -89,7 +90,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                 {
                     logging.AddSentry(sentryLoggingOptions =>
                     {
-                        var version = Assembly.GetExecutingAssembly().GetName().Version;
+                        var version = typeof(SentryExtensions).Assembly.GetName().Version;
 
                         if (version != null)
                         {
@@ -104,7 +105,9 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                         sentryLoggingOptions.Environment = environment.EnvironmentName;
                         sentryLoggingOptions.Dsn = verifiedOptions.Dns;
-                        sentryLoggingOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
+                        sentryLoggingOptions.TracesSampleRate = environment.IsUnderDevelopment()
+                            ? SentryBaseOptions.TracesSampleRateForDevelopment
+                            : SentryBaseOptions.TracesSampleRateForProduction;
                         sentryLoggingOptions.IsGlobalModeEnabled = true;
                         sentryLoggingOptions.AttachStacktrace = true;
                         sentryLoggingOptions.SendDefaultPii = environment.IsUnderDevelopment();
@@ -133,7 +136,7 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                 var environment = webHostBuilderContext.HostingEnvironment;
 
-                var version = Assembly.GetExecutingAssembly().GetName().Version;
+                var version = typeof(SentryExtensions).Assembly.GetName().Version;
 
                 if (version != null)
                 {
@@ -148,7 +151,9 @@ namespace HomeBudget.Accounting.Api.Extensions
 
                 sentryAspNetCoreOptions.Environment = environment.EnvironmentName;
                 sentryAspNetCoreOptions.Dsn = verifiedOptions.Dns;
-                sentryAspNetCoreOptions.TracesSampleRate = environment.IsUnderDevelopment() ? 1.0 : 0.3;
+                sentryAspNetCoreOptions.TracesSampleRate = environment.IsUnderDevelopment()
+                    ? SentryBaseOptions.TracesSampleRateForDevelopment
+                    : SentryBaseOptions.TracesSampleRateForProduction;
                 sentryAspNetCoreOptions.IsGlobalModeEnabled = true;
                 sentryAspNetCoreOptions.AttachStacktrace = true;
                 sentryAspNetCoreOptions.SendDefaultPii = environment.IsUnderDevelopment(); // Disable sending PII for security (e.g., user emails)
@@ -166,7 +171,7 @@ namespace HomeBudget.Accounting.Api.Extensions
         {
             verifiedOptions = null;
 
-            var sentryDns = sentryOptions.Dns ?? configuration["Sentry:Dsn"];
+            var sentryDns = sentryOptions.Dns ?? configuration[SentryBaseOptions.UriConfigurationKey];
 
             var isNotNullOrEmptyDns = !string.IsNullOrWhiteSpace(sentryDns);
 
