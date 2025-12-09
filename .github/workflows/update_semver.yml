@@ -33,20 +33,84 @@ jobs:
           version_from_branch: true
           debug: true
 
-      - name: Tag Release & Push
+      - name: Tag Release with Retry Logic
+        id: tag_with_retry
         env:
           PAT_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          TAG=${{ steps.tag_version.outputs.version_tag }}
+          # Function to check if tag exists
+          tag_exists() {
+            git show-ref --tags --quiet --verify "refs/tags/$1"
+          }
 
-          git tag $TAG
+          # Get base version from semantic-version action
+          BASE_VERSION="${{ steps.tag_version.outputs.version_tag }}"
+          echo "Base version: $BASE_VERSION"
 
-          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git $TAG
+          # Extract version components
+          if [[ $BASE_VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)-build([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            BUILD="${BASH_REMATCH[4]}"
+          else
+            echo "❌ Failed to parse version: $BASE_VERSION"
+            exit 1
+          fi
 
-          echo "✅ Generated and pushed tag: $TAG"
-          echo "TAG=$TAG" >> $GITHUB_ENV
+          # Try up to 10 times to create a unique tag
+          MAX_RETRIES=10
+          RETRY_COUNT=0
+          NEW_TAG=""
+          TAG_CREATED=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TAG_CREATED" = false ]; do
+            # For first attempt, use the original build number
+            # For subsequent attempts, increment build number
+            if [ $RETRY_COUNT -eq 0 ]; then
+              CURRENT_BUILD=$BUILD
+            else
+              CURRENT_BUILD=$((BUILD + RETRY_COUNT))
+            fi
+
+            PROPOSED_TAG="v${MAJOR}.${MINOR}.${PATCH}-build${CURRENT_BUILD}"
+            
+            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking tag '$PROPOSED_TAG'..."
+            
+            if tag_exists "$PROPOSED_TAG"; then
+              echo "Tag '$PROPOSED_TAG' already exists, trying next build number..."
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            else
+              echo "Creating tag: $PROPOSED_TAG"
+              
+              # Create and push the tag
+              git tag "$PROPOSED_TAG"
+              if git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" "$PROPOSED_TAG"; then
+                NEW_TAG="$PROPOSED_TAG"
+                TAG_CREATED=true
+                echo "✅ Successfully created and pushed tag: $NEW_TAG"
+              else
+                echo "❌ Failed to push tag '$PROPOSED_TAG', retrying..."
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                # Remove local tag if push failed
+                git tag -d "$PROPOSED_TAG" 2>/dev/null || true
+              fi
+            fi
+          done
+
+          if [ "$TAG_CREATED" = false ]; then
+            echo "❌ Failed to create unique tag after $MAX_RETRIES attempts"
+            echo "Last attempted build number: $((BUILD + RETRY_COUNT - 1))"
+            echo "Please check for existing tags or consider using a different versioning strategy"
+            exit 1
+          fi
+
+          # Output the new tag for use in subsequent steps
+          echo "TAG=$NEW_TAG" >> $GITHUB_ENV
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Show latest tag
         run: |
           TAG_LATEST=$(git describe --tags $(git rev-list --tags --max-count=1))
           echo "🔹 Latest tag in repo: $TAG_LATEST"
+          echo "🔹 Newly created tag: ${{ env.TAG }}"
