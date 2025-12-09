@@ -3,7 +3,7 @@ set -e
 
 echo ">> Starting Sonar Scanner"
 
-COVERAGE_REPORT_PATH="merged-coverage/Cobertura.xml"
+COVERAGE_REPORT_PATH="merged-coverage/coverage.cobertura.xml"
 TEST_RESULTS_PATH="artifacts/**/test_results.trx"
 
 if [ -n "${PULL_REQUEST_ID}" ] && [ "${PULL_REQUEST_ID}" != "0" ]; then

@@ -120,7 +120,7 @@ jobs:
 
           # Merge all OpenCover XML files produced by coverlet collector:
           reportgenerator \
-            -reports:"artifacts/**/coverage.opencover.xml" \
+            -reports:"artifacts/**/coverage.cobertura.xml" \
             -targetdir:"merged-coverage" \
             -reporttypes:"Html;Badges;OpenCover"
 
