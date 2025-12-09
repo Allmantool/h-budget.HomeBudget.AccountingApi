@@ -67,8 +67,11 @@ jobs:
   sonarqube-scan:
     name: Sonar scanning
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Java for SonarQube
         uses: actions/setup-java@v5
@@ -81,24 +84,43 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Download coverage artifact
+      - name: Download raw coverage files
         uses: actions/download-artifact@v5
         with:
-          name: ${{ inputs.tests-artifact-name }}
-          path: ${{ inputs.tests-artifact-path }}
+          pattern: raw-coverage-*
+          path: raw-coverage-files
+          merge-multiple: true
 
-      - name: Install dotnet tools
+      - name: Download test results
+        uses: actions/download-artifact@v5
+        with:
+          pattern: test-results-*
+          path: test-results
+          merge-multiple: true
+
+      - name: Install dotnet sonar scanner
         run: |
           dotnet tool install --global dotnet-sonarscanner --version ${{ inputs.sonar-scanner-version }}
 
-      - name: Make the scanner script file executable
-        run: |
-          chmod +x ./startsonar.sh
-
-      - name: Set GITHUB_REF_NAME
+      - name: Set environment variables
         shell: bash
         run: |
           echo "GITHUB_REF_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+          echo "COVERAGE_FILES=$(find raw-coverage-files -name '*.cobertura.xml' -type f | tr '\n' ',')" >> $GITHUB_ENV
+          echo "TEST_RESULTS_FILES=$(find test-results -name '*.trx' -type f | tr '\n' ',')" >> $GITHUB_ENV
+
+      - name: Display coverage files info
+        run: |
+          echo "Found coverage files:"
+          find raw-coverage-files -name '*.cobertura.xml' -type f
+          echo "Coverage files list: $COVERAGE_FILES"
+          echo ""
+          echo "Found test result files:"
+          find test-results -name '*.trx' -type f
+          echo "Test result files list: $TEST_RESULTS_FILES"
+
+      - name: Make startsonar.sh executable
+        run: chmod +x ./startsonar.sh
 
       - name: Start sonar scanning
         env:
