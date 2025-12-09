@@ -16,12 +16,21 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          persist-credentials: false # Required for PAT-based push
+          persist-credentials: false
+          token: ${{ secrets.GH_PAT }}
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Debug repository state
+        run: |
+          echo "🔍 Repository: ${{ github.repository }}"
+          echo "🔍 Event action: ${{ github.event.action }}"
+          echo "🔍 PR merged: ${{ github.event.pull_request.merged }}"
+          echo "🔍 Current tags:"
+          git tag --list | head -20 || echo "No tags found"
 
       - name: Git Semantic Version
         id: tag_version
@@ -29,34 +38,104 @@ jobs:
         with:
           tag_prefix: "v"
           version_format: "${major}.${minor}.${patch}-build${increment}"
+          major_pattern: "(MAJOR)"
+          minor_pattern: "(MINOR)"
           bump_each_commit: true
           version_from_branch: true
           debug: true
 
-      - name: Tag Release with Retry Logic
-        id: tag_with_retry
+      - name: Debug semantic-version outputs
+        run: |
+          echo "🎯 version_tag: '${{ steps.tag_version.outputs.version_tag }}'"
+          echo "🎯 version: '${{ steps.tag_version.outputs.version }}'"
+          echo "🎯 major: '${{ steps.tag_version.outputs.major }}'"
+          echo "🎯 minor: '${{ steps.tag_version.outputs.minor }}'"
+          echo "🎯 patch: '${{ steps.tag_version.outputs.patch }}'"
+          echo "🎯 increment: '${{ steps.tag_version.outputs.increment }}'"
+          echo "🎯 new_version: '${{ steps.tag_version.outputs.new_version }}'"
+          echo "🎯 tag_name: '${{ steps.tag_version.outputs.tag_name }}'"
+
+      - name: Generate and push tag with retry logic
+        id: generate_tag
         env:
           PAT_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Function to check if tag exists
+          # Function to check if tag exists locally or remotely
           tag_exists() {
-            git show-ref --tags --quiet --verify "refs/tags/$1"
+            local tag="$1"
+            # Check local first
+            if git show-ref --tags --quiet --verify "refs/tags/$tag"; then
+              return 0
+            fi
+            # Try to fetch from remote (quietly)
+            git fetch origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null && return 0
+            return 1
           }
 
-          # Get base version from semantic-version action
-          BASE_VERSION="${{ steps.tag_version.outputs.version_tag }}"
-          echo "Base version: $BASE_VERSION"
+          # Function to parse version from any format
+          parse_version() {
+            local version="$1"
+            local major minor patch build
+            
+            # Try different patterns
+            # Pattern 1: vX.Y.Z-buildN
+            if [[ $version =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)-build([0-9]+)$ ]]; then
+              echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} ${BASH_REMATCH[4]}"
+              return 0
+            # Pattern 2: vX.Y.Z (no build suffix)
+            elif [[ $version =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} 1"
+              return 0
+            # Pattern 3: Just the number components
+            elif [[ $version =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]} 1"
+              return 0
+            else
+              echo "❌ Could not parse version: $version" >&2
+              return 1
+            fi
+          }
 
-          # Extract version components
-          if [[ $BASE_VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)-build([0-9]+)$ ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH="${BASH_REMATCH[3]}"
-            BUILD="${BASH_REMATCH[4]}"
+          # Get version information - try multiple sources
+          if [[ -n "${{ steps.tag_version.outputs.major }}" && \
+                -n "${{ steps.tag_version.outputs.minor }}" && \
+                -n "${{ steps.tag_version.outputs.patch }}" ]]; then
+            # Use direct outputs if available
+            MAJOR="${{ steps.tag_version.outputs.major }}"
+            MINOR="${{ steps.tag_version.outputs.minor }}"
+            PATCH="${{ steps.tag_version.outputs.patch }}"
+            INCREMENT="${{ steps.tag_version.outputs.increment }}"
+            echo "✓ Using direct outputs from semantic-version"
           else
-            echo "❌ Failed to parse version: $BASE_VERSION"
-            exit 1
+            # Fallback to parsing version_tag
+            BASE_VERSION="${{ steps.tag_version.outputs.version_tag }}"
+            echo "⚠ Falling back to parsing version_tag: $BASE_VERSION"
+            if ! parsed=$(parse_version "$BASE_VERSION"); then
+              echo "❌ Failed to parse version. Using defaults."
+              MAJOR="0"
+              MINOR="0"
+              PATCH="0"
+              INCREMENT="1"
+            else
+              read MAJOR MINOR PATCH INCREMENT <<< "$parsed"
+            fi
           fi
+
+          # Ensure we have values
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          INCREMENT=${INCREMENT:-1}
+
+          echo "📊 Version components:"
+          echo "   Major: $MAJOR"
+          echo "   Minor: $MINOR"
+          echo "   Patch: $PATCH"
+          echo "   Increment: $INCREMENT"
+
+          # Fetch all tags from remote to ensure we have latest state
+          echo "🔄 Fetching all tags from remote..."
+          git fetch --tags --force
 
           # Try up to 10 times to create a unique tag
           MAX_RETRIES=10
@@ -65,52 +144,93 @@ jobs:
           TAG_CREATED=false
 
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TAG_CREATED" = false ]; do
-            # For first attempt, use the original build number
-            # For subsequent attempts, increment build number
-            if [ $RETRY_COUNT -eq 0 ]; then
-              CURRENT_BUILD=$BUILD
-            else
-              CURRENT_BUILD=$((BUILD + RETRY_COUNT))
-            fi
-
+            # Calculate current build number
+            CURRENT_BUILD=$((INCREMENT + RETRY_COUNT))
+            
+            # Generate proposed tag
             PROPOSED_TAG="v${MAJOR}.${MINOR}.${PATCH}-build${CURRENT_BUILD}"
             
-            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking tag '$PROPOSED_TAG'..."
+            echo "🔄 Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking tag '$PROPOSED_TAG'..."
             
             if tag_exists "$PROPOSED_TAG"; then
-              echo "Tag '$PROPOSED_TAG' already exists, trying next build number..."
+              echo "   ⚠ Tag '$PROPOSED_TAG' already exists, trying next build number..."
               RETRY_COUNT=$((RETRY_COUNT + 1))
-            else
-              echo "Creating tag: $PROPOSED_TAG"
+              continue
+            fi
+            
+            echo "   ✓ Tag '$PROPOSED_TAG' is available"
+            echo "   🏷 Creating and pushing tag..."
+            
+            # Create the tag
+            if ! git tag "$PROPOSED_TAG"; then
+              echo "   ❌ Failed to create local tag"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              continue
+            fi
+            
+            # Try to push the tag
+            if git push origin "$PROPOSED_TAG" 2>&1; then
+              NEW_TAG="$PROPOSED_TAG"
+              TAG_CREATED=true
+              echo "   ✅ Successfully created and pushed tag: $NEW_TAG"
               
-              # Create and push the tag
-              git tag "$PROPOSED_TAG"
-              if git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" "$PROPOSED_TAG"; then
-                NEW_TAG="$PROPOSED_TAG"
-                TAG_CREATED=true
-                echo "✅ Successfully created and pushed tag: $NEW_TAG"
+              # Verify the tag was created on remote
+              echo "   🔍 Verifying remote tag..."
+              git fetch --tags --force
+              if git show-ref --verify "refs/tags/$NEW_TAG" >/dev/null 2>&1; then
+                echo "   ✅ Tag verified on remote"
               else
-                echo "❌ Failed to push tag '$PROPOSED_TAG', retrying..."
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-                # Remove local tag if push failed
-                git tag -d "$PROPOSED_TAG" 2>/dev/null || true
+                echo "   ⚠ Tag created but verification failed - continuing anyway"
               fi
+            else
+              echo "   ❌ Failed to push tag to remote"
+              # Clean up local tag
+              git tag -d "$PROPOSED_TAG" 2>/dev/null || true
+              RETRY_COUNT=$((RETRY_COUNT + 1))
             fi
           done
 
           if [ "$TAG_CREATED" = false ]; then
-            echo "❌ Failed to create unique tag after $MAX_RETRIES attempts"
-            echo "Last attempted build number: $((BUILD + RETRY_COUNT - 1))"
-            echo "Please check for existing tags or consider using a different versioning strategy"
+            echo ""
+            echo "❌ CRITICAL: Failed to create unique tag after $MAX_RETRIES attempts"
+            echo "   Last attempted: v${MAJOR}.${MINOR}.${PATCH}-build$((INCREMENT + RETRY_COUNT - 1))"
+            echo "   Existing tags in range:"
+            git tag --list "v${MAJOR}.${MINOR}.${PATCH}-build*" | sort -V | tail -5
+            echo ""
+            echo "Possible solutions:"
+            echo "   1. Manually clean up conflicting tags"
+            echo "   2. Increase MAX_RETRIES in the workflow"
+            echo "   3. Consider a different versioning strategy"
             exit 1
           fi
 
-          # Output the new tag for use in subsequent steps
+          # Set outputs
           echo "TAG=$NEW_TAG" >> $GITHUB_ENV
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_ENV
+          echo "build=${CURRENT_BUILD}" >> $GITHUB_ENV
 
-      - name: Show latest tag
+      - name: Verify and display tags
         run: |
-          TAG_LATEST=$(git describe --tags $(git rev-list --tags --max-count=1))
-          echo "🔹 Latest tag in repo: $TAG_LATEST"
-          echo "🔹 Newly created tag: ${{ env.TAG }}"
+          echo "📋 TAG created: ${{ env.TAG }}"
+          echo "📋 Version: ${{ env.version }}"
+          echo "📋 Build: ${{ env.build }}"
+
+          echo ""
+          echo "📊 Latest 5 tags:"
+          git fetch --tags --force
+          git tag --list --sort=-version:refname | head -5
+
+          echo ""
+          echo "📊 Tags matching current version pattern:"
+          git tag --list "v${{ env.version }}-build*" | sort -V
+
+      - name: Create GitHub Release (optional)
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "Release ${{ env.TAG }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: false
