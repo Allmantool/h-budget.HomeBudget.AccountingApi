@@ -119,6 +119,9 @@ jobs:
           find test-results -name '*.trx' -type f
           echo "Test result files list: $TEST_RESULTS_FILES"
 
+      - name: Make startsonar.sh executable
+        run: chmod +x ./startsonar.sh
+
       - name: Start sonar scanning
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
