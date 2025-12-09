@@ -3,13 +3,13 @@ set -e
 
 echo ">> Starting Sonar Scanner"
 
-COVERAGE_REPORT_PATH="merged-coverage/Cobertura.xml"
+COVERAGE_REPORT_PATH="merged-coverage/OpenCover.xml"
 
 #
 # Pull Request Mode
 #
 if [ -n "${PULL_REQUEST_ID}" ] && [ "${PULL_REQUEST_ID}" != "0" ]; then
-    echo ">> Running in Pull Request mode for PR #${PULL_REQUEST_ID}"
+    echo ">> Running in PR mode for PR #${PULL_REQUEST_ID}"
 
     dotnet-sonarscanner begin \
         /o:"allmantool" \
@@ -21,17 +21,14 @@ if [ -n "${PULL_REQUEST_ID}" ] && [ "${PULL_REQUEST_ID}" != "0" ]; then
         /d:sonar.pullrequest.key="${PULL_REQUEST_ID}" \
         /d:sonar.pullrequest.branch="${PULL_REQUEST_SOURCE_BRANCH}" \
         /d:sonar.pullrequest.base="${PULL_REQUEST_TARGET_BRANCH}" \
-        /d:sonar.coverage.exclusions="**/Test[s]/**/*" \
         /d:sonar.cs.opencover.reportsPaths="${COVERAGE_REPORT_PATH}" \
+        /d:sonar.coverage.exclusions="**/Test[s]/**/*" \
         /d:sonar.pullrequest.provider="github" \
         /d:sonar.pullrequest.github.repository="Allmantool/h-budget.HomeBudget.AccountingApi" \
         /d:sonar.pullrequest.github.endpoint="https://api.github.com/"
 
-#
-# Normal branch analysis
-#
 else
-    echo ">> Running for normal branch: ${GITHUB_REF_NAME}"
+    echo ">> Running for branch: ${GITHUB_REF_NAME}"
 
     dotnet-sonarscanner begin \
         /o:"allmantool" \
