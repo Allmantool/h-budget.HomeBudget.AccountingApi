@@ -40,6 +40,7 @@ jobs:
           version_format: "${major}.${minor}.${patch}-build${increment}"
           major_pattern: "(MAJOR)"
           minor_pattern: "(MINOR)"
+          patch_pattern: "(PATCH)"
           bump_each_commit: true
           version_from_branch: true
           debug: true
@@ -59,12 +60,13 @@ jobs:
         id: generate_tag
         env:
           PAT_TOKEN: ${{ secrets.GH_PAT }}
+          REPO_URL: https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
         run: |
           # Function to check if tag exists locally or remotely
           tag_exists() {
             local tag="$1"
             # Check local first
-            if git show-ref --tags --quiet --verify "refs/tags/$tag"; then
+            if git show-ref --tags --quiet --verify "refs/tags/$tag" 2>/dev/null; then
               return 0
             fi
             # Try to fetch from remote (quietly)
@@ -96,6 +98,10 @@ jobs:
             fi
           }
 
+          # Set up authentication for git operations
+          echo "🔐 Setting up git authentication..."
+          git remote set-url origin "$REPO_URL"
+
           # Get version information - try multiple sources
           if [[ -n "${{ steps.tag_version.outputs.major }}" && \
                 -n "${{ steps.tag_version.outputs.minor }}" && \
@@ -121,11 +127,17 @@ jobs:
             fi
           fi
 
-          # Ensure we have values
+          # Ensure we have values and increment is at least 1
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
           INCREMENT=${INCREMENT:-1}
+
+          # Ensure increment is at least 1
+          if [ "$INCREMENT" -eq "0" ]; then
+            echo "⚠ Increment is 0, setting to 1"
+            INCREMENT=1
+          fi
 
           echo "📊 Version components:"
           echo "   Major: $MAJOR"
@@ -168,7 +180,8 @@ jobs:
               continue
             fi
             
-            # Try to push the tag
+            # Try to push the tag with authentication
+            echo "   📤 Pushing tag to remote..."
             if git push origin "$PROPOSED_TAG" 2>&1; then
               NEW_TAG="$PROPOSED_TAG"
               TAG_CREATED=true
@@ -184,6 +197,9 @@ jobs:
               fi
             else
               echo "   ❌ Failed to push tag to remote"
+              echo "   Debug info:"
+              echo "     REPO_URL: $REPO_URL"
+              echo "     Remote: $(git remote -v)"
               # Clean up local tag
               git tag -d "$PROPOSED_TAG" 2>/dev/null || true
               RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -195,12 +211,12 @@ jobs:
             echo "❌ CRITICAL: Failed to create unique tag after $MAX_RETRIES attempts"
             echo "   Last attempted: v${MAJOR}.${MINOR}.${PATCH}-build$((INCREMENT + RETRY_COUNT - 1))"
             echo "   Existing tags in range:"
-            git tag --list "v${MAJOR}.${MINOR}.${PATCH}-build*" | sort -V | tail -5
+            git tag --list "v${MAJOR}.${MINOR}.${PATCH}-build*" | sort -V | tail -5 || echo "   No matching tags found"
             echo ""
-            echo "Possible solutions:"
-            echo "   1. Manually clean up conflicting tags"
-            echo "   2. Increase MAX_RETRIES in the workflow"
-            echo "   3. Consider a different versioning strategy"
+            echo "Authentication troubleshooting:"
+            echo "   1. Check if GH_PAT secret is set correctly"
+            echo "   2. Ensure PAT has 'repo' scope permissions"
+            echo "   3. Verify repository name: ${{ github.repository }}"
             exit 1
           fi
 
@@ -223,14 +239,10 @@ jobs:
 
           echo ""
           echo "📊 Tags matching current version pattern:"
-          git tag --list "v${{ env.version }}-build*" | sort -V
+          git tag --list "v${{ env.version }}-build*" | sort -V || echo "No matching tags"
 
-      - name: Create GitHub Release (optional)
+      - name: Show success message
         if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.TAG }}
-          name: "Release ${{ env.TAG }}"
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+        run: |
+          echo "🎉 Successfully created tag: ${{ env.TAG }}"
+          echo "📈 Next build number will be: $(( {{ env.build }} + 1 ))"
