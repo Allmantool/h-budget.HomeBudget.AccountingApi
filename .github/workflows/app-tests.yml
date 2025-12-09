@@ -122,7 +122,7 @@ jobs:
           reportgenerator \
             -reports:"artifacts/**/coverage.opencover.xml" \
             -targetdir:"merged-coverage" \
-            -reporttypes:"Html;Badges;OpenCover;OpenCoverXml"
+            -reporttypes:"Html;Badges;OpenCover"
 
       - uses: actions/upload-artifact@v5
         with:
