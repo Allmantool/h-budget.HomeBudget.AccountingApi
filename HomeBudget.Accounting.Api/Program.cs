@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.Configuration;
-using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Api.Extensions.OpenTelemetry;
@@ -14,6 +13,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
+using HomeBudget.Accounting.Infrastructure.Constants;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;
@@ -44,7 +44,7 @@ services
 
 services.AddHeaderPropagation(options =>
 {
-    options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.Name);
+    options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.AccountApiName);
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 

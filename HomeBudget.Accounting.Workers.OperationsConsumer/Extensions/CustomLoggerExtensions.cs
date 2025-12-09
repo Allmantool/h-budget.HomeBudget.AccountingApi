@@ -1,7 +1,6 @@
 ﻿using Elastic.Apm.SerilogEnricher;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Logs;
 using Serilog;
@@ -14,15 +13,15 @@ using Serilog.Formatting.Compact;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 
-namespace HomeBudget.Accounting.Api.Extensions.Logs
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
 {
     internal static class CustomLoggerExtensions
     {
         public static Logger InitializeLogger(
             this IConfiguration configuration,
-            IWebHostEnvironment environment,
+            IHostEnvironment environment,
             ILoggingBuilder loggingBuilder,
-            ConfigureHostBuilder host)
+            IHostApplicationBuilder hostApplicationBuilder)
         {
             var logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(configuration)
@@ -33,7 +32,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
-                .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.AccountApiName)
+                .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.AccountConsumerWorkerName)
                 .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
@@ -59,21 +58,9 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 options.AddOtlpExporter();
             });
 
-            host.UseSerilog(logger);
-
             Log.Logger = logger;
 
             return logger;
-        }
-
-        public static WebApplication SetupHttpLogging(this WebApplication app)
-        {
-            app.UseSerilogRequestLogging(options =>
-            {
-                options.EnrichDiagnosticContext = LogEnricher.HttpRequestEnricher;
-            });
-
-            return app;
         }
     }
 }

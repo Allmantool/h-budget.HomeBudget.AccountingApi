@@ -17,9 +17,9 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Api.Extensions.Logs
+namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
 {
-    internal static class LoggerConfigurationExtensions
+    public static class LoggerConfigurationExtensions
     {
         public static LoggerConfiguration TryAddSeqSupport(this LoggerConfiguration loggerConfiguration, IConfiguration configuration)
         {
@@ -47,7 +47,8 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
         public static LoggerConfiguration TryAddElasticSearchSupport(
             this LoggerConfiguration loggerConfiguration,
             IConfiguration configuration,
-            IHostEnvironment environment)
+            IHostEnvironment environment,
+            string formattedExecuteAssemblyName)
         {
             try
             {
@@ -69,7 +70,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                             {
                                 new(elasticNodeUrl)
                             },
-                            opt => opt.ConfigureElasticSink(environment));
+                            opt => opt.ConfigureElasticSink(environment, formattedExecuteAssemblyName));
             }
             catch (Exception ex)
             {
@@ -79,9 +80,11 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
             return loggerConfiguration;
         }
 
-        private static void ConfigureElasticSink(this ElasticsearchSinkOptions options, IHostEnvironment environment)
+        private static void ConfigureElasticSink(
+            this ElasticsearchSinkOptions options,
+            IHostEnvironment environment,
+            string formattedExecuteAssemblyName)
         {
-            var formattedExecuteAssemblyName = typeof(Program).Assembly.GetName().Name;
             var dateIndexPostfix = DateTime.UtcNow.ToString(DateTimeFormats.ElasticSearch);
             var streamName = $"{formattedExecuteAssemblyName}-{environment.EnvironmentName}-{dateIndexPostfix}".Replace(".", "-").ToLower();
 
