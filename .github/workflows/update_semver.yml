@@ -40,7 +40,6 @@ jobs:
           version_format: "${major}.${minor}.${patch}-build${increment}"
           major_pattern: "(MAJOR)"
           minor_pattern: "(MINOR)"
-          patch_pattern: "(PATCH)"
           bump_each_commit: true
           version_from_branch: true
           debug: true
@@ -245,4 +244,4 @@ jobs:
         if: success()
         run: |
           echo "🎉 Successfully created tag: ${{ env.TAG }}"
-          echo "📈 Next build number will be: $(( {{ env.build }} + 1 ))"
+          echo "📈 Next build number will be: $((${{ env.build }} + 1))"
