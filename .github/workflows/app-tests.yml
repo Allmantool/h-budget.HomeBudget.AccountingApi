@@ -80,8 +80,9 @@ jobs:
             --no-build \
             --verbosity normal \
             --logger "trx;LogFileName=test_results.trx" \
-            --results-directory "test-results" \
-            --collect:"XPlat Code Coverage"
+            --results-directory test-results \
+            --collect:"XPlat Code Coverage" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
         shell: bash
         timeout-minutes: ${{ inputs.test_timeout_minutes }}
 
@@ -118,10 +119,11 @@ jobs:
         run: |
           mkdir merged-coverage
 
+          # Merge all OpenCover XML files produced by coverlet collector:
           reportgenerator \
-            -reports:"artifacts/**/coverage.cobertura.xml" \
+            -reports:"artifacts/**/coverage.opencover.xml" \
             -targetdir:"merged-coverage" \
-            -reporttypes:"Html;Badges;OpenCover;Cobertura"
+            -reporttypes:"Html;Badges;OpenCover"
 
       - uses: actions/upload-artifact@v5
         with:
