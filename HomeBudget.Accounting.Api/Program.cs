@@ -12,8 +12,8 @@ using HomeBudget.Accounting.Api.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
-using HomeBudget.Components.Operations.MapperProfileConfigurations;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;

@@ -2,15 +2,15 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 
+using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
-using HomeBudget.Accounting.Domain.Configuration;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
