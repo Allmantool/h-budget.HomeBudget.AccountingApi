@@ -119,9 +119,9 @@ jobs:
           mkdir merged-coverage
 
           reportgenerator \
-            -reports:"artifacts/**/coverage.opencover.xml" \
+            -reports:"artifacts/**/coverage.cobertura.xml" \
             -targetdir:"merged-coverage" \
-            -reporttypes:"Html;Cobertura"
+            -reporttypes:"Html;Badges;OpenCover;Cobertura"
 
       - uses: actions/upload-artifact@v5
         with:
