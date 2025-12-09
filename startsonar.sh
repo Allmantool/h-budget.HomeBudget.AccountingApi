@@ -3,7 +3,7 @@ set -e
 
 echo ">> Starting Sonar Scanner"
 
-COVERAGE_REPORT_PATH="merged-coverage/opencover.xml"
+COVERAGE_REPORT_PATH="merged-coverage/Cobertura.xml"
 
 #
 # Pull Request Mode

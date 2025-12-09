@@ -1,6 +1,4 @@
-﻿using System.Threading.Channels;
-
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using HomeBudget.Accounting.Domain.Constants;
@@ -11,7 +9,6 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
-using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
@@ -32,9 +29,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
-            return services
-                .AddSingleton(Channel.CreateUnbounded<PaymentOperationEvent>())
-                .AddHostedService<BatchPaymentEventsProcessorWorker>();
+            return services.AddHostedService<BatchPaymentEventsProcessorWorker>();
         }
     }
 }
