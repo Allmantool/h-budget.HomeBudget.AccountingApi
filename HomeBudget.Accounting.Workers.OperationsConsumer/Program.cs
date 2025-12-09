@@ -8,6 +8,8 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 
 using HomeBudget.Accounting.Domain.Configuration;
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
@@ -71,6 +73,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             builder.AddAndConfigureSentry(configuration);
 
             configureServices?.Invoke(services);
+
+            MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
 
             return builder.Build();
         }
