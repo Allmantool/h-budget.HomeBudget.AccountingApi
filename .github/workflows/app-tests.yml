@@ -79,10 +79,9 @@ jobs:
             --configuration Release \
             --no-build \
             --verbosity normal \
+            --settings coverlet.runsettings \
             --logger "trx;LogFileName=test_results.trx" \
-            --results-directory test-results \
-            --collect:"XPlat Code Coverage" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+            --results-directory test-results
         shell: bash
         timeout-minutes: ${{ inputs.test_timeout_minutes }}
 
@@ -123,7 +122,7 @@ jobs:
           reportgenerator \
             -reports:"artifacts/**/coverage.opencover.xml" \
             -targetdir:"merged-coverage" \
-            -reporttypes:"Html;Badges;OpenCover"
+            -reporttypes:"Html;Badges;OpenCover;OpenCoverXml"
 
       - uses: actions/upload-artifact@v5
         with:
