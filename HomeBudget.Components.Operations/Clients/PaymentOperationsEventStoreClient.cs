@@ -30,7 +30,7 @@ namespace HomeBudget.Components.Operations.Clients
     internal sealed class PaymentOperationsEventStoreClient
         : BaseEventStoreClient<PaymentOperationEvent>, IDisposable
     {
-        private readonly Channel<PaymentOperationEvent> _paymentEventChannel;
+        private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
         private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
 
         private readonly AsyncRetryPolicy _retryPolicy;
@@ -55,7 +55,7 @@ namespace HomeBudget.Components.Operations.Clients
             _logger = logger;
             _serviceScopeFactory = serviceScopeFactory;
             _dateTimeProvider = dateTimeProvider;
-            _paymentEventChannel = PaymentOperationEventChannelFactory.CreateChannel(_opts);
+            _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
             _retryPolicy = EventStoreRetryPolicies.BuildRetryPolicy(_opts, _logger);
             requestRateLimiter = new(_opts.RequestRateLimiter);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
@@ -150,7 +150,7 @@ namespace HomeBudget.Components.Operations.Clients
         {
             try
             {
-                await _paymentEventChannel.Writer.WriteAsync(eventData, _cts.Token);
+                await _paymentEventsBuffer.Writer.WriteAsync(eventData, _cts.Token);
             }
             catch (ChannelClosedException)
             {
@@ -166,9 +166,9 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var delayMs = Math.Max(0, _opts.EventBatchingDelayInMs);
 
-            while (await _paymentEventChannel.Reader.WaitToReadAsync(_cts.Token))
+            while (await _paymentEventsBuffer.Reader.WaitToReadAsync(_cts.Token))
             {
-                while (_paymentEventChannel.Reader.TryRead(out var evt))
+                while (_paymentEventsBuffer.Reader.TryRead(out var evt))
                 {
                     _latestEventsPerAccount[evt.Payload.GetMonthPeriodIdentifier()] = evt;
                 }
@@ -251,7 +251,7 @@ namespace HomeBudget.Components.Operations.Clients
         public void Dispose()
         {
             _cts.Cancel();
-            _paymentEventChannel.Writer.TryComplete();
+            _paymentEventsBuffer.Writer.TryComplete();
 
             try
             {

@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 
-using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
@@ -17,7 +17,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     internal abstract class BasePaymentCommandHandler(
         ILogger logger,
         IMapper mapper,
-        IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
+        IExectutionStrategyHandler<IKafkaProducer<string, string>> handler)
     {
         protected Task<Result<Guid>> HandleAsync<T>(
             T request,
@@ -29,7 +29,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent);
 
-            fireAndForgetHandler.Execute(async producer =>
+            handler.ExecuteAndWaitAsync(async producer =>
             {
                 var message = paymentMessageResult.Payload;
 
