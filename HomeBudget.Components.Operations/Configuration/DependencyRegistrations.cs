@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
-using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Components.Operations.Builders;
@@ -21,6 +20,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Handlers;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
@@ -35,7 +35,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
-                .AddScoped<IFireAndForgetHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
+                .AddScoped<IExectutionStrategyHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
                 .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)

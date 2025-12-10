@@ -7,11 +7,11 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Domain.Handlers;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Handlers;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
@@ -20,7 +20,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         IMapper mapper,
         ISender sender,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IFireAndForgetHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
+        IExectutionStrategyHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
         : BasePaymentCommandHandler(
                 logger,
                 mapper,

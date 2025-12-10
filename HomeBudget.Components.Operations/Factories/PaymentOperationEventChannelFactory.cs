@@ -7,7 +7,7 @@ namespace HomeBudget.Components.Operations.Factories
 {
     internal static class PaymentOperationEventChannelFactory
     {
-        public static Channel<PaymentOperationEvent> CreateChannel(EventStoreDbOptions opts)
+        public static Channel<PaymentOperationEvent> CreateBufferChannel(EventStoreDbOptions opts)
         {
             var capacity = opts.ChannelCapacity > 0 ? opts.ChannelCapacity : 10000;
             var boundedOptions = new BoundedChannelOptions(capacity)
