@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+
 using HomeBudget.Accounting.Infrastructure.Constants;
 
 namespace HomeBudget.Accounting.Api.Extensions.OpenTelemetry
