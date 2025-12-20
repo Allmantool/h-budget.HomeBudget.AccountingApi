@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
+using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,14 +28,17 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var consumerSettings = options.Value.ConsumerSettings;
+            var settings = options.Value.ConsumerSettings;
+            var delay = TimeSpan.FromSeconds(settings.ConsumerCircuitBreakerDelayInSeconds);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    if (topicManager.IsBrokerReady() && _consumer is null)
+                    if (_consumer is null)
                     {
+                        logger.CreateKafkaConsumer();
+
                         var topic = new SubscriptionTopic
                         {
                             ConsumerType = ConsumerTypes.PaymentOperations,
@@ -43,30 +47,28 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
                         _consumer = consumerService.CreateAndSubscribe(topic);
                     }
-                    else
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
-                    }
 
-                    if (_consumer is not null && _consumer.IsAlive())
-                    {
-                        await consumerService.ConsumeKafkaMessagesLoopAsync(_consumer, stoppingToken);
-                    }
+                    await consumerService.ConsumeKafkaMessagesLoopAsync(
+                        _consumer,
+                        stoppingToken);
                 }
-                catch (OperationCanceledException ex)
+                catch (OperationCanceledException)
                 {
-                    logger.OperationCanceled(
-                        nameof(KafkaPaymentsConsumerWorker),
-                        ex);
+                    break;
+                }
+                catch (KafkaException ex)
+                {
+                    logger.RecreateConsumerAfterDelay(ex);
+
+                    CleanupConsumer();
+                    await Task.Delay(delay, stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    logger.UnexpectedError(
-                        nameof(KafkaPaymentsConsumerWorker),
-                        consumerSettings.ConsumerCircuitBreakerDelayInSeconds,
-                        ex);
+                    logger.RestartingConsumer(ex);
 
-                    await Task.Delay(TimeSpan.FromSeconds(consumerSettings.ConsumerCircuitBreakerDelayInSeconds), stoppingToken);
+                    CleanupConsumer();
+                    await Task.Delay(delay, stoppingToken);
                 }
             }
         }
@@ -84,6 +86,23 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
 
             return base.StopAsync(cancellationToken);
+        }
+
+        private void CleanupConsumer()
+        {
+            try
+            {
+                _consumer?.UnSubscribe();
+                _consumer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                logger.FailedToDisposeConsumer(ex);
+            }
+            finally
+            {
+                _consumer = null;
+            }
         }
     }
 }

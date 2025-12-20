@@ -19,13 +19,14 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
+    [Obsolete("Not to go along with prod grade approach. Will be re-written accodring to SOLID, etc")]
     public abstract class BaseEventStoreClient<T> : IEventStoreDbClient<T>, IDisposable
         where T : class, new()
     {
         private readonly EventStoreClient _client;
         private readonly ILogger _logger;
         private bool _disposed;
-        private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new();
+        private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new(); // should be out of proccess cache (re-use rates implementation)
         private readonly EventStoreDbOptions _options;
 
         protected BaseEventStoreClient(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
@@ -143,7 +144,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             }
             catch (Exception ex)
             {
-                BaseEventStoreClientLogs.SubscriptionError(_logger, streamName, ex);
+                _logger.SubscriptionError(streamName, ex);
             }
         }
 

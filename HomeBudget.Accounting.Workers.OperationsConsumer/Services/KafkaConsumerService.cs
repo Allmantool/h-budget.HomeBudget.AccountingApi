@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
+using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -9,7 +10,6 @@ using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -21,43 +21,36 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
         IKafkaConsumersFactory kafkaConsumersFactory)
         : IConsumerService
     {
-        public async Task ConsumeKafkaMessagesLoopAsync(IKafkaConsumer consumer, CancellationToken stoppingToken)
+        public async Task ConsumeKafkaMessagesLoopAsync(
+            IKafkaConsumer consumer,
+            CancellationToken stoppingToken)
         {
-            if (stoppingToken.IsCancellationRequested)
-            {
-                logger.ConsumeLoopStopped();
-                return;
-            }
+            logger.ConsumeLoopStarted();
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    stoppingToken.ThrowIfCancellationRequested();
-
-                    if (consumer is null || !consumer.IsAlive())
-                    {
-                        logger.NoActiveConsumers();
-                        await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
-                        continue;
-                    }
-
-                    if (!consumer.Subscriptions.IsNullOrEmpty())
-                    {
-                        await consumer.ConsumeAsync(stoppingToken);
-                    }
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
+                    await consumer.ConsumeAsync(stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
                     logger.ConsumeLoopCancelled();
-                    break;
+                    throw;
+                }
+                catch (ConsumeException ex) when (!ex.Error.IsFatal)
+                {
+                    logger.NonFatalConsumeError(ex);
+                }
+                catch (KafkaException ex)
+                {
+                    logger.ErrorConsumingMessages(ex);
+                    throw;
                 }
                 catch (Exception ex)
                 {
                     logger.ErrorConsumingMessages(ex);
-                    await Task.Delay(TimeSpan.FromSeconds(options.Value.ConsumerSettings.ConsumeDelayInMilliseconds), stoppingToken);
+                    throw;
                 }
             }
         }

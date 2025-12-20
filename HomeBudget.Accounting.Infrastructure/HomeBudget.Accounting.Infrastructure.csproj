@@ -6,6 +6,10 @@
     <PackageReference Include="Elastic.Channels" />
     <PackageReference Include="Elastic.Ingest.Elasticsearch" />
     <PackageReference Include="Elastic.Serilog.Sinks" />
+    <PackageReference Include="EventStore.Client.Extensions.OpenTelemetry" />
+    <PackageReference Include="EventStore.Client.Grpc" />
+    <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" />
+    <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" />
     <PackageReference Include="EventStore.Client.Grpc.Streams" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />

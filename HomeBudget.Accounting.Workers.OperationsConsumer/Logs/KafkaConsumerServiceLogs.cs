@@ -35,5 +35,17 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Logs
             Level = LogLevel.Information,
             Message = "Subscribed to topic {Title}, consumer type {ConsumerType}")]
         public static partial void SubscribedToTopic(this ILogger logger, string title, string consumerType);
+
+        [LoggerMessage(
+            EventId = 2006,
+            Level = LogLevel.Information,
+            Message = "Consume loop has been started.")]
+        public static partial void ConsumeLoopStarted(this ILogger logger);
+
+        [LoggerMessage(
+            EventId = 2007,
+            Level = LogLevel.Error,
+            Message = "Not fatal kafka error.")]
+        public static partial void NonFatalConsumeError(this ILogger logger, Exception exception);
     }
 }
