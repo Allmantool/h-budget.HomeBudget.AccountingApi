@@ -73,7 +73,7 @@
     <PackageVersion Include="Serilog.Sinks.Seq" Version="9.0.0" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.17.0.131074" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.0.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.0" />
     <PackageVersion Include="System.Linq.Async" Version="7.0.0" />
     <PackageVersion Include="Testcontainers" Version="4.9.0" />
     <PackageVersion Include="Testcontainers.EventStoreDb" Version="4.9.0" />
