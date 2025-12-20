@@ -9,7 +9,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Api.Middlewares;
-using HomeBudget.Accounting.Api.Extensions;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {

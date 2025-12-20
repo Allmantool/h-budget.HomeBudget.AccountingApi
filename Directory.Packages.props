@@ -13,6 +13,10 @@
     <PackageVersion Include="Elastic.Channels" Version="0.17.1" />
     <PackageVersion Include="Elastic.Ingest.Elasticsearch" Version="0.17.1" />
     <PackageVersion Include="Elastic.Serilog.Sinks" Version="9.0.0" />
+    <PackageVersion Include="EventStore.Client.Extensions.OpenTelemetry" Version="23.3.9" />
+    <PackageVersion Include="EventStore.Client.Grpc" Version="23.3.9" />
+    <PackageVersion Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="23.3.9" />
+    <PackageVersion Include="EventStore.Client.Grpc.ProjectionManagement" Version="23.3.9" />
     <PackageVersion Include="EventStore.Client.Grpc.Streams" Version="23.3.9" />
     <PackageVersion Include="FluentAssertions" Version="8.8.0" />
     <PackageVersion Include="MediatR" Version="14.0.0" />

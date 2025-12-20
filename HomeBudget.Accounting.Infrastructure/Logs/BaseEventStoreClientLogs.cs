@@ -11,7 +11,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             EventId = 1001,
             Level = LogLevel.Error,
             Message = "Error ensuring subscription for stream {StreamName}")]
-        public static partial void SubscriptionError(ILogger logger, string streamName, Exception ex);
+        public static partial void SubscriptionError(this ILogger logger, string streamName, Exception ex);
 
         [LoggerMessage(
             EventId = 1001,
