@@ -1,14 +1,15 @@
-﻿using EventStore.Client;
-using Grpc.Core;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Logs;
-using HomeBudget.Core.Options;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
+﻿using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+
+using EventStore.Client;
+using Grpc.Core;
+using Microsoft.Extensions.Logging;
+
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
