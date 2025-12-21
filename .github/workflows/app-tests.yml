@@ -78,7 +78,7 @@ jobs:
           dotnet test "${{ matrix.project }}/${{ matrix.project }}.csproj" \
             --configuration Release \
             --no-build \
-            --verbosity normal \
+            --verbosity minimal \
             --settings coverlet.runsettings \
             --collect:"XPlat Code Coverage" \
             --logger "trx;LogFileName=${{ matrix.project }}.trx" \
