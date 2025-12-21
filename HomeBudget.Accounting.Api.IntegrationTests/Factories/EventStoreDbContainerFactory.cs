@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                     .WithPortBinding(2117, true)
                     .WithEnvironment("EVENTSTORE_CLUSTER_SIZE", "1")
                     .WithEnvironment("EVENTSTORE_INSECURE", "true")
-                    .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "System")
+                    .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "All")
                     .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
                     .WithEnvironment("EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP", "true")
                     .WithEnvironment("EVENTSTORE_COMMIT_TIMEOUT_MS", "60000")
