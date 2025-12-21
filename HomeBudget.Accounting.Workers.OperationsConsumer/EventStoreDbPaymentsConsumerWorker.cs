@@ -6,8 +6,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
@@ -15,7 +16,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
     internal class EventStoreDbPaymentsConsumerWorker(
         ILogger<EventStoreDbPaymentsConsumerWorker> logger,
         IOptions<KafkaOptions> options,
-        PaymentOperationsEventStoreSubscriptionReadClient client)
+        IEventStoreDbSubscriptionReadClient<PaymentOperationEvent> client)
         : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
