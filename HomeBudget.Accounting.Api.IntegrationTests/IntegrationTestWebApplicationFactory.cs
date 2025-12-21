@@ -141,6 +141,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     {
                         settings = eventStoreDbSettings;
                     });
+
+                services.AddEventStorePersistentSubscriptionsClient(
+                    _containersConnections.EventSourceDbContainer,
+                    settings =>
+                    {
+                        settings = eventStoreDbSettings;
+                    });
             });
         }
 

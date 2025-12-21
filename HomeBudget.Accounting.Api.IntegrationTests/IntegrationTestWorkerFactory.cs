@@ -78,6 +78,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                                 MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
                             };
                         });
+
+                    services.AddEventStorePersistentSubscriptionsClient(
+                        _containersConnections.EventSourceDbContainer,
+                        settings =>
+                        {
+                            var esSettings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                            esSettings.OperationOptions.ThrowOnAppendFailure = true;
+                            esSettings.DefaultDeadline =
+                                TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds *
+                                                     (eventStoreDbOptions.RetryAttempts + 1));
+                            esSettings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                            {
+                                KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                                GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                                DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                                MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                            };
+                        });
                 });
 
             var configBuilder = new ConfigurationBuilder()
