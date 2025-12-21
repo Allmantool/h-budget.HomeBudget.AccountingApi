@@ -17,21 +17,21 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Commands.Models;
-using HomeBudget.Components.Operations.Factories;
-using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Components.Operations.Clients
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 {
-    internal sealed class PaymentOperationsEventStoreReadClient
-        : BaseEventStoreReadClient<PaymentOperationEvent>, IDisposable
+    internal sealed class PaymentOperationsEventStoreStreamReadClient
+        : BaseEventStoreStreamReadClient<PaymentOperationEvent>, IDisposable
     {
         private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
         private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
 
-        private readonly ILogger<PaymentOperationsEventStoreReadClient> _logger;
+        private readonly ILogger<PaymentOperationsEventStoreStreamReadClient> _logger;
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly EventStoreDbOptions _opts;
@@ -39,8 +39,8 @@ namespace HomeBudget.Components.Operations.Clients
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
 
-        public PaymentOperationsEventStoreReadClient(
-            ILogger<PaymentOperationsEventStoreReadClient> logger,
+        public PaymentOperationsEventStoreStreamReadClient(
+            ILogger<PaymentOperationsEventStoreStreamReadClient> logger,
             IServiceScopeFactory serviceScopeFactory,
             IDateTimeProvider dateTimeProvider,
             EventStoreClient client,
@@ -54,7 +54,7 @@ namespace HomeBudget.Components.Operations.Clients
             _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
-                t => PaymentOperationsEventStoreClientLogs.BatchProcessorCrashed(_logger, t.Exception),
+                t => _logger.BatchProcessorCrashed(t.Exception),
                 TaskContinuationOptions.OnlyOnFaulted);
         }
 
@@ -63,8 +63,7 @@ namespace HomeBudget.Components.Operations.Clients
             int maxEvents = int.MaxValue,
             CancellationToken token = default)
         {
-            var resolvedStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(streamName);
-            return base.ReadAsync(resolvedStream, maxEvents, token);
+            return base.ReadAsync(streamName, maxEvents, token);
         }
 
         protected override async Task OnEventAppearedAsync(PaymentOperationEvent eventData)
@@ -75,11 +74,11 @@ namespace HomeBudget.Components.Operations.Clients
             }
             catch (ChannelClosedException)
             {
-                PaymentOperationsEventStoreClientLogs.ChannelClosedDropping(_logger, eventData.EventType.ToString());
+                _logger.ChannelClosedDropping(eventData.EventType.ToString());
             }
             catch (OperationCanceledException)
             {
-                PaymentOperationsEventStoreClientLogs.ChannelWriteCanceled(_logger);
+                _logger.ChannelWriteCanceled();
             }
         }
 
@@ -109,7 +108,7 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 while (_paymentEventsBuffer.Reader.TryRead(out var evt))
                 {
-                    _latestEventsPerAccount[evt.Payload.GetMonthPeriodIdentifier()] = evt;
+                    _latestEventsPerAccount[evt.Payload.GetMonthPeriodPaymentAccountIdentifier()] = evt;
                 }
 
                 if (delayMs > 0)
@@ -135,7 +134,7 @@ namespace HomeBudget.Components.Operations.Clients
                     }
                     catch (Exception ex)
                     {
-                        PaymentOperationsEventStoreClientLogs.HandleEventsFailed(_logger, periodKey, ex);
+                        _logger.HandleEventsFailed(periodKey, ex);
                     }
                     finally
                     {
@@ -148,9 +147,11 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task HandlePaymentOperationEventAsync(FinancialTransaction transaction, CancellationToken ct)
         {
             var accountId = transaction.PaymentAccountId;
-            var periodKey = transaction.GetMonthPeriodIdentifier();
+            var monthPeriodPaymentAccountIdentifier = transaction.GetMonthPeriodPaymentAccountIdentifier();
 
-            var events = await ReadAsync(periodKey, token: ct).ToListAsync(ct);
+            var paymentAccountStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(monthPeriodPaymentAccountIdentifier);
+
+            var events = await ReadAsync(paymentAccountStream, token: ct).ToListAsync(ct);
 
             foreach (var e in events)
             {
@@ -170,7 +171,7 @@ namespace HomeBudget.Components.Operations.Clients
             }
             catch (Exception ex)
             {
-                PaymentOperationsEventStoreClientLogs.SyncFailed(_logger, accountId, periodKey, ex);
+                _logger.SyncFailed(accountId, paymentAccountStream, ex);
                 throw;
             }
         }
@@ -183,7 +184,7 @@ namespace HomeBudget.Components.Operations.Clients
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            PaymentOperationsEventStoreClientLogs.DispatchingSync(_logger, paymentAccountId, events.Count());
+            _logger.DispatchingSync(paymentAccountId, events.Count());
             await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
         }
     }

@@ -17,16 +17,19 @@ using HomeBudget.Core.Options;
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
     [Obsolete("Not to go along with prod grade approach. Will be re-written accodring to SOLID, etc")]
-    public abstract class BaseEventStoreReadClient<T> : IEventStoreDbReadClient<T>, IDisposable
+    public abstract class BaseEventStoreStreamReadClient<T> : IEventStoreDbStreamReadClient<T>, IDisposable
         where T : class, new()
     {
+        private readonly EventStoreDbOptions _options;
         private readonly EventStoreClient _client;
         private readonly ILogger _logger;
         private bool _disposed;
         private static readonly ConcurrentDictionary<string, bool> SubscribedStreams = new(); // should be out of proccess cache (re-use rates implementation)
-        private readonly EventStoreDbOptions _options;
 
-        protected BaseEventStoreReadClient(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
+        protected BaseEventStoreStreamReadClient(
+            EventStoreClient client,
+            EventStoreDbOptions options,
+            ILogger logger)
         {
             _client = client;
             _logger = logger;
@@ -91,13 +94,13 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             }
         }
 
-        protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
-
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
+
+        protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
 
         protected virtual void Dispose(bool disposing)
         {

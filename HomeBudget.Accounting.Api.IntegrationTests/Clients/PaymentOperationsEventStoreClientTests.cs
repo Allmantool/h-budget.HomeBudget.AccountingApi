@@ -21,6 +21,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
@@ -35,7 +36,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
 
         private PaymentOperationsEventStoreWriteClient _sutWrite;
-        private PaymentOperationsEventStoreReadClient _sutRead;
+        private PaymentOperationsEventStoreStreamReadClient _sutRead;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -85,8 +86,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 client,
                 options);
 
-            _sutRead = new PaymentOperationsEventStoreReadClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreReadClient>>(),
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
                 _serviceScopeFactoryMock.Object,
                 Mock.Of<IDateTimeProvider>(),
                 client,
@@ -188,8 +189,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 client,
                 options);
 
-            _sutRead = new PaymentOperationsEventStoreReadClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreReadClient>>(),
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
                 _serviceScopeFactoryMock.Object,
                 Mock.Of<IDateTimeProvider>(),
                 client,
@@ -226,7 +227,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             readResult.Count.Should().Be(totalEvents);
 
             var latestEventsByPeriod = readResult
-                .GroupBy(e => e.Payload.GetMonthPeriodIdentifier())
+                .GroupBy(e => e.Payload.GetMonthPeriodPaymentAccountIdentifier())
                 .Select(g => g.OrderByDescending(e => e.Payload.OperationDay).Last())
                 .ToList();
 
@@ -255,8 +256,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 client,
                 options);
 
-            _sutRead = new PaymentOperationsEventStoreReadClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreReadClient>>(),
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
                 _serviceScopeFactoryMock.Object,
                 Mock.Of<IDateTimeProvider>(),
                 client,

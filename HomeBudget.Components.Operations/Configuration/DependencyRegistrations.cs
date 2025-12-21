@@ -67,35 +67,40 @@ namespace HomeBudget.Components.Operations.Configuration
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
         {
             services.AddSingleton<IEventStoreDbWriteClient<PaymentOperationEvent>, PaymentOperationsEventStoreWriteClient>();
-            services.AddSingleton<IEventStoreDbReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreReadClient>();
 
             if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
             {
                 return services;
             }
 
-            var serviceProvider = services.BuildServiceProvider();
-            var eventStoreDbOptions = serviceProvider.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
-            var eventStoreUrl = eventStoreDbOptions.Url.OriginalString;
+            services.AddSingleton(sp =>
+            {
+                var options = sp.GetRequiredService<IOptions<EventStoreDbOptions>>().Value;
+                var settings = EventStoreClientSettings.Create(options.Url.OriginalString);
 
-            return services.AddEventStoreClient(
-                    eventStoreUrl,
-                    settings =>
-                    {
-                        settings = EventStoreClientSettings.Create(eventStoreUrl);
-                        settings.OperationOptions = new EventStoreClientOperationOptions
-                        {
-                            ThrowOnAppendFailure = true,
-                        };
-                        settings.DefaultDeadline = TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds * (eventStoreDbOptions.RetryAttempts + 1));
-                        settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
-                        {
-                            KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
-                            GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
-                            DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
-                            MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
-                        };
-                    });
+                settings.OperationOptions = new EventStoreClientOperationOptions
+                {
+                    ThrowOnAppendFailure = true,
+                };
+
+                settings.DefaultDeadline = TimeSpan.FromSeconds(
+                    options.TimeoutInSeconds * (options.RetryAttempts + 1));
+
+                settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                {
+                    KeepAliveInterval = TimeSpan.FromSeconds(options.KeepAliveInterval),
+                    GossipTimeout = TimeSpan.FromSeconds(options.GossipTimeout),
+                    DiscoveryInterval = TimeSpan.FromSeconds(options.DiscoveryInterval),
+                    MaxDiscoverAttempts = options.MaxDiscoverAttempts
+                };
+
+                return settings;
+            });
+
+            services.AddSingleton(sp => new EventStoreClient(sp.GetRequiredService<EventStoreClientSettings>()));
+            services.AddSingleton(sp => new EventStorePersistentSubscriptionsClient(sp.GetRequiredService<EventStoreClientSettings>()));
+
+            return services;
         }
     }
 }

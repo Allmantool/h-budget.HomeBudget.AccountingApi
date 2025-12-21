@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using EventStore.Client;
@@ -12,7 +11,6 @@ using Polly.Retry;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients;
-using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
@@ -22,8 +20,6 @@ namespace HomeBudget.Components.Operations.Clients
     internal sealed class PaymentOperationsEventStoreWriteClient
         : BaseEventStoreWriteClient<PaymentOperationEvent>, IDisposable
     {
-        private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
-
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly ILogger<PaymentOperationsEventStoreWriteClient> _logger;
         private readonly EventStoreDbOptions _opts;
@@ -39,7 +35,6 @@ namespace HomeBudget.Components.Operations.Clients
         {
             _opts = options.Value;
             _logger = logger;
-            _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
             _retryPolicy = EventStoreRetryPolicies.BuildRetryPolicy(_opts, _logger);
             _requestRateLimiter = new(_opts.RequestRateLimiter);
         }
@@ -60,7 +55,7 @@ namespace HomeBudget.Components.Operations.Clients
             }
             catch (Exception ex)
             {
-                PaymentOperationsEventStoreClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
+                PaymentOperationsEventStoreWriteClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
                 await SendToDeadLetterQueueAsync(eventsForSending, ex);
                 throw;
             }
@@ -96,7 +91,7 @@ namespace HomeBudget.Components.Operations.Clients
                         eventForSending.EnvelopId = retryCtx.CorrelationId;
 
                         var opKey = eventForSending.Payload?.Key.ToString();
-                        PaymentOperationsEventStoreClientLogs.SendingEvent(_logger, eventType, opKey, retryCtx.CorrelationId);
+                        PaymentOperationsEventStoreWriteClientLogs.SendingEvent(_logger, eventType, opKey, retryCtx.CorrelationId);
 
                         var result = await base.SendAsync(
                             eventForSending,
@@ -104,14 +99,14 @@ namespace HomeBudget.Components.Operations.Clients
                             eventType ?? string.Empty,
                             token);
 
-                        PaymentOperationsEventStoreClientLogs.EventSent(_logger, eventType, opKey, retryCtx.CorrelationId);
+                        PaymentOperationsEventStoreWriteClientLogs.EventSent(_logger, eventType, opKey, retryCtx.CorrelationId);
                         return result;
                     },
                     ctx);
             }
             catch (Exception ex)
             {
-                PaymentOperationsEventStoreClientLogs.RetriesExhausted(_logger, eventType, eventForSending.Payload?.Key.ToString(), ex);
+                PaymentOperationsEventStoreWriteClientLogs.RetriesExhausted(_logger, eventType, eventForSending.Payload?.Key.ToString(), ex);
                 await SendToDeadLetterQueueAsync(eventForSending, ex);
                 throw;
             }
@@ -120,7 +115,6 @@ namespace HomeBudget.Components.Operations.Clients
         public void Dispose()
         {
             _cts.Cancel();
-            _paymentEventsBuffer.Writer.TryComplete();
 
             try
             {

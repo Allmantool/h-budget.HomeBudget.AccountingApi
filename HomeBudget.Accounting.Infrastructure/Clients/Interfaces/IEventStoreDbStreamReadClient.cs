@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
 {
-    public interface IEventStoreDbReadClient<T>
+    public interface IEventStoreDbStreamReadClient<T>
     {
         IAsyncEnumerable<T> ReadAsync(
             string streamName,

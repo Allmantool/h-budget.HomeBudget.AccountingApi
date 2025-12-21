@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
@@ -58,7 +59,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to send events to stream {StreamName}: {Message}", streamName, ex.Message);
+                        _logger.FailedToSendEventToStream(ex, streamName, ex.Message);
                     }
                 });
 
@@ -66,13 +67,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "{Handler} failed to process payment events: {Message}", nameof(PaymentOperationsDeliveryHandler), ex.Message);
+                _logger.FailedToProccessEvent(ex, nameof(PaymentOperationsDeliveryHandler), ex.Message);
             }
         }
 
         private static string GenerateStreamName(PaymentOperationEvent paymentEvent)
         {
-            var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodIdentifier();
+            var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodPaymentAccountIdentifier();
             return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
         }
     }

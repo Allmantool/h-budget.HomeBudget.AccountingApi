@@ -25,5 +25,6 @@ namespace HomeBudget.Core.Options
         public int RequestRateLimiter { get; init; } = 32;
 
         public int BatchProcessingFlushPeriodInMs { get; init; } = 100;
+        public int RetryInSeconds { get; set; } = 5;
     }
 }

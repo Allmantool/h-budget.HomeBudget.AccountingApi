@@ -24,7 +24,7 @@ namespace HomeBudget.Components.Operations
             }
 
             var enquiredAt = DateTime.UtcNow;
-            var messageId = eventPayload.GetIdentifier();
+            var messageId = eventPayload.GetPaymentAccountIdentifier();
             var messagePayload = JsonSerializer.Serialize(paymentEvent);
 
             var headers = new Headers

@@ -1,9 +1,8 @@
 ﻿using System.Threading.Channels;
-
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Components.Operations.Factories
+namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
 {
     internal static class PaymentOperationEventChannelFactory
     {
