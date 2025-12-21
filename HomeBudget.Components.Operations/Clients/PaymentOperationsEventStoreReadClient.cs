@@ -11,8 +11,6 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
-using Polly.Retry;
 
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
@@ -27,24 +25,22 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal sealed class PaymentOperationsEventStoreClient
-        : BaseEventStoreClient<PaymentOperationEvent>, IDisposable
+    internal sealed class PaymentOperationsEventStoreReadClient
+        : BaseEventStoreReadClient<PaymentOperationEvent>, IDisposable
     {
         private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
         private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
 
-        private readonly AsyncRetryPolicy _retryPolicy;
-        private readonly ILogger<PaymentOperationsEventStoreClient> _logger;
+        private readonly ILogger<PaymentOperationsEventStoreReadClient> _logger;
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly EventStoreDbOptions _opts;
 
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
-        private readonly SemaphoreSlim requestRateLimiter;
 
-        public PaymentOperationsEventStoreClient(
-            ILogger<PaymentOperationsEventStoreClient> logger,
+        public PaymentOperationsEventStoreReadClient(
+            ILogger<PaymentOperationsEventStoreReadClient> logger,
             IServiceScopeFactory serviceScopeFactory,
             IDateTimeProvider dateTimeProvider,
             EventStoreClient client,
@@ -56,85 +52,10 @@ namespace HomeBudget.Components.Operations.Clients
             _serviceScopeFactory = serviceScopeFactory;
             _dateTimeProvider = dateTimeProvider;
             _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
-            _retryPolicy = EventStoreRetryPolicies.BuildRetryPolicy(_opts, _logger);
-            requestRateLimiter = new(_opts.RequestRateLimiter);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
                 t => PaymentOperationsEventStoreClientLogs.BatchProcessorCrashed(_logger, t.Exception),
                 TaskContinuationOptions.OnlyOnFaulted);
-        }
-
-        public override async Task<IWriteResult> SendBatchAsync(
-            IEnumerable<PaymentOperationEvent> eventsForSending,
-            string streamName,
-            string eventType = null,
-            CancellationToken ctx = default)
-        {
-            try
-            {
-                await requestRateLimiter.WaitAsync(ctx);
-
-                return await _retryPolicy.ExecuteAsync(
-                    async retryCtx => await base.SendBatchAsync(eventsForSending, streamName, eventType, ctx),
-                    ctx);
-            }
-            catch (Exception ex)
-            {
-                PaymentOperationsEventStoreClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
-                await SendToDeadLetterQueueAsync(eventsForSending, ex);
-                throw;
-            }
-            finally
-            {
-                requestRateLimiter.Release();
-            }
-        }
-
-        public override async Task<IWriteResult> SendAsync(
-            PaymentOperationEvent eventForSending,
-            string streamName = default,
-            string eventType = default,
-            CancellationToken token = default)
-        {
-            ArgumentNullException.ThrowIfNull(eventForSending);
-
-            var ctx = new Context
-            {
-                [nameof(PaymentOperationEvent.EventType)] = eventType,
-                [nameof(PaymentOperationEvent.Payload.Key)] = eventForSending.Payload?.Key
-            };
-
-            try
-            {
-                return await _retryPolicy.ExecuteAsync(
-                    async retryCtx =>
-                    {
-                        eventForSending.Metadata ??= new Dictionary<string, string>();
-                        eventForSending.Metadata["CorrelationId"] = retryCtx.CorrelationId.ToString();
-                        eventForSending.Metadata["RetryCount"] = retryCtx.Count.ToString();
-
-                        eventForSending.EnvelopId = retryCtx.CorrelationId;
-
-                        var opKey = eventForSending.Payload?.Key.ToString();
-                        PaymentOperationsEventStoreClientLogs.SendingEvent(_logger, eventType, opKey, retryCtx.CorrelationId);
-
-                        var result = await base.SendAsync(
-                            eventForSending,
-                            streamName ?? string.Empty,
-                            eventType ?? string.Empty,
-                            token);
-
-                        PaymentOperationsEventStoreClientLogs.EventSent(_logger, eventType, opKey, retryCtx.CorrelationId);
-                        return result;
-                    },
-                    ctx);
-            }
-            catch (Exception ex)
-            {
-                PaymentOperationsEventStoreClientLogs.RetriesExhausted(_logger, eventType, eventForSending.Payload?.Key.ToString(), ex);
-                await SendToDeadLetterQueueAsync(eventForSending, ex);
-                throw;
-            }
         }
 
         public override IAsyncEnumerable<PaymentOperationEvent> ReadAsync(
@@ -160,6 +81,24 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 PaymentOperationsEventStoreClientLogs.ChannelWriteCanceled(_logger);
             }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _paymentEventsBuffer.Writer.TryComplete();
+
+            try
+            {
+                _processorTask?.Wait(TimeSpan.FromSeconds(5));
+
+                base.Dispose();
+            }
+            catch
+            {
+            }
+
+            _cts.Dispose();
         }
 
         private async Task ProcessEventBatchAsync()
@@ -246,25 +185,6 @@ namespace HomeBudget.Components.Operations.Clients
 
             PaymentOperationsEventStoreClientLogs.DispatchingSync(_logger, paymentAccountId, events.Count());
             await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
-        }
-
-        public void Dispose()
-        {
-            _cts.Cancel();
-            _paymentEventsBuffer.Writer.TryComplete();
-
-            try
-            {
-                _processorTask?.Wait(TimeSpan.FromSeconds(5));
-                requestRateLimiter.Dispose();
-
-                base.Dispose();
-            }
-            catch
-            {
-            }
-
-            _cts.Dispose();
         }
     }
 }

@@ -19,8 +19,8 @@ using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Core.Options;
 using HomeBudget.Core.Handlers;
+using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
@@ -66,7 +66,8 @@ namespace HomeBudget.Components.Operations.Configuration
 
         private static IServiceCollection RegisterEventStoreDbClient(this IServiceCollection services, string webHostEnvironment)
         {
-            services.AddSingleton<IEventStoreDbClient<PaymentOperationEvent>, PaymentOperationsEventStoreClient>();
+            services.AddSingleton<IEventStoreDbWriteClient<PaymentOperationEvent>, PaymentOperationsEventStoreWriteClient>();
+            services.AddSingleton<IEventStoreDbReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreReadClient>();
 
             if (HostEnvironments.Integration.Equals(webHostEnvironment, StringComparison.OrdinalIgnoreCase))
             {

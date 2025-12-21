@@ -20,16 +20,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
     {
         private readonly ILogger<PaymentOperationsDeliveryHandler> _logger;
         private readonly EventStoreDbOptions _options;
-        private readonly IEventStoreDbClient<PaymentOperationEvent> _eventStoreDbClient;
+        private readonly IEventStoreDbWriteClient<PaymentOperationEvent> _eventStoreDbWriteClient;
 
         public PaymentOperationsDeliveryHandler(
             ILogger<PaymentOperationsDeliveryHandler> logger,
             IOptions<EventStoreDbOptions> options,
-            IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient)
+            IEventStoreDbWriteClient<PaymentOperationEvent> eventStoreDbWriteClient)
         {
             _logger = logger;
             _options = options.Value;
-            _eventStoreDbClient = eventStoreDbClient;
+            _eventStoreDbWriteClient = eventStoreDbWriteClient;
         }
 
         public async Task HandleAsync(IEnumerable<PaymentOperationEvent> paymentEvents, CancellationToken cancellationToken)
@@ -54,7 +54,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
 
                     try
                     {
-                        await _eventStoreDbClient.SendBatchAsync(streamEvents, streamName, eventTypeTitle, cancellationToken);
+                        await _eventStoreDbWriteClient.SendBatchAsync(streamEvents, streamName, eventTypeTitle, cancellationToken);
                     }
                     catch (Exception ex)
                     {
