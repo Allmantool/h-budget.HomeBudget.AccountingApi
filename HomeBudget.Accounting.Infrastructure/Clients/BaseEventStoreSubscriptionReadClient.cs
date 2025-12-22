@@ -109,7 +109,15 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 return;
                             }
 
-                            await OnEventAppearedAsync(eventData);
+                            if (handler is null)
+                            {
+                                await OnEventAppearedAsync(eventData);
+                            }
+                            else
+                            {
+                                await handler(evt);
+                            }
+
                             await sub.Ack(evt);
                         }
                         catch (Exception ex)
