@@ -5,13 +5,16 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
@@ -30,7 +33,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
                 .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
-                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>();
+                .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
+                .AddSingleton<IEventStoreDbSubscriptionReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreSubscriptionReadClient>()
+                .AddSingleton<IEventStoreDbStreamReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreStreamReadClient>();
         }
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)

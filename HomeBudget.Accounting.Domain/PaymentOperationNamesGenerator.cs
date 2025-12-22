@@ -1,14 +1,18 @@
-﻿using HomeBudget.Accounting.Domain.Constants;
-using HomeBudget.Accounting.Domain.Models;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Constants;
 
 namespace HomeBudget.Accounting.Domain
 {
     public static class PaymentOperationNamesGenerator
     {
-        public static string GenerateForAccountMonthStream(string monthPeriodIdentifier)
+        public static string GenerateForAccountMonthStream(string baseStreamName)
             => string.Join(
                 NameConventions.EventPrefixSeparator,
-                nameof(PaymentAccount),
-                monthPeriodIdentifier);
+                EventDbEventStreams.PaymentAccountPrefix,
+                baseStreamName);
+
+        public static string GenerateForAccountMonthStream(Guid accountId)
+            => GenerateForAccountMonthStream(accountId.ToString());
     }
 }

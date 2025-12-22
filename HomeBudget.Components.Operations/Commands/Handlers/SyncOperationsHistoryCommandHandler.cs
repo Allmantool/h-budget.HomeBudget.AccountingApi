@@ -36,7 +36,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             }
 
             var financialTransaction = events.First().Payload;
-            var monthPeriodIdentifier = financialTransaction.GetMonthPeriodIdentifier();
+            var monthPeriodIdentifier = financialTransaction.GetMonthPeriodPaymentAccountIdentifier();
 
             await BenchmarkService.WithBenchmarkAsync(
                 async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events),

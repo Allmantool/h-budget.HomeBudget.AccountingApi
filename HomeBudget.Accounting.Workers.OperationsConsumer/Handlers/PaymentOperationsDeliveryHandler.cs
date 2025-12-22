@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
@@ -20,16 +21,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
     {
         private readonly ILogger<PaymentOperationsDeliveryHandler> _logger;
         private readonly EventStoreDbOptions _options;
-        private readonly IEventStoreDbClient<PaymentOperationEvent> _eventStoreDbClient;
+        private readonly IEventStoreDbWriteClient<PaymentOperationEvent> _eventStoreDbWriteClient;
 
         public PaymentOperationsDeliveryHandler(
             ILogger<PaymentOperationsDeliveryHandler> logger,
             IOptions<EventStoreDbOptions> options,
-            IEventStoreDbClient<PaymentOperationEvent> eventStoreDbClient)
+            IEventStoreDbWriteClient<PaymentOperationEvent> eventStoreDbWriteClient)
         {
             _logger = logger;
             _options = options.Value;
-            _eventStoreDbClient = eventStoreDbClient;
+            _eventStoreDbWriteClient = eventStoreDbWriteClient;
         }
 
         public async Task HandleAsync(IEnumerable<PaymentOperationEvent> paymentEvents, CancellationToken cancellationToken)
@@ -54,11 +55,11 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
 
                     try
                     {
-                        await _eventStoreDbClient.SendBatchAsync(streamEvents, streamName, eventTypeTitle, cancellationToken);
+                        await _eventStoreDbWriteClient.SendBatchAsync(streamEvents, streamName, eventTypeTitle, cancellationToken);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to send events to stream {StreamName}: {Message}", streamName, ex.Message);
+                        _logger.FailedToSendEventToStream(ex, streamName, ex.Message);
                     }
                 });
 
@@ -66,13 +67,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "{Handler} failed to process payment events: {Message}", nameof(PaymentOperationsDeliveryHandler), ex.Message);
+                _logger.FailedToProccessEvent(ex, nameof(PaymentOperationsDeliveryHandler), ex.Message);
             }
         }
 
         private static string GenerateStreamName(PaymentOperationEvent paymentEvent)
         {
-            var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodIdentifier();
+            var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodPaymentAccountIdentifier();
             return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
         }
     }

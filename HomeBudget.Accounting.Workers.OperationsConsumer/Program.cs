@@ -66,7 +66,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(environment.EnvironmentName)
                 .RegisterCategoriesDependencies()
-                .AddHostedService<KafkaPaymentsConsumerWorker>();
+                .AddHostedService<KafkaPaymentsConsumerWorker>()
+                .AddHostedService<EventStoreDbPaymentsConsumerWorker>();
 
             services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder));
 

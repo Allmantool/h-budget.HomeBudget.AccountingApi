@@ -2,6 +2,6 @@
 {
     public static class NameConventions
     {
-        public static readonly string EventPrefixSeparator = "_";
+        public static readonly string EventPrefixSeparator = "-";
     }
 }

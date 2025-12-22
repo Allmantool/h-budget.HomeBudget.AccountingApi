@@ -1,6 +1,13 @@
-﻿namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
+﻿using AccountingWorker = HomeBudget.Accounting.Workers.OperationsConsumer;
+
+namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 {
-    internal class AccountingTestWebApp : BaseTestWebApp<Program, Workers.OperationsConsumer.Program>
+    internal class AccountingTestWebApp : BaseTestWebApp<Program, AccountingWorker.Program>
     {
+        public AccountingTestWebApp()
+        {
+            ShouldInitializeWebApp = true;
+            ShouldInitializeWorkers = true;
+        }
     }
 }

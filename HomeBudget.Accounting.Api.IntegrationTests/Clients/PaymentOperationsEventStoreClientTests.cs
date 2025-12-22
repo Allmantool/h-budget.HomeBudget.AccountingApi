@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-
 using EventStore.Client;
 using FluentAssertions;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,10 +12,12 @@ using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Workers;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -35,11 +36,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         private readonly Mock<IServiceProvider> _serviceProviderMock = new();
         private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
 
-        private PaymentOperationsEventStoreClient _sut;
+        private readonly EventStoreDbPaymentsConsumerTestWorker _sut = new();
+
+        private PaymentOperationsEventStoreWriteClient _sutWrite;
+        private PaymentOperationsEventStoreStreamReadClient _sutRead;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
         {
+            await _sut.InitAsync();
             await base.SetupAsync();
 
             _paymentOperationsHistoryServiceMock
@@ -73,17 +78,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-            _sut = new PaymentOperationsEventStoreClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                _serviceScopeFactoryMock.Object,
-                Mock.Of<IDateTimeProvider>(),
-                client,
-                Options.Create(
+            var options = Options.Create(
                 new EventStoreDbOptions
                 {
                     RetryAttempts = 3,
                     TimeoutInSeconds = 10
-                }));
+                });
+
+            _sutWrite = new PaymentOperationsEventStoreWriteClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreWriteClient>>(),
+                client,
+                options);
+
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                options
+              );
 
             var paymentsEvents = new List<PaymentOperationEvent>
                 {
@@ -148,12 +161,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             foreach (var paymentEvent in paymentsEvents)
             {
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
-                await _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
+                await _sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle);
             }
 
-            var readResult = await _sut.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
+            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountIdA);
+            var readResult = await _sutRead.ReadAsync(stramNameForRead).ToListAsync();
 
             readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
         }
@@ -167,20 +181,28 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var dbConnectionString = TestContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-            _sut = new PaymentOperationsEventStoreClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                _serviceScopeFactoryMock.Object,
-                Mock.Of<IDateTimeProvider>(),
-                client,
-                Options.Create(new EventStoreDbOptions
+            var options = Options.Create(
+                new EventStoreDbOptions
                 {
                     RetryAttempts = 3,
                     TimeoutInSeconds = 10,
                     EventBatchingDelayInMs = 50
-                }));
+                });
+
+            _sutWrite = new PaymentOperationsEventStoreWriteClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreWriteClient>>(),
+                client,
+                options);
+
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                options);
 
             var tasks = new List<Task>();
-            for (int i = 0; i < totalEvents; i++)
+            for (var i = 0; i < totalEvents; i++)
             {
                 var paymentEvent = new PaymentOperationEvent
                 {
@@ -198,19 +220,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 };
 
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
-                tasks.Add(_sut.SendAsync(paymentEvent, streamName, eventTypeTitle));
+                tasks.Add(_sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle));
             }
 
             await Task.WhenAll(tasks);
 
-            var readResult = await _sut.ReadAsync(paymentAccountId.ToString()).ToListAsync();
+            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountId);
+
+            var readResult = await _sutRead.ReadAsync(stramNameForRead).ToListAsync();
 
             readResult.Count.Should().Be(totalEvents);
 
             var latestEventsByPeriod = readResult
-                .GroupBy(e => e.Payload.GetMonthPeriodIdentifier())
+                .GroupBy(e => e.Payload.GetMonthPeriodPaymentAccountIdentifier())
                 .Select(g => g.OrderByDescending(e => e.Payload.OperationDay).Last())
                 .ToList();
 
@@ -227,16 +251,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var dbConnectionString = TestContainers.EventSourceDbContainer.GetConnectionString();
             using var client = new EventStoreClient(EventStoreClientSettings.Create(dbConnectionString));
 
-            _sut = new PaymentOperationsEventStoreClient(
-                Mock.Of<ILogger<PaymentOperationsEventStoreClient>>(),
-                _serviceScopeFactoryMock.Object,
-                Mock.Of<IDateTimeProvider>(),
-                client,
-                Options.Create(new EventStoreDbOptions
+            var options = Options.Create(
+                new EventStoreDbOptions
                 {
                     RetryAttempts = 3,
                     TimeoutInSeconds = 10
-                }));
+                });
+
+            _sutWrite = new PaymentOperationsEventStoreWriteClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreWriteClient>>(),
+                client,
+                options);
+
+            _sutRead = new PaymentOperationsEventStoreStreamReadClient(
+                Mock.Of<ILogger<PaymentOperationsEventStoreStreamReadClient>>(),
+                _serviceScopeFactoryMock.Object,
+                Mock.Of<IDateTimeProvider>(),
+                client,
+                options);
 
             var tasks = Enumerable.Range(0, totalEvents).Select(i =>
             {
@@ -257,18 +289,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 };
 
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
-                return _sut.SendAsync(paymentEvent, streamName, eventTypeTitle);
+                return _sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle);
             });
 
             await Task.WhenAll(tasks);
 
-            var resultA = await _sut.ReadAsync(accountA.ToString()).ToListAsync();
+            var resultA = await _sutRead.ReadAsync(PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountA)).ToListAsync();
             resultA.Should().NotBeEmpty();
             resultA.Count.Should().Be(totalEvents / 2);
 
-            var resultB = await _sut.ReadAsync(accountB.ToString()).ToListAsync();
+            var resultB = await _sutRead.ReadAsync(PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountB)).ToListAsync();
             resultB.Should().NotBeEmpty();
             resultB.Count.Should().Be(totalEvents / 2);
         }

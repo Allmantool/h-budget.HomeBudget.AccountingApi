@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using EventStore.Client;
@@ -11,6 +10,8 @@ using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+
+using AccountingWorker = HomeBudget.Accounting.Workers.OperationsConsumer;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
@@ -32,7 +33,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             _containersConnections = _workerHostInitializationCallback.Invoke();
 
-            WorkerHost = Workers.OperationsConsumer.Program.CreateHost(
+            WorkerHost = AccountingWorker.Program.CreateHost(
                 environmentName: HostEnvironments.Integration,
                 configureServices: services =>
                 {
@@ -63,6 +64,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     var eventStoreDbOptions = new EventStoreDbOptions();
                     services.AddEventStoreClient(
+                        _containersConnections.EventSourceDbContainer,
+                        settings =>
+                        {
+                            var esSettings = EventStoreClientSettings.Create(_containersConnections.EventSourceDbContainer);
+                            esSettings.OperationOptions.ThrowOnAppendFailure = true;
+                            esSettings.DefaultDeadline =
+                                TimeSpan.FromSeconds(eventStoreDbOptions.TimeoutInSeconds *
+                                                     (eventStoreDbOptions.RetryAttempts + 1));
+                            esSettings.ConnectivitySettings = new EventStoreClientConnectivitySettings
+                            {
+                                KeepAliveInterval = TimeSpan.FromSeconds(eventStoreDbOptions.KeepAliveInterval),
+                                GossipTimeout = TimeSpan.FromSeconds(eventStoreDbOptions.GossipTimeout),
+                                DiscoveryInterval = TimeSpan.FromSeconds(eventStoreDbOptions.DiscoveryInterval),
+                                MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
+                            };
+                        });
+
+                    services.AddEventStorePersistentSubscriptionsClient(
                         _containersConnections.EventSourceDbContainer,
                         settings =>
                         {

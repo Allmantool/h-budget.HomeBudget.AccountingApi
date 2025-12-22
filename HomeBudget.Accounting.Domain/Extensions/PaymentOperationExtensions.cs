@@ -5,9 +5,9 @@ namespace HomeBudget.Accounting.Domain.Extensions
 {
     public static class PaymentOperationExtensions
     {
-        public static string GetIdentifier(this FinancialTransaction operation) => $"{operation.PaymentAccountId}-{operation.Key}";
+        public static string GetPaymentAccountIdentifier(this FinancialTransaction operation) => $"{operation.PaymentAccountId}-{operation.Key}";
 
-        public static string GetMonthPeriodIdentifier(this FinancialTransaction operation)
+        public static string GetMonthPeriodPaymentAccountIdentifier(this FinancialTransaction operation)
         {
             var paymentPeriod = operation.OperationDay.ToFinancialPeriod();
             var startPeriod = paymentPeriod.StartDate.ToString(DateTimeFormats.FinancialPeriod);
