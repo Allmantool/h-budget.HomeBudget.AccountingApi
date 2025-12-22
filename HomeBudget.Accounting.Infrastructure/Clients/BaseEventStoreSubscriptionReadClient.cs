@@ -21,6 +21,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         private readonly EventStoreDbOptions _options;
 
         private bool _disposed;
+        private PersistentSubscription _subscription;
 
         protected BaseEventStoreSubscriptionReadClient(
             EventStorePersistentSubscriptionsClient client,
@@ -52,6 +53,10 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 // expected
             }
+            catch (Exception ex)
+            {
+                // expected
+            }
         }
 
         public virtual Task SubscribeAsync(CancellationToken ct = default) => SubscribeAsync(null, ct);
@@ -65,32 +70,34 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         {
             try
             {
-                await _client.SubscribeToStreamAsync(
-                    streamName,
-                    groupName,
-                    async (sub, evt, retryCount, token) =>
-                    {
-                        if (handler is null)
-                        {
-                            var json = evt.Event.Data.Span;
-                            var eventType = evt.Event.EventType;
+                _subscription = await _client.SubscribeToStreamAsync(
+                      streamName,
+                      groupName,
+                      async (sub, evt, retryCount, token) =>
+                      {
+                          if (handler is null)
+                          {
+                              var json = evt.Event.Data.Span;
+                              var eventType = evt.Event.EventType;
 
-                            var eventData = JsonSerializer.Deserialize<T>(json);
+                              var eventData = JsonSerializer.Deserialize<T>(json);
 
-                            await OnEventAppearedAsync(eventData);
-                        }
-                        else
-                        {
-                            await handler(evt);
-                        }
+                              await OnEventAppearedAsync(eventData);
+                          }
+                          else
+                          {
+                              await handler(evt);
+                          }
 
-                        await sub.Ack(evt);
-                    },
-                    (sub, reason, ex) =>
-                    {
-                        _logger.SubscriptionDropped(ex, reason);
-                    },
-                    cancellationToken: ct);
+                          await sub.Ack(evt);
+                      },
+                      (sub, reason, ex) =>
+                      {
+                          _logger.SubscriptionDropped(ex, reason);
+                      },
+                      cancellationToken: ct);
+
+                await Task.Delay(System.Threading.Timeout.Infinite, ct);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

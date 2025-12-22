@@ -22,7 +22,22 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await client.CreatePersistentSubscriptionAsync(stoppingToken);
-            await client.SubscribeAsync(stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                   await client.SubscribeAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // graceful shutdown
+                }
+                catch (Exception ex)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                }
+            }
         }
 
         public override Task StopAsync(CancellationToken cancellationToken)
