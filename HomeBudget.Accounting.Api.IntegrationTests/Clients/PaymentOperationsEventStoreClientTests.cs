@@ -161,12 +161,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             foreach (var paymentEvent in paymentsEvents)
             {
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
                 await _sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle);
             }
 
-            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountIdA.ToString());
+            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountIdA);
             var readResult = await _sutRead.ReadAsync(stramNameForRead).ToListAsync();
 
             readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
@@ -202,7 +202,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 options);
 
             var tasks = new List<Task>();
-            for (int i = 0; i < totalEvents; i++)
+            for (var i = 0; i < totalEvents; i++)
             {
                 var paymentEvent = new PaymentOperationEvent
                 {
@@ -220,14 +220,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 };
 
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
-                tasks.Add(_sutWrite.SendAsync(paymentEvent, streamName, eventTypeTitle));
+                tasks.Add(_sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle));
             }
 
             await Task.WhenAll(tasks);
 
-            var readResult = await _sutRead.ReadAsync(paymentAccountId.ToString()).ToListAsync();
+            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountId);
+
+            var readResult = await _sutRead.ReadAsync(stramNameForRead).ToListAsync();
 
             readResult.Count.Should().Be(totalEvents);
 
@@ -287,18 +289,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 };
 
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId);
 
-                return _sutWrite.SendAsync(paymentEvent, streamName, eventTypeTitle);
+                return _sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle);
             });
 
             await Task.WhenAll(tasks);
 
-            var resultA = await _sutRead.ReadAsync(accountA.ToString()).ToListAsync();
+            var resultA = await _sutRead.ReadAsync(PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountA)).ToListAsync();
             resultA.Should().NotBeEmpty();
             resultA.Count.Should().Be(totalEvents / 2);
 
-            var resultB = await _sutRead.ReadAsync(accountB.ToString()).ToListAsync();
+            var resultB = await _sutRead.ReadAsync(PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountB)).ToListAsync();
             resultB.Should().NotBeEmpty();
             resultB.Count.Should().Be(totalEvents / 2);
         }

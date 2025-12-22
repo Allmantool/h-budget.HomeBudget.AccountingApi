@@ -1,4 +1,6 @@
-﻿using HomeBudget.Accounting.Domain.Constants;
+﻿using System;
+
+using HomeBudget.Accounting.Domain.Constants;
 
 namespace HomeBudget.Accounting.Domain
 {
@@ -9,5 +11,8 @@ namespace HomeBudget.Accounting.Domain
                 NameConventions.EventPrefixSeparator,
                 EventDbEventStreams.PaymentAccountPrefix,
                 baseStreamName);
+
+        public static string GenerateForAccountMonthStream(Guid accountId)
+            => GenerateForAccountMonthStream(accountId.ToString());
     }
 }
