@@ -29,6 +29,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         private List<IntegrationTestWorkerFactory<TWorkerEntryPoint>> WorkerFactories { get; set; } = new List<IntegrationTestWorkerFactory<TWorkerEntryPoint>>();
 
+        public bool ShouldInitializeWebApp { get; protected set; } = true;
+        public bool ShouldInitializeWorkers { get; protected set; } = true;
+
         internal static TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
@@ -56,9 +59,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
                 var kafkaContainerConnection = await TestContainersService.KafkaContainer.GetReachableBootstrapAsync();
 
-                for (var i = 0; i < workersMaxAmount; i++)
+                if (ShouldInitializeWorkers)
                 {
-                    var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
+                    for (var i = 0; i < workersMaxAmount; i++)
+                    {
+                        var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
+                            () => new TestContainersConnections
+                            {
+                                KafkaContainer = kafkaContainerConnection,
+                                EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                                MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                            });
+
+                        WorkerFactories.Add(worker);
+                    }
+
+                    await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
+                }
+
+                if (ShouldInitializeWebApp)
+                {
+                    WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
                         () => new TestContainersConnections
                         {
                             KafkaContainer = kafkaContainerConnection,
@@ -66,48 +87,36 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                             MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
                         });
 
-                    WorkerFactories.Add(worker);
+                    var server = WebFactory.Server;
+                    var addresses = server.Features.Get<IServerAddressesFeature>();
+                    var realAddress = addresses.Addresses.FirstOrDefault();
+                    var baseAddress = realAddress is null ?
+                        WebFactory.ClientOptions.BaseAddress
+                        : new Uri(realAddress);
+
+                    var clientOptions = new WebApplicationFactoryClientOptions
+                    {
+                        BaseAddress = baseAddress,
+                        AllowAutoRedirect = true,
+                        HandleCookies = true
+                    };
+
+                    var baseClient = WebFactory.CreateClient(clientOptions);
+                    baseClient.Timeout = TimeSpan.FromMinutes(BaseTestWebAppOptions.WebClientTimeoutInMinutes);
+
+                    var healthUri = new Uri(baseClient.BaseAddress, Endpoints.HealthCheckSource);
+                    var response = await baseClient.GetAsync(healthUri);
+                    response.EnsureSuccessStatusCode();
+
+                    RestHttpClient = new RestClient(
+                        baseClient,
+                        new RestClientOptions()
+                        {
+                            ThrowOnAnyError = true,
+                            ConfigureMessageHandler = (handler) => new ErrorHandlerDelegatingHandler(new HttpClientHandler())
+                        }
+                    );
                 }
-
-                await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
-
-                WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
-                    () => new TestContainersConnections
-                    {
-                        KafkaContainer = kafkaContainerConnection,
-                        EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                        MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
-                    });
-
-                var server = WebFactory.Server;
-                var addresses = server.Features.Get<IServerAddressesFeature>();
-                var realAddress = addresses.Addresses.FirstOrDefault();
-                var baseAddress = realAddress is null ?
-                    WebFactory.ClientOptions.BaseAddress
-                    : new Uri(realAddress);
-
-                var clientOptions = new WebApplicationFactoryClientOptions
-                {
-                    BaseAddress = baseAddress,
-                    AllowAutoRedirect = true,
-                    HandleCookies = true
-                };
-
-                var baseClient = WebFactory.CreateClient(clientOptions);
-                baseClient.Timeout = TimeSpan.FromMinutes(BaseTestWebAppOptions.WebClientTimeoutInMinutes);
-
-                var healthUri = new Uri(baseClient.BaseAddress, Endpoints.HealthCheckSource);
-                var response = await baseClient.GetAsync(healthUri);
-                response.EnsureSuccessStatusCode();
-
-                RestHttpClient = new RestClient(
-                    baseClient,
-                    new RestClientOptions()
-                    {
-                        ThrowOnAnyError = true,
-                        ConfigureMessageHandler = (handler) => new ErrorHandlerDelegatingHandler(new HttpClientHandler())
-                    }
-                );
 
                 return true;
             }

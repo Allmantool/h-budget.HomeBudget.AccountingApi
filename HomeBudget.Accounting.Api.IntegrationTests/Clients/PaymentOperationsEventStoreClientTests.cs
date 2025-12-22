@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
 using EventStore.Client;
 using FluentAssertions;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,16 +12,17 @@ using Moq;
 using NUnit.Framework;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Workers;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {
@@ -35,12 +36,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         private readonly Mock<IServiceProvider> _serviceProviderMock = new();
         private readonly Mock<IPaymentOperationsHistoryService> _paymentOperationsHistoryServiceMock = new();
 
+        private readonly EventStoreDbPaymentsConsumerTestWorker _sut = new();
+
         private PaymentOperationsEventStoreWriteClient _sutWrite;
         private PaymentOperationsEventStoreStreamReadClient _sutRead;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
         {
+            await _sut.InitAsync();
             await base.SetupAsync();
 
             _paymentOperationsHistoryServiceMock
@@ -157,12 +161,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             foreach (var paymentEvent in paymentsEvents)
             {
                 var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
-                var streamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
+                var streamNameForWrite = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentEvent.Payload.PaymentAccountId.ToString());
 
-                await _sutWrite.SendAsync(paymentEvent, streamName, eventTypeTitle);
+                await _sutWrite.SendAsync(paymentEvent, streamNameForWrite, eventTypeTitle);
             }
 
-            var readResult = await _sutRead.ReadAsync(paymentAccountIdA.ToString()).ToListAsync();
+            var stramNameForRead = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(paymentAccountIdA.ToString());
+            var readResult = await _sutRead.ReadAsync(stramNameForRead).ToListAsync();
 
             readResult.Count.Should().Be(paymentsEvents.Count(p => p.Payload.PaymentAccountId.CompareTo(paymentAccountIdA) == 0));
         }

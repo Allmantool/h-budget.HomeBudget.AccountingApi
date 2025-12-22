@@ -16,7 +16,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
     internal class EventStoreDbPaymentsConsumerWorker(
         ILogger<EventStoreDbPaymentsConsumerWorker> logger,
-        IOptions<KafkaOptions> options,
+        IOptions<EventStoreDbOptions> options,
         IEventStoreDbSubscriptionReadClient<PaymentOperationEvent> client)
         : BackgroundService
     {
@@ -41,8 +41,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Subscription failed, retrying");
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    logger.SubscriptionFailed(ex);
+                    await Task.Delay(TimeSpan.FromSeconds(options.Value.RetryInSeconds), stoppingToken);
                 }
             }
         }

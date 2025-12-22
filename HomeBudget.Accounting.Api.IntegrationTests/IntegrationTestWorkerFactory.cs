@@ -11,6 +11,8 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
+using AccountingWorker = HomeBudget.Accounting.Workers.OperationsConsumer;
+
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     public class IntegrationTestWorkerFactory<TProgram>
@@ -31,7 +33,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         {
             _containersConnections = _workerHostInitializationCallback.Invoke();
 
-            WorkerHost = Workers.OperationsConsumer.Program.CreateHost(
+            WorkerHost = AccountingWorker.Program.CreateHost(
                 environmentName: HostEnvironments.Integration,
                 configureServices: services =>
                 {

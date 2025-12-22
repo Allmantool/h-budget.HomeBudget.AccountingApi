@@ -7,6 +7,7 @@ using EventStore.Client;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core.Options;
@@ -45,21 +46,15 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     settings,
                     cancellationToken: ct);
 
-                _logger.LogInformation(
-                    "Persistent subscription '{Group}' created on $all",
-                    groupName);
+                _logger.PersistentSubscriptionCreated(groupName);
             }
             catch (RpcException ex) when (ex.StatusCode == StatusCode.AlreadyExists)
             {
-                _logger.LogInformation(
-                    "Persistent subscription '{Group}' already exists",
-                    groupName);
+                _logger.PersistentSubscriptionAlreadyExists(ex, groupName);
             }
             catch (Exception ex)
             {
-                _logger.LogError(
-                    "Failed to create subscription with error",
-                    groupName);
+                _logger.FailedCreateSubscription(ex, groupName);
             }
         }
 
@@ -78,18 +73,22 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     groupName,
                     async (sub, evt, retryCount, token) =>
                     {
-                        if (evt.Event is null)
+                        var resolveEvent = evt.Event;
+
+                        if (resolveEvent is null)
                         {
                             return;
                         }
 
-                        if (evt.Event.EventType.StartsWith("$"))
+                        if (resolveEvent.EventType.StartsWith('$'))
                         {
                             await sub.Ack(evt);
                             return;
                         }
 
-                        if (!evt.Event.EventStreamId.StartsWith("payment-account-"))
+                        if (!resolveEvent.EventStreamId.StartsWith(
+                            $"{EventDbEventStreams.PaymentAccountPrefix}{NameConventions.EventPrefixSeparator}",
+                            StringComparison.OrdinalIgnoreCase))
                         {
                             await sub.Ack(evt);
                             return;
@@ -122,10 +121,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(
-                                ex,
-                                "Handler failed for event {EventId}",
-                                evt.Event.EventId);
+                            _logger.HandlerFailedForEvent(ex, resolveEvent.EventId);
 
                             await sub.Nack(
                                 PersistentSubscriptionNakEventAction.Retry,
@@ -135,10 +131,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     },
                     (sub, reason, ex) =>
                     {
-                        _logger.LogWarning(
-                            ex,
-                            "Subscription dropped: {Reason}",
-                            reason);
+                        _logger.SubscriptionDropped(ex, reason);
 
                         droppedTcs.TrySetResult();
                     },

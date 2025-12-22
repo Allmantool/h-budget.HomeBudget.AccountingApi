@@ -25,11 +25,5 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Subscription dropped: {Reason}")]
         public static partial void SubscriptionDropped(this ILogger logger, Exception ex, SubscriptionDroppedReason reason);
-
-        [LoggerMessage(
-            EventId = 1004,
-            Level = LogLevel.Error,
-            Message = "Subscription failed, retrying...")]
-        public static partial void SubscriptionFailed(this ILogger logger, Exception ex);
     }
 }
