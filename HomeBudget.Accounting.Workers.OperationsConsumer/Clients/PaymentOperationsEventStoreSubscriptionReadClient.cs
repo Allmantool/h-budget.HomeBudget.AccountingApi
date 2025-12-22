@@ -65,12 +65,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
         public override Task CreatePersistentSubscriptionAsync(CancellationToken ct)
         {
-            return CreatePersistentSubscriptionAsync(Stream, Group, ct);
+            return CreatePersistentSubscriptionAsync(Group, ct);
         }
 
-        public override Task SubscribeAsync(Func<ResolvedEvent, Task> handler = null, CancellationToken ct = default)
+        public override Task<PersistentSubscription> SubscribeAsync(
+            Func<ResolvedEvent, Task> handler = null,
+            CancellationToken ct = default)
         {
-            return SubscribeAsync(Stream, Group, handler, ct);
+            return SubscribeAsync(Group, handler, ct);
         }
 
         protected override async Task OnEventAppearedAsync(PaymentOperationEvent eventData)

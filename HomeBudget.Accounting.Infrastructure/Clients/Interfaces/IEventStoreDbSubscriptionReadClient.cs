@@ -10,14 +10,13 @@ namespace HomeBudget.Accounting.Infrastructure.Clients.Interfaces
     {
         Task CreatePersistentSubscriptionAsync(CancellationToken ct);
 
-        Task CreatePersistentSubscriptionAsync(string streamName, string groupName, CancellationToken ct);
+        Task CreatePersistentSubscriptionAsync(string groupName, CancellationToken ct);
 
-        Task SubscribeAsync(
-            string streamName,
+        Task<PersistentSubscription> SubscribeAsync(
             string groupName,
             Func<ResolvedEvent, Task> handler,
             CancellationToken ct);
 
-        Task SubscribeAsync(CancellationToken ct);
+        Task<PersistentSubscription> SubscribeAsync(CancellationToken ct);
     }
 }

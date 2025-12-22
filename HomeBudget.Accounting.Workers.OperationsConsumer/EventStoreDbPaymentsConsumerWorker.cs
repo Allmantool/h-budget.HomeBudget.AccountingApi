@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using EventStore.Client;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
         IEventStoreDbSubscriptionReadClient<PaymentOperationEvent> client)
         : BackgroundService
     {
+        private PersistentSubscription _subscription;
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await client.CreatePersistentSubscriptionAsync(stoppingToken);
@@ -27,14 +30,18 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             {
                 try
                 {
-                   await client.SubscribeAsync(stoppingToken);
+                    _subscription?.Dispose();
+                    _subscription = null;
+
+                    _subscription = await client.SubscribeAsync(stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
-                    // graceful shutdown
+                    break;
                 }
                 catch (Exception ex)
                 {
+                    logger.LogError(ex, "Subscription failed, retrying");
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 }
             }
@@ -44,6 +51,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
         {
             try
             {
+                _subscription?.Dispose();
+                _subscription = null;
             }
             catch (Exception ex)
             {
