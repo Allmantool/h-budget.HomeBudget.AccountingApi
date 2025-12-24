@@ -83,16 +83,11 @@ namespace HomeBudget.Components.Operations.Configuration
                     ThrowOnAppendFailure = true,
                 };
 
-                settings.DefaultDeadline = TimeSpan.FromSeconds(
-                    options.TimeoutInSeconds * (options.RetryAttempts + 1));
-
-                settings.ConnectivitySettings = new EventStoreClientConnectivitySettings
-                {
-                    KeepAliveInterval = TimeSpan.FromSeconds(options.KeepAliveInterval),
-                    GossipTimeout = TimeSpan.FromSeconds(options.GossipTimeout),
-                    DiscoveryInterval = TimeSpan.FromSeconds(options.DiscoveryInterval),
-                    MaxDiscoverAttempts = options.MaxDiscoverAttempts
-                };
+                settings.DefaultDeadline = TimeSpan.FromSeconds(options.TimeoutInSeconds * (options.RetryAttempts + 1));
+                settings.ConnectivitySettings.KeepAliveInterval = TimeSpan.FromSeconds(options.KeepAliveInterval);
+                settings.ConnectivitySettings.GossipTimeout = TimeSpan.FromSeconds(options.GossipTimeout);
+                settings.ConnectivitySettings.DiscoveryInterval = TimeSpan.FromSeconds(options.DiscoveryInterval);
+                settings.ConnectivitySettings.MaxDiscoverAttempts = options.MaxDiscoverAttempts;
 
                 return settings;
             });

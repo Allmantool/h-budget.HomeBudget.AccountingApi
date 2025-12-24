@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
             {
                 var stream = record.Event.EventStreamId;
 
-                if (stream.StartsWith("$"))
+                if (stream.StartsWith('$'))
                 {
                     continue;
                 }
