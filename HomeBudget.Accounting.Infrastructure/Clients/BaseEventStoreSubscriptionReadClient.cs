@@ -144,7 +144,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                 return subscription;
             }
-            catch
+            catch(Exception ex)
             {
                 subscription?.Dispose();
                 throw;
