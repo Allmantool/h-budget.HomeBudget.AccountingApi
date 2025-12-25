@@ -14,7 +14,7 @@ namespace HomeBudget.Components.Operations
 {
     internal static class PaymentEventToMessageConverter
     {
-        public static Result<Message<string, string>> Convert(PaymentOperationEvent paymentEvent)
+        public static Result<Message<string, string>> Convert(PaymentOperationEvent paymentEvent, DateTime? createdAt = null)
         {
             var eventPayload = paymentEvent?.Payload;
 
@@ -23,7 +23,7 @@ namespace HomeBudget.Components.Operations
                 return Result<Message<string, string>>.Failure($"'{nameof(PaymentOperationEvent)}' can not be null");
             }
 
-            var enquiredAt = DateTime.UtcNow;
+            var enquiredAt = createdAt ?? DateTime.UtcNow;
             var messageId = eventPayload.GetPaymentAccountIdentifier();
             var messagePayload = JsonSerializer.Serialize(paymentEvent);
 

@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 
+using AutoMapper;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
-using HomeBudget.Core.Models;
 using HomeBudget.Core.Handlers;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
@@ -19,13 +21,17 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         ILogger<UpdatePaymentOperationCommandHandler> logger,
         IMapper mapper,
         ISender sender,
+        IDateTimeProvider dateTimeProvider,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IExectutionStrategyHandler<IKafkaProducer<string, string>> fireAndForgetHandler)
+        IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
+        IExectutionStrategyHandler<IBaseWriteRepository> cdcHandler)
         : BasePaymentCommandHandler(
-                logger,
-                mapper,
-                fireAndForgetHandler),
-            IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
+            logger,
+            mapper,
+            dateTimeProvider,
+            kafkaHandler,
+            cdcHandler),
+        IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(UpdatePaymentOperationCommand request, CancellationToken cancellationToken)
         {

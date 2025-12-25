@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
-
 using Confluent.Kafka;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using HomeBudget.Accounting.Infrastructure.BackgroundServices;
+using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Data.SqlClients;
+using HomeBudget.Accounting.Infrastructure.Data.SqlClients.MsSql;
 using HomeBudget.Accounting.Infrastructure.Providers;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Services;
@@ -68,9 +71,10 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 .Configure<HostOptions>(options =>
                 {
                     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
-                });
+                })
+                .RegistryDapperIoCDependencies();
 
-                // .RegisterBackgroundServices();
+            // .RegisterBackgroundServices();
         }
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
@@ -79,5 +83,11 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 .AddHostedService<KafkaConsumerWatchdogWorker>()
                 .AddHostedService<KafkaAccountsConsumerWorker>();
         }
+
+        private static IServiceCollection RegistryDapperIoCDependencies(this IServiceCollection services)
+           => services
+               .AddScoped<ISqlConnectionFactory, SqlConnectionFactory>()
+               .AddScoped<IBaseWriteRepository, DapperWriteRepository>()
+               .AddScoped<IBaseReadRepository, DapperReadRepository>();
     }
 }
