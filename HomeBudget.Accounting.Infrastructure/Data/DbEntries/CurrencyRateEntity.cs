@@ -1,6 +1,6 @@
 ﻿using System;
 
-using HomeBudget.Core.Constants;
+using HomeBudget.Accounting.Domain.Enumerations;
 
 namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 {
@@ -18,7 +18,8 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public DateTime CreatedAt { get; set; }
 
-        public OutboxStatus Status { get; set; } = OutboxStatus.Pending;
         public int RetryCount { get; set; }
+
+        public byte Status { get; set; } = OutboxStatuses.Pending.Key;
     }
 }

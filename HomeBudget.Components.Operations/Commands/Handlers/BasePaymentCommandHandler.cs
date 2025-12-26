@@ -8,9 +8,7 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
-using HomeBudget.Accounting.Infrastructure.Data.Extensions;
 using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
@@ -52,8 +50,6 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     CreatedAt = createdAt,
                 };
 
-                var dt = dbEntitity.ToDataTable();
-
                 const string sql = @"
                     INSERT INTO dbo.OutboxAccountPayments
                     (
@@ -65,26 +61,27 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                         Status,
                         RetryCount
                     )
-                    SELECT
-                        EventType,
-                        AggregateId,
-                        PartitionKey,
-                        Payload,
-                        CreatedAt,
-                        Status,
-                        RetryCount
-                    FROM @OutboxAccountPayments;";
+                    VALUES
+                    (
+                        @EventType,
+                        @AggregateId,
+                        @PartitionKey,
+                        @Payload,
+                        @CreatedAt,
+                        @Status,
+                        @RetryCount
+                    );";
 
                 try
                 {
-                    await cdcWriter.ExecuteAsync(sql, dt, TableTypes.OutboxAccountPaymentsEntityType);
+                    await cdcWriter.ExecuteAsync(sql, dbEntitity);
                 }
                 catch (Exception ex)
                 {
                     var reason = ex.InnerException?.Message ?? ex.Message;
 
                     logger.CdcWriteFailed(
-                        dt.TableName,
+                        nameof(OutboxAccountPaymentsEntity),
                         reason,
                         ex);
 
