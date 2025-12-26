@@ -1,11 +1,16 @@
 ﻿using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
 using Microsoft.Extensions.Logging;
 
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
@@ -17,7 +22,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     internal abstract class BasePaymentCommandHandler(
         ILogger logger,
         IMapper mapper,
-        IExectutionStrategyHandler<IKafkaProducer<string, string>> handler)
+        IDateTimeProvider dateTimeProvider,
+        IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
+        IExectutionStrategyHandler<IBaseWriteRepository> cdcHandler)
     {
         protected Task<Result<Guid>> HandleAsync<T>(
             T request,
@@ -25,11 +32,64 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         {
             var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
 
-            var paymentAccountId = paymentEvent.Payload.PaymentAccountId;
+            var payload = paymentEvent.Payload;
+            var paymentAccountId = payload.PaymentAccountId;
 
-            var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent);
+            var createdAt = dateTimeProvider.GetNowUtc();
 
-            handler.ExecuteAndWaitAsync(async producer =>
+            var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent, createdAt);
+
+            cdcHandler.ExecuteFireAndForget(async cdcWriter =>
+            {
+                var dbEntitity = new OutboxAccountPaymentsEntity
+                {
+                    EventType = paymentEvent.EventType.ToString(),
+                    AggregateId = paymentAccountId.ToString(),
+                    PartitionKey = paymentEvent.Payload.GetPaymentAccountIdentifier(),
+                    Payload = JsonSerializer.Serialize(paymentEvent),
+                    CreatedAt = createdAt,
+                };
+
+                const string sql = @"
+                    INSERT INTO dbo.OutboxAccountPayments
+                    (
+                        EventType,
+                        AggregateId,
+                        PartitionKey,
+                        Payload,
+                        CreatedAt,
+                        Status,
+                        RetryCount
+                    )
+                    VALUES
+                    (
+                        @EventType,
+                        @AggregateId,
+                        @PartitionKey,
+                        @Payload,
+                        @CreatedAt,
+                        @Status,
+                        @RetryCount
+                    );";
+
+                try
+                {
+                    await cdcWriter.ExecuteAsync(sql, dbEntitity);
+                }
+                catch (Exception ex)
+                {
+                    var reason = ex.InnerException?.Message ?? ex.Message;
+
+                    logger.CdcWriteFailed(
+                        nameof(OutboxAccountPaymentsEntity),
+                        reason,
+                        ex);
+
+                    throw;
+                }
+            });
+
+            kafkaHandler.ExecuteAndWaitAsync(async producer =>
             {
                 var message = paymentMessageResult.Payload;
 
@@ -41,8 +101,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 {
                     var reason = ex.InnerException?.Message ?? ex.Message;
 
-                    BasePaymentCommandHandlerLogs.ProduceFailed(
-                        logger,
+                    logger.ProduceFailed(
                         BaseTopics.AccountingPayments,
                         message.Key,
                         reason,

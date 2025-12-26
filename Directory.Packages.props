@@ -9,6 +9,7 @@
     <PackageVersion Include="AutoMapper" Version="16.0.0" />
     <PackageVersion Include="Confluent.Kafka" Version="2.12.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Dapper" Version="2.1.66" />
     <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="9.0.0" />
     <PackageVersion Include="Elastic.Channels" Version="0.17.1" />
     <PackageVersion Include="Elastic.Ingest.Elasticsearch" Version="0.17.1" />
@@ -25,6 +26,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Hosting" Version="2.3.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.1" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.3" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.1" />

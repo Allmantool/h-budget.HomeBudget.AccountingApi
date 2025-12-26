@@ -18,6 +18,7 @@ namespace HomeBudget.Accounting.Domain.Configuration
             }
 
             return services
+                .Configure<DatabaseConnectionOptions>(configuration.GetSection(ConfigurationSectionKeys.DatabaseConnectionOptions))
                 .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
                 .Configure<MongoDbOptions>(configuration.GetSection(ConfigurationSectionKeys.MongoDbOptions))
                 .Configure<EventStoreDbOptions>(configuration.GetSection(ConfigurationSectionKeys.EventStoreDb));

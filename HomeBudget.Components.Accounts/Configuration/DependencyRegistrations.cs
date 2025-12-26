@@ -2,7 +2,6 @@
 
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Components.Accounts.Clients;
