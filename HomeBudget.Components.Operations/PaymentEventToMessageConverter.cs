@@ -5,8 +5,8 @@ using Confluent.Kafka;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Components.Operations.Commands.Handlers;
-using HomeBudget.Components.Operations.Factories;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exceptions;
@@ -44,34 +44,20 @@ namespace HomeBudget.Components.Operations
             PaymentOperationEvent paymentEvent,
             DateTime enquiredAt)
         {
-            return new Headers
-            {
-                HeaderFactory.String(
+            return HeaderFactory
+                .With(
                     KafkaMessageHeaders.CorrelationId,
-                    paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId)),
-
-                HeaderFactory.String(
-                    KafkaMessageHeaders.Type,
-                    nameof(PaymentOperationEvent)),
-
-                HeaderFactory.String(
-                    KafkaMessageHeaders.Version,
-                    "2.0"),
-
-                HeaderFactory.String(
-                    KafkaMessageHeaders.Source,
-                    nameof(BasePaymentCommandHandler)),
-
-                HeaderFactory.String(
+                    paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId))
+                .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
+                .With(KafkaMessageHeaders.Version, "2.0")
+                .With(KafkaMessageHeaders.Source, nameof(BasePaymentCommandHandler))
+                .With(
                     KafkaMessageHeaders.EnvelopId,
                     paymentEvent.EnvelopId != Guid.Empty
                         ? paymentEvent.EnvelopId.ToString()
-                        : Guid.NewGuid().ToString()),
-
-                HeaderFactory.String(
-                    KafkaMessageHeaders.OccuredOn,
-                    enquiredAt.ToString("O"))
-            };
+                        : Guid.NewGuid().ToString())
+                .With(KafkaMessageHeaders.OccuredOn, enquiredAt.ToString("O"))
+                .Build();
         }
     }
 }
