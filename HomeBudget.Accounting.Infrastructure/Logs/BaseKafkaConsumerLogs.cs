@@ -151,5 +151,11 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Information,
             Message = "The consumer {ConsumerId} has been disposed. Related topics: {SubscribedTopics}")]
         public static partial void DisposedConsumer(this ILogger logger, string consumerId, string subscribedTopics);
+
+        [LoggerMessage(
+            EventId = 1017,
+            Level = LogLevel.Error,
+            Message = "Unexpected error checking consumer liveness")]
+        public static partial void UnExpectedError(this ILogger logger, Exception exception);
     }
 }

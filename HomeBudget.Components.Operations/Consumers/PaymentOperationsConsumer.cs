@@ -8,10 +8,14 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
+using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
 
@@ -19,10 +23,14 @@ namespace HomeBudget.Components.Operations.Consumers
 {
     internal class PaymentOperationsConsumer(
         ILogger<PaymentOperationsConsumer> logger,
+        IDateTimeProvider dateTimeProvider,
+        IOutboxPaymentStatusService outboxPaymentStatusService,
         Channel<PaymentOperationEvent> paymentEventsChannel,
         IOptions<KafkaOptions> kafkaOptions)
         : BaseKafkaConsumer<string, string>(EnrichConsumerOptions(kafkaOptions.Value), logger)
     {
+        private static string paymentsConsumerGroup = "accounting.payments.group";
+
         private static KafkaOptions EnrichConsumerOptions(KafkaOptions options)
         {
             var consumerSettings = options.ConsumerSettings;
@@ -32,7 +40,7 @@ namespace HomeBudget.Components.Operations.Consumers
                 return options;
             }
 
-            consumerSettings.GroupId = "accounting.payments.group";
+            consumerSettings.GroupId = paymentsConsumerGroup;
             consumerSettings.ClientId = $"{consumerSettings.GroupId}_{Guid.NewGuid()}";
 
             consumerSettings.EnableAutoCommit = false;
@@ -54,13 +62,19 @@ namespace HomeBudget.Components.Operations.Consumers
                             return;
                         }
 
-                        message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
+                        message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
 
-                        PaymentOperationsConsumerLogs.PaymentConsumed(logger, message.Key);
+                        logger.PaymentConsumed(message.Key);
 
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
                         paymentEvent.Metadata.Add(EventMetadataKeys.FromMessage, message.Key);
+                        paymentEvent.Metadata.Add(EventMetadataKeys.CorrelationId, paymentEvent.Metadata[EventMetadataKeys.CorrelationId]);
+
+                        var paylod = paymentEvent.Payload;
+                        var partitionKey = paylod.GetPartitionKey();
+
+                        outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Published);
 
                         await paymentEventsChannel.Writer.WriteAsync(paymentEvent);
                     }
@@ -72,6 +86,25 @@ namespace HomeBudget.Components.Operations.Consumers
                     {
                         logger.ConsumerFailed(nameof(PaymentOperationsConsumer), ex.Message, ex);
                     }
+                },
+                async payload =>
+                {
+                    var message = payload.Message;
+
+                    if (message == null || string.IsNullOrWhiteSpace(message.Value))
+                    {
+                        return;
+                    }
+
+                    message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
+
+                    logger.PaymentConsumed(message.Key);
+
+                    var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
+                    var paylod = paymentEvent.Payload;
+                    var partitionKey = paylod.GetPartitionKey();
+
+                    outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Acknowledged);
                 },
                 cancellationToken);
         }

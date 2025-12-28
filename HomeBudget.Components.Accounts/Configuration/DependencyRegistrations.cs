@@ -24,11 +24,7 @@ namespace HomeBudget.Components.Accounts.Configuration
                 .AddScoped<IPaymentAccountService, PaymentAccountService>()
                 .AddScoped<IPaymentAccountProducerService, PaymentAccountProducerService>()
                 .RegisterMongoDbClient()
-                .RegisterAccountsClients()
-                .AddMediatR(configuration =>
-                {
-                    configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
-                });
+                .RegisterAccountsClients();
         }
 
         private static IServiceCollection RegisterMongoDbClient(this IServiceCollection services)

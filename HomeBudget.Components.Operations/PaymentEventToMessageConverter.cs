@@ -8,6 +8,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Components.Operations.Commands.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations
@@ -29,8 +30,9 @@ namespace HomeBudget.Components.Operations
 
             var headers = new Headers
             {
+                new Header(KafkaMessageHeaders.CorrelationId, Encoding.UTF8.GetBytes(paymentEvent.Metadata[EventMetadataKeys.CorrelationId])),
                 new Header(KafkaMessageHeaders.Type, Encoding.UTF8.GetBytes(nameof(PaymentOperationEvent))),
-                new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
+                new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("2.0")),
                 new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(BasePaymentCommandHandler))),
                 new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                 new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),

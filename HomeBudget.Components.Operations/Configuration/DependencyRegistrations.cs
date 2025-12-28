@@ -36,21 +36,12 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
+                .AddScoped<IOutboxPaymentStatusService, OutboxPaymentStatusService>()
                 .AddScoped<IExectutionStrategyHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
                 .AddScoped<IExectutionStrategyHandler<IBaseWriteRepository>, FireAndForgetSqlCdcHandler>()
-                .RegisterCommandHandlers()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
                 .RegisterMongoDbClient(webHostEnvironment);
-        }
-
-        private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
-        {
-            return services
-                .AddMediatR(configuration =>
-                {
-                    configuration.RegisterServicesFromAssembly(typeof(DependencyRegistrations).Assembly);
-                });
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)

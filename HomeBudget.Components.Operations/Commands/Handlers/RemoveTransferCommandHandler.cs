@@ -2,15 +2,15 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
 using AutoMapper;
+
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
+using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Models;
 
@@ -21,13 +21,13 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         IMapper mapper,
         IDateTimeProvider dateTimeProvider,
         IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
-        IExectutionStrategyHandler<IBaseWriteRepository> cdcHandler)
+        IOutboxPaymentStatusService outboxPaymentStatusService)
         : BasePaymentCommandHandler(
             logger,
             mapper,
             dateTimeProvider,
             kafkaHandler,
-            cdcHandler),
+            outboxPaymentStatusService),
             IRequestHandler<RemoveTransferCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(RemoveTransferCommand request, CancellationToken cancellationToken)
