@@ -18,6 +18,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Components.Operations.Consumers
 {
@@ -69,7 +70,7 @@ namespace HomeBudget.Components.Operations.Consumers
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
                         paymentEvent.Metadata.Add(EventMetadataKeys.FromMessage, message.Key);
-                        paymentEvent.Metadata.Add(EventMetadataKeys.CorrelationId, paymentEvent.Metadata[EventMetadataKeys.CorrelationId]);
+                        paymentEvent.Metadata.Add(EventMetadataKeys.CorrelationId, paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId));
 
                         var paylod = paymentEvent.Payload;
                         var partitionKey = paylod.GetPartitionKey();

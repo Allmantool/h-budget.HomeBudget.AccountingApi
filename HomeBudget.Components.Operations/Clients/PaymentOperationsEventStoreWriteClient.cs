@@ -84,7 +84,6 @@ namespace HomeBudget.Components.Operations.Clients
                 return await _retryPolicy.ExecuteAsync(
                     async retryCtx =>
                     {
-                        eventForSending.Metadata ??= new Dictionary<string, string>();
                         eventForSending.Metadata[EventDbEventMetadataKeys.CorrelationId] = retryCtx.CorrelationId.ToString();
                         eventForSending.Metadata[EventDbEventMetadataKeys.RetryCount] = retryCtx.Count.ToString();
 

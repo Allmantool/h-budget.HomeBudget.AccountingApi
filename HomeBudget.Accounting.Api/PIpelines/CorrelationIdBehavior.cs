@@ -9,7 +9,7 @@ using HomeBudget.Core.Commands;
 
 namespace HomeBudget.Components.Operations.PIpelines
 {
-    public sealed class CorrelationIdBehavior<TRequest, TResponse>
+    internal sealed class CorrelationIdBehavior<TRequest, TResponse>
         : IPipelineBehavior<TRequest, TResponse>
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -38,7 +38,7 @@ namespace HomeBudget.Components.Operations.PIpelines
                 }
             }
 
-            return await next();
+            return await next(cancellationToken);
         }
     }
 }

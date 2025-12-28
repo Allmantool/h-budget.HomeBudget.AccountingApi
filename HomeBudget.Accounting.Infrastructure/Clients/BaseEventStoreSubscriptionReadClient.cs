@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
@@ -113,7 +114,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 return;
                             }
 
-                            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, eventData.Metadata[EventMetadataKeys.CorrelationId]))
+                            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, eventData.Metadata.Get(EventMetadataKeys.CorrelationId)))
                             {
                                 if (handler is null)
                                 {
