@@ -12,8 +12,8 @@ using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {

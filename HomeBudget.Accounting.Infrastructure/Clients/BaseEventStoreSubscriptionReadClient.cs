@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics.Eventing.Reader;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,12 +9,13 @@ using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Options;
-using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
@@ -101,10 +101,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                         try
                         {
-                            var eventData = JsonSerializer.Deserialize<T>(resolveEvent.Data.Span);
-                            var metadata = JsonSerializer.Deserialize<EventMetadata>(resolveEvent.Metadata.Span);
+                            SafeJsonSerializer.TryDeserialize<EventMetadata>(resolveEvent.Metadata.Span, out var metadata);
 
-                            if (eventData is null)
+                            if (!SafeJsonSerializer.TryDeserialize<T>(resolveEvent.Data.Span, out var eventData) || eventData is null)
                             {
                                 await sub.Nack(
                                     PersistentSubscriptionNakEventAction.Skip,

@@ -7,7 +7,7 @@ using Confluent.Kafka;
 using Confluent.Kafka.Admin;
 
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Exceptions;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 {

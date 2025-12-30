@@ -12,9 +12,9 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Helpers;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Infrastructure.BackgroundServices
 {

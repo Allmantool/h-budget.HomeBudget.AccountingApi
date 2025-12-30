@@ -1,33 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace HomeBudget.Core.Exceptions
+using HomeBudget.Core.Exstensions;
+
+namespace HomeBudget.Accounting.Domain.Extensions
 {
-    public static class CollectionExceptions
+    public static class MetadataExstensions
     {
-        public static bool IsNullOrEmpty<T>(this IEnumerable<T> origin)
-        {
-            if (origin is null)
-            {
-                return true;
-            }
-
-            using var enumerator = origin.GetEnumerator();
-            return !enumerator.MoveNext();
-        }
-
         public static string Get(
             this IReadOnlyDictionary<string, string> metadata,
             string key)
         {
             if (metadata.IsNullOrEmpty())
             {
-                return null;
+                return string.Empty;
             }
 
             return metadata.TryGetValue(key, out var value)
                 ? value
-                : null;
+                : string.Empty;
         }
 
         public static string GetRequired(
@@ -37,7 +28,7 @@ namespace HomeBudget.Core.Exceptions
         {
             if (metadata.IsNullOrEmpty())
             {
-                return null;
+                return string.Empty;
             }
 
             if (metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
@@ -68,3 +59,4 @@ namespace HomeBudget.Core.Exceptions
         }
     }
 }
+

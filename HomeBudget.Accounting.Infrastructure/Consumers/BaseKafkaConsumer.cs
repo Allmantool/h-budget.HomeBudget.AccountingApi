@@ -15,9 +15,9 @@ using Serilog.Context;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {

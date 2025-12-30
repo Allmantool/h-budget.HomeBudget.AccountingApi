@@ -18,7 +18,6 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
-using HomeBudget.Core.Exceptions;
 
 namespace HomeBudget.Components.Operations.Consumers
 {

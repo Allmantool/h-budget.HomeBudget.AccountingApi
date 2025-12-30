@@ -9,7 +9,6 @@ using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Components.Operations.Commands.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations
