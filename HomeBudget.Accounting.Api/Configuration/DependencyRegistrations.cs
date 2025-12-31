@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using MediatR;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
@@ -11,6 +12,7 @@ using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
+using HomeBudget.Components.Operations.PIpelines;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -30,7 +32,23 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
                 .RegisterCategoriesDependencies()
-                .RegisterInfrastructureDependencies(configuration);
+                .RegisterInfrastructureDependencies(configuration)
+                .RegisterCommandHandlers();
+        }
+
+        private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
+        {
+            return services
+                .AddMediatR(configuration =>
+                {
+                    configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
+                    configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
+
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(CorrelationIdBehavior<,>)
+                    );
+                });
         }
     }
 }

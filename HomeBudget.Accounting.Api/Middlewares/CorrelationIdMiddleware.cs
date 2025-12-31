@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
@@ -7,19 +8,33 @@ using HomeBudget.Accounting.Domain.Constants;
 
 namespace HomeBudget.Accounting.Api.Middlewares
 {
-    internal class CorrelationIdMiddleware(RequestDelegate next)
+    internal sealed class CorrelationIdMiddleware
     {
+        private readonly RequestDelegate _next;
+
+        public CorrelationIdMiddleware(RequestDelegate next)
+        {
+            _next = next;
+        }
+
         public async Task InvokeAsync(HttpContext context)
         {
-            var requestHeaders = context.Request.Headers;
+            var correlationId = context.Request.Headers[HttpHeaderKeys.CorrelationId]
+                .FirstOrDefault()
+                ?? Guid.NewGuid().ToString("N");
 
-            _ = requestHeaders.TryGetValue(HttpHeaderKeys.CorrelationId, out var correlationId);
+            context.Items[HttpHeaderKeys.CorrelationId] = correlationId;
 
-            var responseHeaders = context.Response.Headers;
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers[HttpHeaderKeys.CorrelationId] = correlationId;
+                return Task.CompletedTask;
+            });
 
-            responseHeaders.TryAdd(HttpHeaderKeys.CorrelationId, correlationId);
-
-            await next.Invoke(context);
+            using (Serilog.Context.LogContext.PushProperty(HttpHeaderKeys.CorrelationId, correlationId))
+            {
+                await _next(context);
+            }
         }
     }
 }

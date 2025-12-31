@@ -9,8 +9,8 @@ using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Infrastructure.Services;
 

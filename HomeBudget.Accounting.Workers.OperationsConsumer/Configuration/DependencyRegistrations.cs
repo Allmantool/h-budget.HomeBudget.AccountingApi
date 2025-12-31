@@ -30,6 +30,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 .RegisterBackgroundServices()
                 .RegisterPaymentAccountsDependencies()
                 .RegisterCategoriesDependencies()
+                .RegisterCommandHandlers()
                 .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
                 .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
@@ -41,6 +42,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
             return services.AddHostedService<BatchPaymentEventsProcessorWorker>();
+        }
+
+        private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
+        {
+            return services
+                .AddMediatR(configuration =>
+                {
+                    configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
+                    configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
+                });
         }
     }
 }

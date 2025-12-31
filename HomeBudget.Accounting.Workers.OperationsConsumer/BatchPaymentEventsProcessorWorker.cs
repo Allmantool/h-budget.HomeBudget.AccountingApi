@@ -12,8 +12,8 @@ using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
-using HomeBudget.Core.Exceptions;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {

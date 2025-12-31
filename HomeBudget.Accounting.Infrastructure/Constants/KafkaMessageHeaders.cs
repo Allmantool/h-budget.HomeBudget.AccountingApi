@@ -2,11 +2,12 @@
 {
     public static class KafkaMessageHeaders
     {
-        public static readonly string Type = "Message-Type";
-        public static readonly string Version = "Message-Version";
-        public static readonly string Source = "Source";
-        public static readonly string EnvelopId = "Envelop-Id";
-        public static readonly string OccuredOn = "Occured-On";
-        public static readonly string ProcessedAt = "Processed-At";
+        public static readonly string Type = "message-type";
+        public static readonly string Version = "message-version";
+        public static readonly string Source = "source";
+        public static readonly string EnvelopId = "envelop-Id";
+        public static readonly string OccuredOn = "occured-on";
+        public static readonly string ProcessedAt = "processed-at";
+        public static readonly string CorrelationId = "correlation-id";
     }
 }

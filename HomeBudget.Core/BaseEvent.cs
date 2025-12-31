@@ -15,7 +15,7 @@ namespace HomeBudget.Core
 
         public DateTime ProcessedAt { get; set; }
 
-        public Dictionary<string, string> Metadata { get; set; } = new()
+        public Dictionary<string, string> Metadata { get; } = new()
         {
             {
                 EventMetadataKeys.Version, "0.0.2"

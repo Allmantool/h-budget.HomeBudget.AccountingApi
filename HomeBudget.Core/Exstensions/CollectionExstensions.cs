@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 
-namespace HomeBudget.Core.Exceptions
+namespace HomeBudget.Core.Exstensions
 {
-    public static class CollectionExceptions
+    public static class CollectionExstensions
     {
         public static bool IsNullOrEmpty<T>(this IEnumerable<T> origin)
         {

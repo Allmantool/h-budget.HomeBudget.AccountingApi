@@ -1,21 +1,26 @@
 ﻿using System;
-using System.Text.Json;
+using System.Diagnostics.Eventing.Reader;
 using System.Threading;
 using System.Threading.Tasks;
 
 using EventStore.Client;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
+using Serilog.Context;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Core;
+using HomeBudget.Core.Constants;
+using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
 {
     public class BaseEventStoreSubscriptionReadClient<T> : IEventStoreDbSubscriptionReadClient<T>, IDisposable
-        where T : class, new()
+        where T : BaseEvent
     {
         private readonly ILogger _logger;
         private readonly EventStorePersistentSubscriptionsClient _client;
@@ -96,9 +101,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                         try
                         {
-                            var eventData = JsonSerializer.Deserialize<T>(evt.Event.Data.Span);
+                            SafeJsonSerializer.TryDeserialize<EventMetadata>(resolveEvent.Metadata.Span, out var metadata);
 
-                            if (eventData is null)
+                            if (!SafeJsonSerializer.TryDeserialize<T>(resolveEvent.Data.Span, out var eventData) || eventData is null)
                             {
                                 await sub.Nack(
                                     PersistentSubscriptionNakEventAction.Skip,
@@ -108,13 +113,16 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 return;
                             }
 
-                            if (handler is null)
+                            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, eventData.Metadata.Get(EventMetadataKeys.CorrelationId)))
                             {
-                                await OnEventAppearedAsync(eventData);
-                            }
-                            else
-                            {
-                                await handler(evt);
+                                if (handler is null)
+                                {
+                                    await OnEventAppearedAsync(eventData);
+                                }
+                                else
+                                {
+                                    await handler(evt);
+                                }
                             }
 
                             await sub.Ack(evt);
@@ -144,7 +152,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                 return subscription;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 subscription?.Dispose();
                 throw;

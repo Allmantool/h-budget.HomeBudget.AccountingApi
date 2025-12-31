@@ -4,15 +4,18 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
+using Serilog.Context;
 
+using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
-using HomeBudget.Core.Exceptions;
+using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -132,14 +135,22 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Unexpected error checking consumer liveness");
+                _logger.UnExpectedError(ex);
                 return false;
             }
         }
 
         protected virtual async Task ConsumeAsync(
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken = default)
+        {
+            await ConsumeAsync(processMessageAsync, null, cancellationToken);
+        }
+
+        protected virtual async Task ConsumeAsync(
+            Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
+            Func<ConsumeResult<TKey, TValue>, Task> afterCommitCallbackAsync,
+            CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(processMessageAsync);
 
@@ -165,22 +176,37 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             continue;
                         }
 
-                        using var activity = ActivitySource.StartActivity("KafkaMessage.Consume");
+                        var consumedMessage = consumeResult.Message;
 
-                        activity?.SetTag("messaging.system", "kafka");
-                        activity?.SetTag("messaging.destination", consumeResult.Topic);
-                        activity?.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
-                        activity?.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
-                        activity?.SetTag("messaging.message_id", consumeResult.Message?.Key?.ToString());
+                        var correlationId = consumedMessage.Headers
+                            .TryGetLastBytes(KafkaMessageHeaders.CorrelationId, out var lastHeaderBytes)
+                                ? Encoding.UTF8.GetString(lastHeaderBytes)
+                                : string.Empty;
 
-                        await processMessageAsync(consumeResult);
-
-                        if (!_disposed)
+                        using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CorrelationId), correlationId))
                         {
-                            _consumer.Commit(consumeResult);
-                        }
+                            using var activity = ActivitySource.StartActivity("KafkaMessage.Consume");
 
-                        activity?.SetStatus(ActivityStatusCode.Ok);
+                            activity?.SetTag("messaging.system", "kafka");
+                            activity?.SetTag("messaging.destination", consumeResult.Topic);
+                            activity?.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
+                            activity?.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
+                            activity?.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
+
+                            await processMessageAsync(consumeResult);
+
+                            if (!_disposed)
+                            {
+                                _consumer.Commit(consumeResult);
+
+                                if (afterCommitCallbackAsync is not null)
+                                {
+                                    await afterCommitCallbackAsync(consumeResult);
+                                }
+
+                                activity?.SetStatus(ActivityStatusCode.Ok);
+                            }
+                        }
                     }
                     catch (ConsumeException ex)
                     {

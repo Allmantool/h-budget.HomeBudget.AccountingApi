@@ -85,7 +85,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         {
             ArgumentNullException.ThrowIfNull(eventForSending);
 
-            eventForSending.Metadata ??= [];
             eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception.Message;
 
             var data = CreateEventData((T)(object)eventForSending, EventDbEventTypes.DeadLetter);
@@ -103,7 +102,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         {
             Parallel.ForEach(eventsForSending, eventForSending =>
             {
-                eventForSending.Metadata ??= new Dictionary<string, string>();
                 eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception?.Message;
             });
 

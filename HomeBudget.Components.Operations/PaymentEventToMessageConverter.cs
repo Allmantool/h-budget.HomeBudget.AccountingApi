@@ -1,13 +1,14 @@
 ﻿using System;
-using System.Text;
 using System.Text.Json;
 
 using Confluent.Kafka;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Components.Operations.Commands.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations
@@ -27,24 +28,35 @@ namespace HomeBudget.Components.Operations
             var messageId = eventPayload.GetPaymentAccountIdentifier();
             var messagePayload = JsonSerializer.Serialize(paymentEvent);
 
-            var headers = new Headers
-            {
-                new Header(KafkaMessageHeaders.Type, Encoding.UTF8.GetBytes(nameof(PaymentOperationEvent))),
-                new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
-                new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(BasePaymentCommandHandler))),
-                new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),
-            };
-
             var message = new Message<string, string>
             {
                 Key = messageId,
                 Value = messagePayload,
                 Timestamp = new Timestamp(enquiredAt),
-                Headers = headers
+                Headers = BuildHeaders(paymentEvent, enquiredAt)
             };
 
             return Result<Message<string, string>>.Succeeded(message);
+        }
+
+        private static Headers BuildHeaders(
+            PaymentOperationEvent paymentEvent,
+            DateTime enquiredAt)
+        {
+            return HeaderFactory
+                .With(
+                    KafkaMessageHeaders.CorrelationId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId))
+                .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
+                .With(KafkaMessageHeaders.Version, "2.0")
+                .With(KafkaMessageHeaders.Source, nameof(BasePaymentCommandHandler))
+                .With(
+                    KafkaMessageHeaders.EnvelopId,
+                    paymentEvent.EnvelopId != Guid.Empty
+                        ? paymentEvent.EnvelopId.ToString()
+                        : Guid.NewGuid().ToString())
+                .With(KafkaMessageHeaders.OccuredOn, enquiredAt.ToString("O"))
+                .Build();
         }
     }
 }
