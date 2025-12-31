@@ -34,6 +34,12 @@ namespace HomeBudget.Core.Exstensions
             out T result,
             JsonSerializerOptions options = null)
         {
+            if (json.IsEmpty)
+            {
+                result = default;
+                return false;
+            }
+
             try
             {
                 result = JsonSerializer.Deserialize<T>(json, options);

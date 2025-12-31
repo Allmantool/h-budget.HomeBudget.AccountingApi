@@ -3,8 +3,8 @@
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Core.Models;
 using HomeBudget.Core.Commands;
+using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
