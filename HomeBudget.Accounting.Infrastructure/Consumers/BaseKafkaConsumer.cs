@@ -15,9 +15,9 @@ using Serilog.Context;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
@@ -176,10 +176,12 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             continue;
                         }
 
-                        var correlationId = consumeResult.Message.Headers
-                            .GetLastBytes(KafkaMessageHeaders.CorrelationId) is { } bytes
-                                ? Encoding.UTF8.GetString(bytes)
-                                : Guid.NewGuid().ToString("N");
+                        var consumedMessage = consumeResult.Message;
+
+                        var correlationId = consumedMessage.Headers
+                            .TryGetLastBytes(KafkaMessageHeaders.CorrelationId, out var lastHeaderBytes)
+                                ? Encoding.UTF8.GetString(lastHeaderBytes)
+                                : string.Empty;
 
                         using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CorrelationId), correlationId))
                         {
@@ -189,7 +191,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             activity?.SetTag("messaging.destination", consumeResult.Topic);
                             activity?.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
                             activity?.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
-                            activity?.SetTag("messaging.message_id", consumeResult.Message?.Key?.ToString());
+                            activity?.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
 
                             await processMessageAsync(consumeResult);
 
