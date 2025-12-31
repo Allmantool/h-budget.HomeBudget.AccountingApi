@@ -52,10 +52,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 {
                     configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
                     configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
-
-                    configuration.AddBehavior(
-                        typeof(IPipelineBehavior<,>)
-                    );
                 });
         }
     }
