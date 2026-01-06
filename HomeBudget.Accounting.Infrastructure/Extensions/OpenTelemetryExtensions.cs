@@ -17,6 +17,11 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions
         {
             var alloyHost = configuration.GetValue<string>("GrafanaOptions:AlloyHost");
 
+            if (string.IsNullOrWhiteSpace(alloyHost))
+            {
+                return services;
+            }
+
             services
                .AddOpenTelemetry()
                .ConfigureResource(r => r
