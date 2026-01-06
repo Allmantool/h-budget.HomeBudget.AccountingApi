@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System;
+using System.Reflection;
+
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
@@ -15,7 +18,16 @@ namespace HomeBudget.Accounting.Api.Extensions.OpenTelemetry
         {
             services
                 .AddOpenTelemetry()
-                .ConfigureResource(resource => resource.AddService(serviceName: environment.ApplicationName))
+                .ConfigureResource(resource =>
+                    resource.AddService(
+                        serviceName: environment.ApplicationName,
+                        serviceVersion: Assembly
+                            .GetExecutingAssembly()
+                            .GetName()
+                            .Version?
+                            .ToString(),
+                        serviceInstanceId: Environment.MachineName
+                ))
                 .WithTracing(tracing => tracing
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
