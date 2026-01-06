@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using HomeBudget.Accounting.Api.Middlewares;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
@@ -45,7 +46,7 @@ namespace HomeBudget.Accounting.Api.Extensions
                 .UseHttpsRedirection()
                 .UseResponseCaching()
                 .UseAuthorization()
-                .UseCorrelationId()
+                .UseCustomCorrelationId()
                 .UseHeaderPropagation()
                 .UseRouting()
                 .UseSerilogRequestLogging(options =>

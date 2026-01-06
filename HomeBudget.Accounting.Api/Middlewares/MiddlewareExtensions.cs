@@ -4,7 +4,7 @@ namespace HomeBudget.Accounting.Api.Middlewares
 {
     internal static class MiddlewareExtensions
     {
-        public static IApplicationBuilder UseCorrelationId(this IApplicationBuilder builder)
+        public static IApplicationBuilder UseCustomCorrelationId(this IApplicationBuilder builder)
         {
             return builder.UseMiddleware<CorrelationIdMiddleware>();
         }
