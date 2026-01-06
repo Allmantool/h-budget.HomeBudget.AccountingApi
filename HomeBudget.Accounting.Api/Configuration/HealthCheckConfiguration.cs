@@ -17,8 +17,7 @@ namespace HomeBudget.Accounting.Api.Configuration
         public static IServiceCollection SetUpHealthCheck(
             this IServiceCollection services,
             IConfiguration configuration,
-            string hostUrls,
-            IWebHostEnvironment webHostEnvironment)
+            string hostUrls)
         {
             services
                 .AddHealthChecks()

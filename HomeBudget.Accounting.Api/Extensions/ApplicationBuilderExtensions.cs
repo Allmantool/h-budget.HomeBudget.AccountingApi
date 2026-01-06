@@ -6,7 +6,6 @@ using Serilog;
 using Serilog.Events;
 
 using HomeBudget.Accounting.Api.Configuration;
-using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Domain.Constants;
 
 namespace HomeBudget.Accounting.Api.Extensions

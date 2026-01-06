@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
@@ -11,6 +13,7 @@ using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Configuration;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Components.Categories.Configuration;
@@ -26,6 +29,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             try
             {
                 var host = CreateHost(args);
+
                 await host.RunAsync();
             }
             catch (Exception ex)
@@ -40,7 +44,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             Action<IServiceCollection> configureServices = null,
             string environmentName = null)
         {
-            var builder = Host.CreateApplicationBuilder(args ?? Array.Empty<string>());
+            var builder = WebApplication.CreateBuilder(args);
 
             if (!string.IsNullOrWhiteSpace(environmentName))
             {
@@ -54,6 +58,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             var services = builder.Services;
             var environment = builder.Environment;
+            var applicationName = environment.ApplicationName;
             var configuration = builder.Configuration
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
@@ -69,7 +74,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .AddHostedService<KafkaPaymentsConsumerWorker>()
                 .AddHostedService<EventStoreDbPaymentsConsumerWorker>();
 
+            services
+                .AddHealthChecks()
+                .AddCheck("heartbeat", () => HealthCheckResult.Healthy());
+
+            var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
+            services.AddTracingSupport(configuration, applicationName, serviceVersion);
+
             services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder));
+
+            services.AddEndpointsApiExplorer();
 
             builder.AddAndConfigureSentry(configuration);
 
@@ -77,7 +91,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
 
-            return builder.Build();
+            var app = builder.Build();
+
+            app.MapHealthChecks("/health");
+            app.MapPrometheusScrapingEndpoint("/metrics");
+
+            return app;
         }
     }
 }

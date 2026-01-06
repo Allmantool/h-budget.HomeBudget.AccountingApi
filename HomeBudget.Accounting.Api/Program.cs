@@ -13,12 +13,14 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;
 var services = webAppBuilder.Services;
 var environment = webAppBuilder.Environment;
+var applicationName = environment.ApplicationName;
 var configuration = webAppBuilder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
@@ -37,7 +39,7 @@ services
 services
     .SetUpDi(configuration, environment)
     .AddEndpointsApiExplorer()
-    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"), environment)
+    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
     .AddResponseCaching()
     .AddSwaggerGen()
     .SetupSwaggerGen();
@@ -58,6 +60,9 @@ services.InitializeOpenTelemetry(environment);
 
 services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
 
+var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
+services.AddTracingSupport(configuration, applicationName, serviceVersion);
+
 webHost.AddAndConfigureSentry();
 
 MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(AccountTypes).Assembly);
@@ -73,6 +78,9 @@ webApp.MapControllers();
 
 try
 {
+    webApp.MapHealthChecks("/health");
+    webApp.MapPrometheusScrapingEndpoint("/metrics");
+
     await webApp.RunAsync();
 }
 catch (Exception ex)
