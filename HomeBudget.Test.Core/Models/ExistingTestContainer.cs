@@ -125,15 +125,5 @@ namespace HomeBudget.Test.Core.Models
         {
             throw new NotImplementedException();
         }
-
-        public string GetConnectionString(ConnectionMode connectionMode = ConnectionMode.Host)
-        {
-            throw new NotImplementedException();
-        }
-
-        public string GetConnectionString(string name, ConnectionMode connectionMode = ConnectionMode.Host)
-        {
-            throw new NotImplementedException();
-        }
     }
 }
