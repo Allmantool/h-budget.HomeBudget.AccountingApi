@@ -28,11 +28,11 @@ namespace HomeBudget.Test.Core.Models
         public DateTime PausedTime => DateTime.MinValue;
         public DateTime UnpausedTime => DateTime.MinValue;
 
-        public ILogger Logger => null!;
+        public ILogger Logger => Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
         public string IpAddress => "127.0.0.1";
         public string MacAddress => "";
         public string Hostname => "localhost";
-        public IImage Image => null!;
+        public IImage Image => new DummyImage();
         public TestcontainersStates State => TestcontainersStates.Running;
         public TestcontainersHealthStatus Health => TestcontainersHealthStatus.Healthy;
         public long HealthCheckFailingStreak => 0;
@@ -122,6 +122,16 @@ namespace HomeBudget.Test.Core.Models
             uint gid = 0,
             UnixFileModes fileMode = UnixFileModes.OtherRead | UnixFileModes.GroupRead | UnixFileModes.UserWrite | UnixFileModes.UserRead,
             CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public string GetConnectionString(ConnectionMode connectionMode = ConnectionMode.Host)
+        {
+            throw new NotImplementedException();
+        }
+
+        public string GetConnectionString(string name, ConnectionMode connectionMode = ConnectionMode.Host)
         {
             throw new NotImplementedException();
         }

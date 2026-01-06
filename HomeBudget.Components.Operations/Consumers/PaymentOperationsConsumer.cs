@@ -41,7 +41,7 @@ namespace HomeBudget.Components.Operations.Consumers
             }
 
             consumerSettings.GroupId = paymentsConsumerGroup;
-            consumerSettings.ClientId = $"{consumerSettings.GroupId}_{Guid.NewGuid()}";
+            consumerSettings.ClientId = $"{paymentsConsumerGroup}-{Environment.GetEnvironmentVariable("HOSTNAME")}";
 
             consumerSettings.EnableAutoCommit = false;
 

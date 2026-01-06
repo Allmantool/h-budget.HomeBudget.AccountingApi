@@ -15,7 +15,6 @@ using Serilog.Context;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
-using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
 
@@ -46,10 +45,11 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             _consumerSettings = kafkaOptions.ConsumerSettings;
 
             ConsumerId = _consumerSettings.ClientId;
+            var instanceId = Environment.GetEnvironmentVariable("HOSTNAME");
 
             var consumerConfig = new ConsumerConfig
             {
-                GroupInstanceId = $"{_consumerSettings.GroupId}-{_consumerSettings.ClientId}",
+                GroupInstanceId = $"{_consumerSettings.GroupId}-{instanceId}", // only if need in 'static membership' to avoid Avoids rebalances
                 GroupId = $"{_consumerSettings.GroupId}",
                 ClientId = _consumerSettings.ClientId,
                 BootstrapServers = _consumerSettings.BootstrapServers,
@@ -158,7 +158,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             try
             {
-                while (!cancellationToken.IsCancellationRequested && !_consumer.Subscription.IsNullOrEmpty())
+                while (!cancellationToken.IsCancellationRequested)
                 {
                     if (_disposed || _consumer is null)
                     {
