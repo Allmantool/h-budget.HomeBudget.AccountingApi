@@ -69,7 +69,6 @@ MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(Accoun
 var app = webAppBuilder.Build();
 
 app.SetupHttpLogging();
-
 app.SetupOpenTelemetry();
 
 app.SetUpBaseApplication(services, environment, configuration);
