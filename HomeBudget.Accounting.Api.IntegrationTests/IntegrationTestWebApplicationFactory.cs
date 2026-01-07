@@ -43,7 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            var port = GetSecureRandomPort(5000, 6000);
+            var port = GetSecureRandomPort(6000, 10000);
 
             builder.UseKestrel(options =>
             {

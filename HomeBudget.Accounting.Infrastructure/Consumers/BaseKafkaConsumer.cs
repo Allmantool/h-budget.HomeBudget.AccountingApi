@@ -49,7 +49,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             var consumerConfig = new ConsumerConfig
             {
-                GroupInstanceId = $"{_consumerSettings.GroupId}-{instanceId}", // only if need in 'static membership' to avoid Avoids rebalances
+                // GroupInstanceId = $"{_consumerSettings.GroupId}-{instanceId}", // only if need in 'static membership' to avoid Avoids rebalances
                 GroupId = $"{_consumerSettings.GroupId}",
                 ClientId = _consumerSettings.ClientId,
                 BootstrapServers = _consumerSettings.BootstrapServers,
