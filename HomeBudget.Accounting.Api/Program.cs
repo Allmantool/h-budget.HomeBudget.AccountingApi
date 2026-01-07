@@ -80,7 +80,6 @@ try
 {
     if (isTracingEnabled)
     {
-        app.MapHealthChecks("/health");
         app.MapPrometheusScrapingEndpoint("/metrics");
     }
 
