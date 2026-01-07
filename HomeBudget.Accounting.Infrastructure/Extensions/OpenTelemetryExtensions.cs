@@ -1,4 +1,5 @@
 ﻿using System;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
@@ -9,7 +10,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions
 {
     public static class OpenTelemetryExtensions
     {
-        public static IServiceCollection AddTracingSupport(
+        public static bool TryAddTracingSupport(
             this IServiceCollection services,
             IConfigurationRoot configuration,
             string applicationName,
@@ -19,7 +20,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions
 
             if (string.IsNullOrWhiteSpace(alloyHost))
             {
-                return services;
+                return false;
             }
 
             services
@@ -45,7 +46,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions
                     });
                });
 
-            return services;
+            return true;
         }
     }
 }

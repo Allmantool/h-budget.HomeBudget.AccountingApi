@@ -61,31 +61,34 @@ services.InitializeOpenTelemetry(environment);
 services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
 
 var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-services.AddTracingSupport(configuration, applicationName, serviceVersion);
+var isTracingEnabled = services.TryAddTracingSupport(configuration, applicationName, serviceVersion);
 
 webHost.AddAndConfigureSentry();
 
 MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(AccountTypes).Assembly);
-var webApp = webAppBuilder.Build();
+var app = webAppBuilder.Build();
 
-webApp.SetupHttpLogging();
+app.SetupHttpLogging();
 
-webApp.SetupOpenTelemetry();
+app.SetupOpenTelemetry();
 
-webApp.SetUpBaseApplication(services, environment, configuration);
-webApp.UseAuthorization();
-webApp.MapControllers();
+app.SetUpBaseApplication(services, environment, configuration);
+app.UseAuthorization();
+app.MapControllers();
 
 try
 {
-    webApp.MapHealthChecks("/health");
-    webApp.MapPrometheusScrapingEndpoint("/metrics");
+    if (isTracingEnabled)
+    {
+        app.MapHealthChecks("/health");
+        app.MapPrometheusScrapingEndpoint("/metrics");
+    }
 
-    await webApp.RunAsync();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
-    webApp.Logger.LogError($"Fatal error: {ex}");
+    app.Logger.LogError($"Fatal error: {ex}");
     Environment.Exit(1);
 }
 

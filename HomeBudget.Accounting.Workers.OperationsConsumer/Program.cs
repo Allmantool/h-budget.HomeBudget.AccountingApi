@@ -79,7 +79,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .AddCheck("heartbeat", () => HealthCheckResult.Healthy());
 
             var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-            services.AddTracingSupport(configuration, applicationName, serviceVersion);
+            var isTracingEnabled = services.TryAddTracingSupport(configuration, applicationName, serviceVersion);
 
             services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder));
 
@@ -93,8 +93,11 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             var app = builder.Build();
 
-            app.MapHealthChecks("/health");
-            app.MapPrometheusScrapingEndpoint("/metrics");
+            if (isTracingEnabled)
+            {
+                app.MapHealthChecks("/health");
+                app.MapPrometheusScrapingEndpoint("/metrics");
+            }
 
             return app;
         }
