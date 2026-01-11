@@ -71,8 +71,6 @@ var app = webAppBuilder.Build();
 
 app.SetupHttpLogging();
 
-app.UseOpenTelemetryPrometheusScrapingEndpoint();
-
 app.SetUpBaseApplication(services, environment, configuration);
 app.UseAuthorization();
 app.MapControllers();
@@ -81,6 +79,8 @@ try
 {
     if (isTracingEnabled)
     {
+        app.UseOpenTelemetryPrometheusScrapingEndpoint();
+
         app.MapPrometheusScrapingEndpoint("/metrics");
     }
 

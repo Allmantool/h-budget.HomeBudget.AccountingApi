@@ -101,10 +101,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             var app = builder.Build();
 
-            app.UseOpenTelemetryPrometheusScrapingEndpoint();
-
             if (isTracingEnabled)
             {
+                app.UseOpenTelemetryPrometheusScrapingEndpoint();
+
                 app.MapHealthChecks("/health");
                 app.MapPrometheusScrapingEndpoint("/metrics");
             }
