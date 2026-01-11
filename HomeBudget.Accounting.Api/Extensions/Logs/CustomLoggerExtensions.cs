@@ -10,6 +10,7 @@ using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Exceptions;
 using Serilog.Formatting.Compact;
+using Serilog.Sinks.OpenTelemetry;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
@@ -22,7 +23,8 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
             this IConfiguration configuration,
             IWebHostEnvironment environment,
             ILoggingBuilder loggingBuilder,
-            ConfigureHostBuilder host)
+            ConfigureHostBuilder host,
+            string hostServiceName)
         {
             var logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(configuration)
@@ -33,7 +35,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
-                .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.AccountApiName)
+                .Enrich.WithProperty(LoggerTags.HostService, hostServiceName)
                 .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
@@ -43,6 +45,11 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                     new RenderedCompactJsonFormatter(),
                     restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
+                .WriteTo.OpenTelemetry(o =>
+                 {
+                     o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
+                     o.Protocol = OtlpProtocol.Grpc;
+                 })
                 .Enrich.WithElasticApmCorrelationInfo()
                 .TryAddSeqSupport(configuration)
                 .TryAddElasticSearchSupport(configuration, environment, typeof(Program).Assembly.GetName().Name)
@@ -61,6 +68,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
 
             host.UseSerilog(logger);
 
+            // SelfLog.Enable(msg => File.AppendAllText("serilog-accounting-api-selflog.txt", msg));
             Log.Logger = logger;
 
             return logger;

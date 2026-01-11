@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Configuration;
+using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
@@ -82,9 +83,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .AddCheck("heartbeat", () => HealthCheckResult.Healthy());
 
             var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-            var isTracingEnabled = services.TryAddTracingSupport(configuration, applicationName, serviceVersion);
+            var isTracingEnabled = services.TryAddTracingSupport(
+                configuration,
+                environment,
+                HostServiceOptions.AccountConsumerWorkerName,
+                serviceVersion);
 
-            services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder));
+            services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder, HostServiceOptions.AccountConsumerWorkerName));
 
             services.AddEndpointsApiExplorer();
 
@@ -95,6 +100,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(CategoryTypes).Assembly);
 
             var app = builder.Build();
+
+            app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
             if (isTracingEnabled)
             {
