@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Extensions;
 using HomeBudget.Accounting.Api.Extensions.Logs;
-using HomeBudget.Accounting.Api.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
@@ -46,7 +45,7 @@ services
 
 services.AddHeaderPropagation(options =>
 {
-    options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.AccountApiName);
+    options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.AccountingApiName);
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
 });
 
@@ -56,12 +55,14 @@ services.AddAutoMapper(cfg =>
     cfg.AddMaps(PaymentOperationsComponentMappingProfile.GetExecutingAssembly());
 });
 
-services.InitializeOpenTelemetry(environment);
-
-services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host));
+services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host, HostServiceOptions.AccountingApiName));
 
 var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-var isTracingEnabled = services.TryAddTracingSupport(configuration, applicationName, serviceVersion);
+var isTracingEnabled = services.TryAddTracingSupport(
+    configuration,
+    environment,
+    HostServiceOptions.AccountingApiName,
+    serviceVersion);
 
 webHost.AddAndConfigureSentry();
 
@@ -69,7 +70,8 @@ MongoEnumerationSerializerRegistration.RegisterAllBaseEnumerations(typeof(Accoun
 var app = webAppBuilder.Build();
 
 app.SetupHttpLogging();
-app.SetupOpenTelemetry();
+
+app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
 app.SetUpBaseApplication(services, environment, configuration);
 app.UseAuthorization();

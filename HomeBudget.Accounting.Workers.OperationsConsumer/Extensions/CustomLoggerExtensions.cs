@@ -9,6 +9,7 @@ using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Exceptions;
 using Serilog.Formatting.Compact;
+using Serilog.Sinks.OpenTelemetry;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
@@ -21,7 +22,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
             this IConfiguration configuration,
             IHostEnvironment environment,
             ILoggingBuilder loggingBuilder,
-            IHostApplicationBuilder hostApplicationBuilder)
+            IHostApplicationBuilder hostApplicationBuilder,
+            string hostServiceName)
         {
             var logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(configuration)
@@ -32,7 +34,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
                 .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
-                .Enrich.WithProperty(LoggerTags.HostService, HostServiceOptions.AccountConsumerWorkerName)
+                .Enrich.WithProperty(LoggerTags.HostService, hostServiceName)
                 .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
@@ -42,6 +44,11 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
                     new RenderedCompactJsonFormatter(),
                     restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
+                .WriteTo.OpenTelemetry(o =>
+                {
+                    o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
+                    o.Protocol = OtlpProtocol.Grpc;
+                })
                 .Enrich.WithElasticApmCorrelationInfo()
                 .TryAddSeqSupport(configuration)
                 .TryAddElasticSearchSupport(configuration, environment, typeof(Program).Assembly.GetName().Name)
@@ -58,6 +65,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
                 options.AddOtlpExporter();
             });
 
+            // SelfLog.Enable(msg => File.AppendAllText("serilog-accounting-worker-selflog.txt",
             Log.Logger = logger;
 
             return logger;
