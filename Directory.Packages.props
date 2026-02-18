@@ -12,7 +12,7 @@
     <PackageVersion Include="Dapper" Version="2.1.66" />
     <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="9.0.0" />
     <PackageVersion Include="Elastic.Channels" Version="0.19.0" />
-    <PackageVersion Include="Elastic.Ingest.Elasticsearch" Version="0.17.1" />
+    <PackageVersion Include="Elastic.Ingest.Elasticsearch" Version="0.19.0" />
     <PackageVersion Include="Elastic.Serilog.Sinks" Version="9.0.0" />
     <PackageVersion Include="EventStore.Client.Extensions.OpenTelemetry" Version="23.3.9" />
     <PackageVersion Include="EventStore.Client.Grpc" Version="23.3.9" />
