@@ -80,7 +80,6 @@ try
     if (isTracingEnabled)
     {
         app.UseOpenTelemetryPrometheusScrapingEndpoint();
-
         app.MapPrometheusScrapingEndpoint("/metrics");
     }
 

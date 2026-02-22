@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,6 +117,13 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions
                 );
 
             return true;
+        }
+
+        public static IApplicationBuilder SetupOpenTelemetry(this IApplicationBuilder app)
+        {
+            app.UseOpenTelemetryPrometheusScrapingEndpoint();
+
+            return app;
         }
     }
 }
