@@ -86,14 +86,24 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
             }
 
+            var currentOperationStateDocument = await paymentsHistoryDocumentsClient.GetByIdAsync(paymentAccountId, operationId);
+
+            if (currentOperationStateDocument is null)
+            {
+                return Result<Guid>.Failure($"The payment operation '{nameof(operationId)}' for account '{nameof(paymentAccountId)}' hasn't been found");
+            }
+
+            var currentOperaiton = currentOperationStateDocument.Payload;
+            var paymentRecord = currentOperaiton.Record;
+
             var operationForUpdate = new FinancialTransaction
             {
                 PaymentAccountId = paymentAccountId,
                 Key = operationId,
                 Amount = payload.Amount,
                 Comment = payload.Comment,
-                CategoryId = Guid.Parse(payload.CategoryId),
-                ContractorId = Guid.Parse(payload.ContractorId),
+                CategoryId = string.IsNullOrWhiteSpace(payload.CategoryId) ? paymentRecord.CategoryId : Guid.Parse(payload.CategoryId),
+                ContractorId = string.IsNullOrWhiteSpace(payload.ContractorId) ? paymentRecord.ContractorId : Guid.Parse(payload.ContractorId),
                 OperationDay = payload.OperationDate,
                 TransactionType = TransactionTypes.Payment
             };
