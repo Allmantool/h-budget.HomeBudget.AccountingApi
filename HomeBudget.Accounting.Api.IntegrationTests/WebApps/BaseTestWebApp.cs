@@ -126,7 +126,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             }
         }
 
-        public static async Task<bool> StartContainersAsync()
+        private static async Task<bool> StartContainersAsync()
         {
             if (TestContainersService is null)
             {
