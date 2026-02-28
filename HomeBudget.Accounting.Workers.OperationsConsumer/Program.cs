@@ -89,7 +89,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 HostServiceOptions.AccountConsumerWorkerName,
                 serviceVersion);
 
-            services.AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder, HostServiceOptions.AccountConsumerWorkerName));
+            services
+                .AddAllElasticApm()
+                .AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder, HostServiceOptions.AccountConsumerWorkerName));
 
             services.AddEndpointsApiExplorer();
 

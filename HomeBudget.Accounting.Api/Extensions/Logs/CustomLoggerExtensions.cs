@@ -40,6 +40,7 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
                 .Enrich.WithActivityTags()
+                .Enrich.WithElasticApmCorrelationInfo()
                 .WriteTo.Debug()
                 .WriteTo.Console(
                     new RenderedCompactJsonFormatter(),
@@ -50,7 +51,6 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                      o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
                      o.Protocol = OtlpProtocol.Grpc;
                  })
-                .Enrich.WithElasticApmCorrelationInfo()
                 .TryAddSeqSupport(configuration)
                 .TryAddElasticSearchSupport(configuration, environment, typeof(Program).Assembly.GetName().Name)
                 .CreateLogger();
