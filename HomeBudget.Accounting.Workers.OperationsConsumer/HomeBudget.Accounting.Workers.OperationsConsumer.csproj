@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Elastic.Apm.NetCoreAll" />
     <PackageReference Include="Elastic.Apm.SerilogEnricher" />
     <PackageReference Include="Microsoft.AspNetCore.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
@@ -55,9 +56,5 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
     </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Interfaces\" />
   </ItemGroup>
 </Project>
