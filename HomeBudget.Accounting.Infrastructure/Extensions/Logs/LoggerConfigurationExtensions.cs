@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Channels;
 
 using Elastic.Apm.SerilogEnricher;
@@ -85,10 +86,14 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
             IHostEnvironment environment,
             string formattedExecuteAssemblyName)
         {
-            var dateIndexPostfix = DateTime.UtcNow.ToString(DateTimeFormats.ElasticSearch);
-            var streamName = $"{formattedExecuteAssemblyName}-{environment.EnvironmentName}-{dateIndexPostfix}".Replace(".", "-").ToLower();
+            var dateIndexPostfix = DateTime.UtcNow.ToString(DateFormats.ElasticSearch, CultureInfo.InvariantCulture);
+            var baseStreamName = $"{formattedExecuteAssemblyName}-{environment.EnvironmentName}-{dateIndexPostfix}";
 
-            options.DataStream = new DataStreamName(streamName);
+            var formattedStreamName = baseStreamName
+                .Replace(".", "-", StringComparison.OrdinalIgnoreCase)
+                .ToUpperInvariant();
+
+            options.DataStream = new DataStreamName(formattedStreamName);
             options.BootstrapMethod = BootstrapMethod.Failure;
             options.MinimumLevel = LogEventLevel.Debug;
             options.ConfigureChannel = channelOpts =>
