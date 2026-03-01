@@ -15,13 +15,13 @@ using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Infrastructure.Constants;
-using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
-using HomeBudget.Accounting.Api.Extensions.Logs;
+using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
+using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {

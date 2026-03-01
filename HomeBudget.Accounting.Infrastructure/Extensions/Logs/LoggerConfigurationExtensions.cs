@@ -20,7 +20,7 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
 {
-    public static class LoggerConfigurationExtensions
+    internal static class LoggerConfigurationExtensions
     {
         public static LoggerConfiguration TryAddSeqSupport(this LoggerConfiguration loggerConfiguration, IConfiguration configuration)
         {
@@ -93,7 +93,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
                 .Replace(".", "-", StringComparison.OrdinalIgnoreCase)
                 .ToUpperInvariant();
 
-            options.DataStream = new DataStreamName(formattedStreamName);
+            options.DataStream = new DataStreamName($"{formattedStreamName}-{Guid.NewGuid()}");
             options.BootstrapMethod = BootstrapMethod.Failure;
             options.MinimumLevel = LogEventLevel.Debug;
             options.ConfigureChannel = channelOpts =>

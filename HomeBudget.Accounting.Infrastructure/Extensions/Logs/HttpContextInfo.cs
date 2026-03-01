@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Primitives;
 
-namespace HomeBudget.Accounting.Api.Extensions.Logs
+namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
 {
     internal record HttpContextInfo
     {
