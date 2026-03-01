@@ -28,7 +28,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-    <PackageReference Include="Sentry.AspNetCore" />
+    <PackageReference Include="Sentry" />
+    <PackageReference Include="Sentry.Extensions.Logging" />
     <PackageReference Include="Sentry.Serilog" />
     <PackageReference Include="Serilog" />
     <PackageReference Include="Serilog.AspNetCore" />

@@ -21,6 +21,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
+using HomeBudget.Accounting.Api.Extensions.Logs;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {
@@ -91,7 +92,11 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             services
                 .AddAllElasticApm()
-                .AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, builder, HostServiceOptions.AccountConsumerWorkerName));
+                .AddLogging(loggerBuilder => configuration.InitializeLogger(
+                    environment,
+                    loggerBuilder,
+                    builder.Host,
+                    HostServiceOptions.AccountConsumerWorkerName));
 
             services.AddEndpointsApiExplorer();
 

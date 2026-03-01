@@ -57,7 +57,11 @@ services.AddAutoMapper(cfg =>
 
 services
     .AddAllElasticApm()
-    .AddLogging(loggerBuilder => configuration.InitializeLogger(environment, loggerBuilder, webAppBuilder.Host, HostServiceOptions.AccountingApiName));
+    .AddLogging(loggerBuilder => configuration.InitializeLogger(
+        environment,
+        loggerBuilder,
+        webAppBuilder.Host,
+        HostServiceOptions.AccountingApiName));
 
 var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
 var isTracingEnabled = services.TryAddTracingSupport(

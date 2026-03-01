@@ -16,7 +16,7 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Api.Extensions
 {
-    internal static class SentryExtensions
+    public static class SentryExtensions
     {
         public static LoggerConfiguration AddAndConfigureSentry(
             this LoggerSinkConfiguration loggerConfiguration,
