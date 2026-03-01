@@ -6,7 +6,7 @@ using Serilog;
 
 using HomeBudget.Accounting.Domain.Constants;
 
-namespace HomeBudget.Accounting.Api.Extensions.Logs
+namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
 {
     internal static class LogEnricher
     {

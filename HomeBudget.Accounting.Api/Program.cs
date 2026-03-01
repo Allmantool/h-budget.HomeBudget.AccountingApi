@@ -7,13 +7,14 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Extensions;
-using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Constants;
-using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
+using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
+using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;

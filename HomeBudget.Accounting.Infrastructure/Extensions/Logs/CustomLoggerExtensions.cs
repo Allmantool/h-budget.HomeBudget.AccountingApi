@@ -1,5 +1,4 @@
-﻿using Elastic.Apm.SerilogEnricher;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -13,9 +12,8 @@ using Serilog.Formatting.Compact;
 using Serilog.Sinks.OpenTelemetry;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
-using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 
-namespace HomeBudget.Accounting.Api.Extensions.Logs
+namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
 {
     public static class CustomLoggerExtensions
     {
@@ -34,13 +32,12 @@ namespace HomeBudget.Accounting.Api.Extensions.Logs
                 .Enrich.WithProcessId()
                 .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
-                .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
-                .Enrich.WithProperty(LoggerTags.HostService, hostServiceName)
-                .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
                 .Enrich.WithActivityTags()
-                .Enrich.WithElasticApmCorrelationInfo()
+                .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
+                .Enrich.WithProperty(LoggerTags.HostService, hostServiceName)
+                .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
                 .WriteTo.Debug()
                 .WriteTo.Console(
                     new RenderedCompactJsonFormatter(),

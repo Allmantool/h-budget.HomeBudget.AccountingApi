@@ -15,7 +15,7 @@ using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 
-namespace HomeBudget.Accounting.Infrastructure.Extensions
+namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
 {
     public static class OpenTelemetryExtensions
     {

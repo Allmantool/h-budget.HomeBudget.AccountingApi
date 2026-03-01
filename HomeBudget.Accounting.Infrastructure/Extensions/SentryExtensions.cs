@@ -14,7 +14,7 @@ using Serilog.Events;
 
 using HomeBudget.Core.Options;
 
-namespace HomeBudget.Accounting.Api.Extensions
+namespace HomeBudget.Accounting.Infrastructure.Extensions
 {
     public static class SentryExtensions
     {

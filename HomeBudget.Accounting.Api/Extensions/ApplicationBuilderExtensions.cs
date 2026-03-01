@@ -8,6 +8,7 @@ using Serilog.Events;
 
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 
 namespace HomeBudget.Accounting.Api.Extensions
 {

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 
 using HomeBudget.Accounting.Domain.Constants;
 
-namespace HomeBudget.Accounting.Api.Extensions
+namespace HomeBudget.Accounting.Infrastructure.Extensions
 {
     public static class HostEnvironmentExtensions
     {
