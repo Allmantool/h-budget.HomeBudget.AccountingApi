@@ -1,6 +1,7 @@
 ﻿using Elastic.Apm.SerilogEnricher;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Logs;
 using Serilog;
@@ -14,15 +15,15 @@ using Serilog.Sinks.OpenTelemetry;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 
-namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
+namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
-    internal static class CustomLoggerExtensions
+    public static class CustomLoggerExtensions
     {
         public static Logger InitializeLogger(
             this IConfiguration configuration,
-            IHostEnvironment environment,
+            IWebHostEnvironment environment,
             ILoggingBuilder loggingBuilder,
-            IHostApplicationBuilder hostApplicationBuilder,
+            ConfigureHostBuilder host,
             string hostServiceName)
         {
             var logger = new LoggerConfiguration()
@@ -39,19 +40,19 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
                 .Enrich.WithSpan()
                 .Enrich.WithActivityId()
                 .Enrich.WithActivityTags()
+                .Enrich.WithElasticApmCorrelationInfo()
                 .WriteTo.Debug()
                 .WriteTo.Console(
                     new RenderedCompactJsonFormatter(),
                     restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
                 .WriteTo.OpenTelemetry(o =>
-                {
-                    o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
-                    o.Protocol = OtlpProtocol.Grpc;
-                })
-                .Enrich.WithElasticApmCorrelationInfo()
+                 {
+                     o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
+                     o.Protocol = OtlpProtocol.Grpc;
+                 })
                 .TryAddSeqSupport(configuration)
-                .TryAddElasticSearchSupport(configuration, environment, typeof(Program).Assembly.GetName().Name)
+                .TryAddElasticSearchSupport(configuration, environment, hostServiceName)
                 .CreateLogger();
 
             loggingBuilder.ClearProviders();
@@ -65,10 +66,22 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Extensions
                 options.AddOtlpExporter();
             });
 
-            // SelfLog.Enable(msg => File.AppendAllText("serilog-accounting-worker-selflog.txt",
+            host.UseSerilog(logger);
+
+            // SelfLog.Enable(msg => File.AppendAllText("serilog-accounting-api-selflog.txt", msg));
             Log.Logger = logger;
 
             return logger;
+        }
+
+        public static WebApplication SetupHttpLogging(this WebApplication app)
+        {
+            app.UseSerilogRequestLogging(options =>
+            {
+                options.EnrichDiagnosticContext = LogEnricher.HttpRequestEnricher;
+            });
+
+            return app;
         }
     }
 }
