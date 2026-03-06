@@ -33,6 +33,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
                 .Enrich.WithProcessName()
                 .Enrich.WithExceptionDetails()
                 .Enrich.WithSpan()
+                .Enrich.With<ActivityEnricher>()
                 .Enrich.WithActivityId()
                 .Enrich.WithActivityTags()
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
