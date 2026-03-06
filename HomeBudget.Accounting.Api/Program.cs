@@ -11,10 +11,10 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Accounting.Infrastructure.Constants;
-using HomeBudget.Components.Operations.MapperProfileConfigurations;
-using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
-using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 using HomeBudget.Accounting.Infrastructure.Extensions;
+using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
+using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
+using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;
@@ -48,6 +48,7 @@ services.AddHeaderPropagation(options =>
 {
     options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.AccountingApiName);
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
+    options.Headers.Add("traceparent");
 });
 
 services.AddAutoMapper(cfg =>

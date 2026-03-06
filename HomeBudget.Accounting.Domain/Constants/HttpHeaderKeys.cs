@@ -4,5 +4,7 @@
     {
         public static readonly string CorrelationId = nameof(CorrelationId);
         public static readonly string HostService = nameof(HostService);
+
+        public static readonly string TraceId = "trace-id";
     }
 }

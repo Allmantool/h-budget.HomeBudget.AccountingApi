@@ -55,7 +55,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
             {
                 var elasticOptions = configuration.GetSection(ConfigurationSectionKeys.ElasticSearchOptions)?.Get<ElasticSearchOptions>();
 
-                if (!elasticOptions.IsEnabled)
+                if (elasticOptions is null || !elasticOptions.IsEnabled)
                 {
                     return loggerConfiguration;
                 }
