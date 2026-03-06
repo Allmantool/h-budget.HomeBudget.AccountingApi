@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
@@ -11,6 +12,7 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog.Context;
 
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
@@ -22,6 +24,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
@@ -142,7 +145,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             var paymentAccountStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(monthPeriodPaymentAccountIdentifier);
 
-            var events = await _eventStoreDbStreamReadClient.ReadAsync(paymentAccountStream, cancellationToken: ct).ToListAsync(ct);
+            var events = await _eventStoreDbStreamReadClient
+                .ReadAsync(paymentAccountStream, cancellationToken: ct)
+                .ToListAsync(ct);
 
             foreach (var e in events)
             {
@@ -154,7 +159,34 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             try
             {
-                await SendSyncOperationsHistoryAsync(accountId, events, ct);
+                // Extract trace info from the first event in the stream
+                var firstEvent = events.FirstOrDefault();
+                var correlationId = firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId);
+                var traceParent = firstEvent?.Metadata.Get(EventMetadataKeys.TraceParent);
+                var traceId = firstEvent?.Metadata.Get(EventMetadataKeys.TraceId);
+
+                using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
+                {
+                    using var activity = Tracing.Source.StartActivity(
+                        "mongodb.sync",
+                        ActivityKind.Internal,
+                        traceParent); // restore parent trace
+
+                    if (activity != null)
+                    {
+                        activity.SetTag("correlation_id", correlationId);
+                        if (!string.IsNullOrEmpty(traceId))
+                            activity.SetTag("trace_id", traceId);
+
+                        activity.SetTag("messaging.system", "eventstore");
+                        activity.SetTag("messaging.stream", paymentAccountStream);
+                        activity.SetTag("messaging.event_count", events.Count);
+                    }
+
+                    await SendSyncOperationsHistoryAsync(accountId, events, ct);
+
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -176,7 +208,22 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
             _logger.DispatchingSync(paymentAccountId, events.Count());
-            await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
+
+            // Continue the same correlation context inside the command
+            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
+            using (var activity = Tracing.Source.StartActivity("mongodb.send_command"))
+            {
+                if (activity != null)
+                {
+                    var firstEvent = events.FirstOrDefault();
+                    activity.SetTag("correlation_id", firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId));
+                    activity.SetTag("messaging.system", "mongodb");
+                    activity.SetTag("messaging.event_count", events.Count());
+                }
+
+                await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+            }
         }
     }
 }

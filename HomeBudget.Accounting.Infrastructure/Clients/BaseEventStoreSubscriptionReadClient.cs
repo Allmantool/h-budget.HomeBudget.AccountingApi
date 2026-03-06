@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.Threading;
 using System.Threading.Tasks;
@@ -69,7 +70,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             CancellationToken ct = default)
         {
             var droppedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
             PersistentSubscription subscription = null;
 
             try
@@ -78,20 +78,20 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     groupName,
                     async (sub, evt, retryCount, token) =>
                     {
-                        var resolveEvent = evt.Event;
+                        var resolvedEvent = evt.Event;
 
-                        if (resolveEvent is null)
+                        if (resolvedEvent is null)
                         {
                             return;
                         }
 
-                        if (resolveEvent.EventType.StartsWith('$'))
+                        if (resolvedEvent.EventType.StartsWith('$'))
                         {
                             await sub.Ack(evt);
                             return;
                         }
 
-                        if (!resolveEvent.EventStreamId.StartsWith(
+                        if (!resolvedEvent.EventStreamId.StartsWith(
                             $"{EventDbEventStreams.PaymentAccountPrefix}{NameConventions.EventPrefixSeparator}",
                             StringComparison.OrdinalIgnoreCase))
                         {
@@ -101,20 +101,42 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                         try
                         {
-                            SafeJsonSerializer.TryDeserialize<EventMetadata>(resolveEvent.Metadata.Span, out var metadata);
-
-                            if (!SafeJsonSerializer.TryDeserialize<T>(resolveEvent.Data.Span, out var eventData) || eventData is null)
+                            SafeJsonSerializer.TryDeserialize<EventMetadata>(resolvedEvent.Metadata.Span, out var metadata);
+                            if (!SafeJsonSerializer.TryDeserialize<T>(resolvedEvent.Data.Span, out var eventData) || eventData is null)
                             {
                                 await sub.Nack(
                                     PersistentSubscriptionNakEventAction.Skip,
                                     "Deserialization failed",
                                     evt);
-
                                 return;
                             }
 
-                            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, eventData.Metadata.Get(EventMetadataKeys.CorrelationId)))
+                            var correlationId = eventData.Metadata.Get(EventMetadataKeys.CorrelationId);
+                            var traceParent = eventData.Metadata.Get(EventMetadataKeys.TraceParent);
+                            var traceId = eventData.Metadata.Get(EventMetadataKeys.TraceId);
+
+                            using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                             {
+                                using var activity = Tracing.Source.StartActivity(
+                                    "eventstore.consume",
+                                    ActivityKind.Consumer,
+                                    traceParent); // Restore parent from EventStore
+
+                                if (activity != null)
+                                {
+                                    activity.SetTag("correlation_id", correlationId);
+                                    if (!string.IsNullOrEmpty(traceId))
+                                    {
+                                        activity.SetTag("trace_id", traceId);
+                                    }
+
+                                    activity.SetTag("messaging.system", "eventstore");
+                                    activity.SetTag("messaging.stream", resolvedEvent.EventStreamId);
+                                    activity.SetTag("messaging.event_type", resolvedEvent.EventType);
+                                    activity.SetTag("messaging.event_id", resolvedEvent.EventId.ToString());
+                                }
+
+                                // Call the handler
                                 if (handler is null)
                                 {
                                     await OnEventAppearedAsync(eventData);
@@ -123,13 +145,14 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 {
                                     await handler(evt);
                                 }
-                            }
 
-                            await sub.Ack(evt);
+                                await sub.Ack(evt);
+                                activity?.SetStatus(ActivityStatusCode.Ok);
+                            }
                         }
                         catch (Exception ex)
                         {
-                            _logger.HandlerFailedForEvent(ex, resolveEvent.EventId);
+                            _logger.HandlerFailedForEvent(ex, resolvedEvent.EventId);
 
                             await sub.Nack(
                                 PersistentSubscriptionNakEventAction.Retry,
@@ -140,7 +163,6 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     (sub, reason, ex) =>
                     {
                         _logger.SubscriptionDropped(ex, reason);
-
                         droppedTcs.TrySetResult();
                     },
                     cancellationToken: ct);

@@ -9,5 +9,9 @@
         public static readonly string FromMessage = nameof(FromMessage);
 
         public static readonly string ExceptionDetails = nameof(ExceptionDetails);
+
+        public static readonly string TraceId = "trace-id";
+
+        public static readonly string TraceParent = "trace-parent";
     }
 }
