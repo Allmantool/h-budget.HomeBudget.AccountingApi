@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,23 +29,37 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
         IOutboxPaymentStatusService outboxPaymentStatusService)
     {
-        protected Task<Result<Guid>> HandleAsync<T>(
+        protected async Task<Result<Guid>> HandleAsync<T>(
             T request,
             CancellationToken cancellationToken)
             where T : ICorrelatedCommand
         {
             var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
 
-            paymentEvent.Metadata.Add(EventMetadataKeys.CorrelationId, request.CorrelationId);
+            var currentActivity = Activity.Current;
+
+            var traceId = currentActivity?.TraceId.ToString();
+            var traceParent = currentActivity?.Id;
+
+            if (traceId != null)
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceId] = traceId;
+            }
+
+            if (traceParent != null)
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+            }
+
+            paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = request.CorrelationId;
 
             var payload = paymentEvent.Payload;
             var paymentAccountId = payload.PaymentAccountId;
-
             var createdAt = dateTimeProvider.GetNowUtc();
 
             var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent, createdAt);
 
-            var dbEntitity = new OutboxAccountPaymentsEntity
+            var dbEntity = new OutboxAccountPaymentsEntity
             {
                 EventType = paymentEvent.EventType.ToString(),
                 AggregateId = paymentAccountId.ToString(),
@@ -53,29 +69,46 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 UpdatedAt = createdAt
             };
 
-            outboxPaymentStatusService.WriteRecord(dbEntitity);
+            outboxPaymentStatusService.WriteRecord(dbEntity);
 
-            kafkaHandler.ExecuteAndWaitAsync(async producer =>
+            await kafkaHandler.ExecuteAndWaitAsync(async producer =>
             {
                 var message = paymentMessageResult.Payload;
 
+                if (traceParent != null)
+                {
+                    message.Headers.Add("traceparent", Encoding.UTF8.GetBytes(traceParent));
+                }
+
+                if (traceId != null)
+                {
+                    message.Headers.Add("traceId", Encoding.UTF8.GetBytes(traceId));
+                }
+
+                message.Headers.Add("correlationId", Encoding.UTF8.GetBytes(request.CorrelationId));
+
                 try
                 {
-                    var deliveryResult = await producer.ProduceAsync(BaseTopics.AccountingPayments, message, cancellationToken);
+                    using var activity = Tracing.Source.StartActivity("kafka.produce", ActivityKind.Producer);
+
+                    var deliveryResult = await producer.ProduceAsync(
+                        BaseTopics.AccountingPayments,
+                        message,
+                        cancellationToken);
+
+                    logger.LogInformation(
+                        "Produced Kafka message to {Topic} (Key: {Key})",
+                        BaseTopics.AccountingPayments,
+                        message.Key);
                 }
                 catch (Exception ex)
                 {
                     var reason = ex.InnerException?.Message ?? ex.Message;
-
-                    logger.ProduceFailed(
-                        BaseTopics.AccountingPayments,
-                        message.Key,
-                        reason,
-                        ex);
+                    logger.ProduceFailed(BaseTopics.AccountingPayments, message.Key, reason, ex);
                 }
             });
 
-            return Task.FromResult(Result<Guid>.Succeeded(paymentEvent.Payload.Key));
+            return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
         }
     }
 }

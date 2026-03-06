@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
+
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
@@ -24,7 +25,6 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
     {
         public string ConsumerId { get; }
 
-        private static readonly ActivitySource ActivitySource = new("HomeBudget.KafkaConsumer");
         private static readonly ConcurrentBag<string> _subscribedTopics = new ConcurrentBag<string>();
 
         private readonly Lock _lock = new();
@@ -154,8 +154,6 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         {
             ArgumentNullException.ThrowIfNull(processMessageAsync);
 
-            var subscribeTopics = _consumer.Subscription;
-
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
@@ -178,20 +176,35 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                         var consumedMessage = consumeResult.Message;
 
-                        var correlationId = consumedMessage.Headers
-                            .TryGetLastBytes(KafkaMessageHeaders.CorrelationId, out var lastHeaderBytes)
-                                ? Encoding.UTF8.GetString(lastHeaderBytes)
-                                : string.Empty;
+                        var correlationId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.CorrelationId, out var lastHeaderBytes)
+                            ? Encoding.UTF8.GetString(lastHeaderBytes)
+                            : string.Empty;
 
                         using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CorrelationId), correlationId))
                         {
-                            using var activity = ActivitySource.StartActivity("KafkaMessage.Consume");
+                            // Extract traceparent header (optional)
+                            string traceParent = null;
+                            if (consumedMessage.Headers.TryGetLastBytes("traceparent", out var traceParentBytes))
+                            {
+                                traceParent = Encoding.UTF8.GetString(traceParentBytes);
+                            }
 
-                            activity?.SetTag("messaging.system", "kafka");
-                            activity?.SetTag("messaging.destination", consumeResult.Topic);
-                            activity?.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
-                            activity?.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
-                            activity?.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
+                            using var activity = Tracing.Source.StartActivity(
+                                "kafka.consume",
+                                ActivityKind.Consumer,
+                                traceParent // correctly restore parent if available
+                            );
+
+                            if (activity != null)
+                            {
+                                activity.SetTag("messaging.system", "kafka");
+                                activity.SetTag("messaging.destination", consumeResult.Topic);
+                                activity.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
+                                activity.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
+                                activity.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
+
+                                activity.SetTag("correlation_id", correlationId);
+                            }
 
                             await processMessageAsync(consumeResult);
 

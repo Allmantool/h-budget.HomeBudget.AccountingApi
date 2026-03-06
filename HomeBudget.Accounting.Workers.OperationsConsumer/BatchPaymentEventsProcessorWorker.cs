@@ -13,7 +13,6 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Options;
-using HomeBudget.Core.Exstensions;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
 {

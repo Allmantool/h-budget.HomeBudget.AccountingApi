@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -62,25 +63,65 @@ namespace HomeBudget.Components.Operations.Consumers
                             return;
                         }
 
-                        message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
+                        message.Headers.Add(
+                            KafkaMessageHeaders.ProcessedAt,
+                            Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
 
                         logger.PaymentConsumed(message.Key);
 
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
-                        paymentEvent.Metadata.Add(EventMetadataKeys.FromMessage, message.Key);
-                        paymentEvent.Metadata.Add(EventMetadataKeys.CorrelationId, paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId));
+                        var correlationId = paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId)
+                                           ?? string.Empty;
 
-                        var paylod = paymentEvent.Payload;
-                        var partitionKey = paylod.GetPartitionKey();
+                        var traceParent = message.Headers.TryGetLastBytes("traceparent", out var tpBytes)
+                            ? Encoding.UTF8.GetString(tpBytes)
+                            : null;
 
+                        var traceId = message.Headers.TryGetLastBytes("traceId", out var tidBytes)
+                            ? Encoding.UTF8.GetString(tidBytes)
+                            : null;
+
+                        using var activity = Tracing.Source.StartActivity(
+                            "payment.events.channel.process",
+                            ActivityKind.Consumer,
+                            traceParent);
+
+                        if (activity != null)
+                        {
+                            activity.SetTag("messaging.system", "kafka");
+                            activity.SetTag("messaging.destination", payload.Topic);
+                            activity.SetTag("messaging.kafka.partition", payload.Partition);
+                            activity.SetTag("messaging.kafka.offset", payload.Offset);
+                            activity.SetTag("messaging.message_id", message.Key);
+                            activity.SetTag("correlation_id", correlationId);
+
+                            if (!string.IsNullOrEmpty(traceId))
+                            {
+                                activity.SetTag("trace_id", traceId);
+                            }
+                        }
+
+                        paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = correlationId;
+                        if (!string.IsNullOrEmpty(traceId))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.TraceId] = traceId;
+                        }
+
+                        if (!string.IsNullOrEmpty(traceParent))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+                        }
+
+                        var payloadData = paymentEvent.Payload;
+                        var partitionKey = payloadData.GetPartitionKey();
                         outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Published);
 
                         await paymentEventsChannel.Writer.WriteAsync(paymentEvent);
                     }
                     catch (JsonException ex)
                     {
-                        logger.DeserializationFailed(payload.Message.Value, ex.Message, ex);
+                        logger.DeserializationFailed(payload.Message?.Value, ex.Message, ex);
                     }
                     catch (Exception ex)
                     {
@@ -90,19 +131,20 @@ namespace HomeBudget.Components.Operations.Consumers
                 async payload =>
                 {
                     var message = payload.Message;
-
                     if (message == null || string.IsNullOrWhiteSpace(message.Value))
                     {
                         return;
                     }
 
-                    message.Headers.Add(KafkaMessageHeaders.ProcessedAt, Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
+                    message.Headers.Add(
+                        KafkaMessageHeaders.ProcessedAt,
+                        Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
 
                     logger.PaymentConsumed(message.Key);
 
                     var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
-                    var paylod = paymentEvent.Payload;
-                    var partitionKey = paylod.GetPartitionKey();
+                    var payloadData = paymentEvent.Payload;
+                    var partitionKey = payloadData.GetPartitionKey();
 
                     outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Acknowledged);
                 },

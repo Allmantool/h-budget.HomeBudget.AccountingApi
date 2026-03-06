@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Options;
 
@@ -51,11 +53,41 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                     var streamName = kvp.Key;
                     var streamEvents = kvp.Value;
 
-                    var eventTypeTitle = $"{streamEvents.First().EventType}_{streamEvents.First().Payload.Key}";
+                    var firstEvent = streamEvents.First();
+                    var eventTypeTitle = $"{firstEvent.EventType}_{firstEvent.Payload.Key}";
 
                     try
                     {
-                        await _eventStoreDbWriteClient.SendBatchAsync(streamEvents, streamName, eventTypeTitle, cancellationToken);
+                        var traceParent = firstEvent.Metadata.Get(EventMetadataKeys.TraceParent);
+                        var traceId = firstEvent.Metadata.Get(EventMetadataKeys.TraceId);
+                        var correlationId = firstEvent.Metadata.Get(EventMetadataKeys.CorrelationId);
+
+                        using var activity = Tracing.Source.StartActivity(
+                            "eventstore.write",
+                            ActivityKind.Internal,
+                            traceParent);
+
+                        if (activity != null)
+                        {
+                            activity.SetTag("correlation_id", correlationId);
+                            if (!string.IsNullOrWhiteSpace(traceId))
+                            {
+                                activity.SetTag("trace_id", traceId);
+                            }
+
+                            activity.SetTag("messaging.system", "eventstore");
+                            activity.SetTag("messaging.stream", streamName);
+                            activity.SetTag("messaging.event_count", streamEvents.Count());
+                            activity.SetTag("messaging.first_event_type", firstEvent.EventType.ToString());
+                        }
+
+                        await _eventStoreDbWriteClient.SendBatchAsync(
+                            streamEvents,
+                            streamName,
+                            eventTypeTitle,
+                            cancellationToken);
+
+                        activity?.SetStatus(ActivityStatusCode.Ok);
                     }
                     catch (Exception ex)
                     {
