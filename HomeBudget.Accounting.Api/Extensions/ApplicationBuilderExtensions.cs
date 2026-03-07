@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
-using HomeBudget.Accounting.Api.Middlewares;
+
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
 
 using HomeBudget.Accounting.Api.Configuration;
+using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 
@@ -52,13 +53,13 @@ namespace HomeBudget.Accounting.Api.Extensions
                 .UseRouting()
                 .UseSerilogRequestLogging(options =>
                 {
-                    // Customize the message template
                     options.MessageTemplate = "Handled {RequestPath}";
 
-                    // Emit debug-level events instead of the defaults
-                    options.GetLevel = (_, _, _) => LogEventLevel.Debug;
+                    if (env.IsIntegrationTesting())
+                    {
+                        options.GetLevel = (_, _, _) => LogEventLevel.Debug;
+                    }
 
-                    // Attach additional properties to the request completion event
                     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
                     {
                         diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
@@ -66,7 +67,10 @@ namespace HomeBudget.Accounting.Api.Extensions
                     };
                 })
                 .SetUpHealthCheckEndpoints(env)
-                .UseEndpoints(endpoints => { endpoints.MapControllers(); });
+                .UseEndpoints(endpoints =>
+                {
+                    endpoints.MapControllers();
+                });
         }
     }
 }

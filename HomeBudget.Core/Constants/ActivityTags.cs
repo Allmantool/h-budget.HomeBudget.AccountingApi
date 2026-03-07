@@ -9,5 +9,7 @@
 
         public static readonly string MediatorRequest = "mediator.request";
         public static readonly string MediatorRequestType = "mediator.request.type";
+
+        public static readonly string KafkaStartProduce = "kafka.produce";
     }
 }

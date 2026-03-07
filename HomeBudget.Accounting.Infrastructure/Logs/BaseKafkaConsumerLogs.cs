@@ -24,7 +24,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
 
         [LoggerMessage(
             EventId = 1023,
-            Level = LogLevel.Information,
+            Level = LogLevel.Debug,
             Message = "Partitions assigned: [{Partitions}]")]
         public static partial void PartitionsAssigned(
             this ILogger logger,
@@ -32,7 +32,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
 
         [LoggerMessage(
             EventId = 1022,
-            Level = LogLevel.Information,
+            Level = LogLevel.Debug,
             Message = "Partitions revoked: [{Partitions}]")]
         public static partial void PartitionsRevoked(
             this ILogger logger,
@@ -40,7 +40,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
 
         [LoggerMessage(
             EventId = 1021,
-            Level = LogLevel.Information,
+            Level = LogLevel.Debug,
             Message = "Kafka log: {Message}")]
         public static partial void KafkaLog(
             this ILogger logger,

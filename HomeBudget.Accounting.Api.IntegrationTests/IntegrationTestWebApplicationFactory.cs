@@ -70,7 +70,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     ["Kafka:BootstrapServers"] = _containersConnections.KafkaContainer,
                     ["MongoDb:ConnectionString"] = _containersConnections.MongoDbContainer,
-                    ["EventStore:ConnectionString"] = _containersConnections.EventSourceDbContainer
+                    ["EventStore:ConnectionString"] = _containersConnections.EventSourceDbContainer,
+                    ["MsSqlDb:ConnectionString"] = _containersConnections.MsSqlDbContainer,
                 });
 
                 Configuration = conf.Build();
@@ -85,6 +86,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
             builder.ConfigureServices(services =>
             {
+                services.Configure<DatabaseConnectionOptions>(opts =>
+                {
+                    opts.ConnectionString = _containersConnections?.MsSqlDbContainer;
+                    opts.RedisConnectionString = "mock-web-connection";
+                });
+
                 var kafkaOptions = new KafkaOptions
                 {
                     ProducerSettings = new ProducerSettings

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +9,9 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
@@ -74,32 +75,22 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             await kafkaHandler.ExecuteAndWaitAsync(async producer =>
             {
                 var message = paymentMessageResult.Payload;
+                var messageHeaders = message.Headers;
 
-                if (traceParent != null)
-                {
-                    message.Headers.Add("traceparent", Encoding.UTF8.GetBytes(traceParent));
-                }
-
-                if (traceId != null)
-                {
-                    message.Headers.Add("traceId", Encoding.UTF8.GetBytes(traceId));
-                }
-
-                message.Headers.Add("correlationId", Encoding.UTF8.GetBytes(request.CorrelationId));
+                messageHeaders.TryAddHeader(KafkaMessageHeaders.Traceparent, traceParent);
+                messageHeaders.TryAddHeader(KafkaMessageHeaders.TraceId, traceId);
+                messageHeaders.TryAddHeader(KafkaMessageHeaders.CorrelationId, request?.CorrelationId);
 
                 try
                 {
-                    using var activity = Tracing.Source.StartActivity("kafka.produce", ActivityKind.Producer);
+                    using var activity = Tracing.Source.StartActivity(ActivityTags.KafkaStartProduce, ActivityKind.Producer);
 
                     var deliveryResult = await producer.ProduceAsync(
                         BaseTopics.AccountingPayments,
                         message,
                         cancellationToken);
 
-                    logger.LogInformation(
-                        "Produced Kafka message to {Topic} (Key: {Key})",
-                        BaseTopics.AccountingPayments,
-                        message.Key);
+                    logger.ProduceMessageSuccessfully(BaseTopics.AccountingPayments, message.Key);
                 }
                 catch (Exception ex)
                 {
