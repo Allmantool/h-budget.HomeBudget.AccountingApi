@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -101,13 +100,13 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                         try
                         {
-                            SafeJsonSerializer.TryDeserialize<EventMetadata>(resolvedEvent.Metadata.Span, out var metadata);
                             if (!SafeJsonSerializer.TryDeserialize<T>(resolvedEvent.Data.Span, out var eventData) || eventData is null)
                             {
                                 await sub.Nack(
                                     PersistentSubscriptionNakEventAction.Skip,
                                     "Deserialization failed",
                                     evt);
+
                                 return;
                             }
 

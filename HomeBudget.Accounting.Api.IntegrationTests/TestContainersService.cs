@@ -4,11 +4,14 @@ using System.Threading.Tasks;
 
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using EvolveDb;
+using EvolveDb.Configuration;
+using Microsoft.Data.SqlClient;
+using Serilog;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
 using Testcontainers.MsSql;
-using Serilog;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
@@ -16,7 +19,6 @@ using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Core.Constants;
 using HomeBudget.Test.Core.Factories;
-using HomeBudget.Tests.Infrastructure.Containers;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
@@ -54,6 +56,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 {
                     _instance = new TestContainersService();
                     await _instance.UpAndRunningContainersAsync();
+
+                    _instance.ApplyDbMigrations();
                 }
 
                 GetInstance = _instance;
@@ -119,6 +123,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             _isDisposed = true;
+        }
+
+        private void ApplyDbMigrations()
+        {
+            using var cnx = new SqlConnection(MsSqlDbContainer.GetConnectionString());
+            var evolve = new Evolve(cnx)
+            {
+                Locations = ["db/migrations"],
+                EnableClusterMode = false,
+                TransactionMode = TransactionKind.CommitEach
+            };
+
+            evolve.Migrate();
         }
 
         private async Task<bool> UpAndRunningContainersAsync()

@@ -89,6 +89,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 services.Configure<DatabaseConnectionOptions>(opts =>
                 {
                     opts.ConnectionString = _containersConnections?.MsSqlDbContainer;
+                    opts.RedisConnectionString = "mock-web-connection";
                 });
 
                 var kafkaOptions = new KafkaOptions

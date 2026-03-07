@@ -27,11 +27,13 @@ namespace HomeBudget.Accounting.Infrastructure.Data.SqlClients
         {
             try
             {
+                ArgumentException.ThrowIfNullOrWhiteSpace(_databaseConnectionOptions?.ConnectionString);
+
                 return new SqlConnection(_databaseConnectionOptions.ConnectionString);
             }
             catch (Exception ex)
             {
-                _logConnectionFailure(logger, _databaseConnectionOptions.ConnectionString, ex);
+                _logConnectionFailure(logger, _databaseConnectionOptions?.ConnectionString, ex);
                 throw;
             }
         }

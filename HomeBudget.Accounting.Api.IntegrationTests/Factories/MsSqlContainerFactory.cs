@@ -5,7 +5,7 @@ using Testcontainers.MsSql;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 
-namespace HomeBudget.Tests.Infrastructure.Containers
+namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
 {
     internal static class MsSqlContainerFactory
     {

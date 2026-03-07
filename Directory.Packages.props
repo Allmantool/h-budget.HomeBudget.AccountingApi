@@ -19,6 +19,7 @@
     <PackageVersion Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="23.3.9" />
     <PackageVersion Include="EventStore.Client.Grpc.ProjectionManagement" Version="23.3.9" />
     <PackageVersion Include="EventStore.Client.Grpc.Streams" Version="23.3.9" />
+    <PackageVersion Include="Evolve" Version="3.2.0" />
     <PackageVersion Include="FluentAssertions" Version="8.8.0" />
     <PackageVersion Include="MediatR" Version="14.1.0" />
     <PackageVersion Include="MediatR.Contracts" Version="2.0.1" />

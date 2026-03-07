@@ -9,5 +9,9 @@
         public static readonly string OccuredOn = "occured-on";
         public static readonly string ProcessedAt = "processed-at";
         public static readonly string CorrelationId = "correlation-id";
+
+        // public static readonly string CorrelationId = "correlationId";
+        public static readonly string Traceparent = "traceparent";
+        public static readonly string TraceId = "traceId";
     }
 }

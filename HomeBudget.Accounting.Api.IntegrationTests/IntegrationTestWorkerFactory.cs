@@ -37,6 +37,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 environmentName: HostEnvironments.Integration,
                 configureServices: services =>
                 {
+                    services.Configure<DatabaseConnectionOptions>(opts =>
+                    {
+                        opts.ConnectionString = _containersConnections?.MsSqlDbContainer;
+                        opts.RedisConnectionString = "mock-wrk-connection";
+                    });
+
                     services.Configure<KafkaOptions>(options =>
                     {
                         options.ProducerSettings = new ProducerSettings
