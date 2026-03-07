@@ -68,7 +68,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                             {
                                 KafkaContainer = kafkaContainerConnection,
                                 EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                                MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                                MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
+                                MsSqlDbContainer = TestContainersService.MsSqlDbContainer.GetConnectionString(),
                             });
 
                         WorkerFactories.Add(worker);
@@ -84,7 +85,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                         {
                             KafkaContainer = kafkaContainerConnection,
                             EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString()
+                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
+                            MsSqlDbContainer = TestContainersService.MsSqlDbContainer.GetConnectionString(),
                         });
 
                     var server = WebFactory.Server;

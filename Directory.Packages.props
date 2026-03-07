@@ -87,5 +87,6 @@
     <PackageVersion Include="Testcontainers.EventStoreDb" Version="4.9.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="4.9.0" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.9.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.9.0" />
   </ItemGroup>
 </Project>

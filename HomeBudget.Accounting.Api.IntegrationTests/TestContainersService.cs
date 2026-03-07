@@ -7,6 +7,8 @@ using DotNet.Testcontainers.Networks;
 using Testcontainers.EventStoreDb;
 using Testcontainers.Kafka;
 using Testcontainers.MongoDb;
+using Testcontainers.MsSql;
+using Serilog;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
@@ -14,6 +16,7 @@ using HomeBudget.Accounting.Api.IntegrationTests.Factories;
 using HomeBudget.Accounting.Infrastructure;
 using HomeBudget.Core.Constants;
 using HomeBudget.Test.Core.Factories;
+using HomeBudget.Tests.Infrastructure.Containers;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
@@ -32,6 +35,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         public IContainer ZkContainer { get; private set; }
         public INetwork KafkaNetwork { get; private set; }
         public MongoDbContainer MongoDbContainer { get; private set; }
+        public MsSqlContainer MsSqlDbContainer { get; private set; }
 
         protected TestContainersService()
         {
@@ -64,15 +68,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             {
                 try
                 {
+                    await MsSqlDbContainer.ResetContainersAsync();
                     await MongoDbContainer.ResetContainersAsync();
-
                     await KafkaContainer.ResetContainersAsync();
-
                     await EventSourceDbContainer.ResetContainersAsync();
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Reset failed: {ex}");
+                    Log.Error(ex, ex.Message);
                     throw;
                 }
             }
@@ -110,6 +113,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await MongoDbContainer.DisposeAsync();
             }
 
+            if (MsSqlDbContainer != null)
+            {
+                await MsSqlDbContainer.DisposeAsync();
+            }
+
             _isDisposed = true;
         }
 
@@ -133,6 +141,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 KafkaUIContainer = await KafkaUIContainerFactory.BuildAsync(KafkaNetwork);
 
                 MongoDbContainer = MongoDbContainerFactory.Build();
+                MsSqlDbContainer = MsSqlContainerFactory.Build();
 
                 await TryToStartContainerAsync();
 
@@ -142,7 +151,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Log.Error(ex, ex.Message);
                 IsReadyForUse = false;
 
                 throw;
@@ -163,6 +172,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await MongoDbContainer.SafeStartWithRetryAsync();
                 }
 
+                if (MsSqlDbContainer is not null)
+                {
+                    await MsSqlDbContainer.SafeStartWithRetryAsync();
+                }
+
                 if (ZkContainer is not null)
                 {
                     await ZkContainer.SafeStartWithRetryAsync();
@@ -179,13 +193,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     await KafkaUIContainer.SafeStartWithRetryAsync();
                 }
 
-                Console.WriteLine($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
+                Log.Information($"The topics have been created: {BaseTopics.AccountingAccounts}, {BaseTopics.AccountingPayments}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Container startup failed:");
-                Console.WriteLine(ex);
+                Log.Information("Container startup failed:");
+                Log.Error(ex, ex.Message);
 
+                await MsSqlDbContainer.DumpContainerLogsSafelyAsync("MsSqlDB");
                 await MongoDbContainer.DumpContainerLogsSafelyAsync("MongoDB");
                 await EventSourceDbContainer.DumpContainerLogsSafelyAsync("EventStoreDB");
                 await KafkaContainer.DumpContainerLogsSafelyAsync("Kafka");

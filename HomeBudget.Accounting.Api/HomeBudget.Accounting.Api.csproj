@@ -4,6 +4,7 @@
     <RootNamespace>HomeBudget.Accounting.Api</RootNamespace>
     <PublishReadyToRun>true</PublishReadyToRun>
     <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <UserSecretsId>e3b65c30-e4af-4ad3-a189-a53bde4672a6</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
