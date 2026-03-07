@@ -76,19 +76,17 @@ namespace HomeBudget.Components.Operations.Clients
         public async Task ReplaceOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
         {
             var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-            var filter = Builders<PaymentHistoryDocument>.Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
-            var document = new PaymentHistoryDocument
-            {
-                Payload = payload
-            };
 
-            await targetCollection.ReplaceOneAsync(
+            var filter = Builders<PaymentHistoryDocument>
+                .Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
+
+            var update = Builders<PaymentHistoryDocument>
+                .Update.Set(d => d.Payload, payload);
+
+            await targetCollection.UpdateOneAsync(
                 filter,
-                document,
-                new ReplaceOptions
-                {
-                    IsUpsert = true
-                });
+                update,
+                new UpdateOptions { IsUpsert = true });
         }
 
         public async Task BulkWriteAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> payload)
@@ -102,9 +100,9 @@ namespace HomeBudget.Components.Operations.Clients
                     Builders<PaymentHistoryDocument>.Update
                         .Set(d => d.Payload, r)
                     )
-                    {
-                        IsUpsert = true
-                    }
+                {
+                    IsUpsert = true
+                }
                 ).ToList();
 
             if (bulkOps.Count > 0)
