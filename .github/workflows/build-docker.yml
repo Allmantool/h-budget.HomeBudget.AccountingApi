@@ -1,4 +1,4 @@
-name: Push to docker hub
+name: Push to Docker Hub
 
 on:
   workflow_dispatch:
@@ -23,42 +23,111 @@ on:
       DOCKERHUB_TOKEN:
         required: true
 
+permissions:
+  contents: read
+  deployments: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
+    if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       matrix:
         service:
           - id: "api"
             name: "homebudget-accounting-api"
-            file: "dockerfile"
+            file: "Dockerfile"
             context: "."
           - id: "payments-consumer-worker"
             name: "homebudget-accounting-payments-consumer-worker"
             file: "HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile"
             context: "."
+      max-parallel: 2
 
     steps:
       - name: Check out code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Resolve Docker tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.last_tag }}" ]]; then
+            echo "tag=${{ inputs.last_tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "No tag provided and not a tag push. Exiting."
+            exit 1
+          fi
+
+      - name: Create Deployment for ${{ matrix.service.id }}
+        id: create-deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.ref,
+              auto_merge: false,
+              required_contexts: [],
+              environment: 'production-${{ matrix.service.id }}',
+              transient_environment: false,
+              production_environment: true,
+              description: `Deploying Docker image for service ${{ matrix.service.name }} with tag ${{ steps.tag.outputs.tag }}`
+            });
+            return deployment.data.id;
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build Docker Image - ${{ matrix.service.id }}
+      - name: Build and tag Docker Image - ${{ matrix.service.id }}
         env:
-          BUILD_VERSION: ${{ inputs.last_tag }}
+          BUILD_VERSION: ${{ steps.tag.outputs.tag }}
         run: |
-          docker build \
+          IMAGE_BASE="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+          docker buildx build \
+            --build-arg BUILD_VERSION="${TAG}" \
             --target final \
             -f "${{ matrix.service.file }}" \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}:${{ inputs.last_tag }}" \
+            -t "${IMAGE_BASE}:${TAG}" \
+            -t "${IMAGE_BASE}:latest" \
+            --label "org.opencontainers.image.source=${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.version=${TAG}" \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --push \
             "${{ matrix.service.context }}"
 
-      - name: Push Docker Image - ${{ matrix.service.id }}
-        run: |
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}:${{ inputs.last_tag }}"
+      - name: Update Deployment Status - Success for ${{ matrix.service.id }}
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.create-deployment.outputs.result }},
+              state: 'success',
+              environment_url: 'https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.name }}'
+            });
+
+      - name: Update Deployment Status - Failure for ${{ matrix.service.id }}
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.create-deployment.outputs.result }},
+              state: 'failure'
+            });
