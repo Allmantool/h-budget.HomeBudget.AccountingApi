@@ -11,8 +11,8 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using NUnit.Framework;
 using RestSharp;
+using Serilog;
 
-using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
@@ -106,13 +106,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     var baseClient = WebFactory.CreateClient(clientOptions);
                     baseClient.Timeout = TimeSpan.FromMinutes(BaseTestWebAppOptions.WebClientTimeoutInMinutes);
 
-                    var healthUri = new Uri(baseClient.BaseAddress, Endpoints.HealthCheckSource);
-                    var response = await baseClient.GetAsync(healthUri);
-                    response.EnsureSuccessStatusCode();
-
                     RestHttpClient = new RestClient(
                         baseClient,
-                        new RestClientOptions()
+                        new RestClientOptions
                         {
                             ThrowOnAnyError = true,
                             ConfigureMessageHandler = (handler) => new ErrorHandlerDelegatingHandler(new HttpClientHandler())
@@ -124,6 +120,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             }
             catch (Exception ex)
             {
+                Log.Error(ex, ex.Message);
                 throw;
             }
         }

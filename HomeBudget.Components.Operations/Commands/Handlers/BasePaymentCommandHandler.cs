@@ -96,10 +96,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                         message,
                         cancellationToken);
 
-                    logger.LogInformation(
-                        "Produced Kafka message to {Topic} (Key: {Key})",
-                        BaseTopics.AccountingPayments,
-                        message.Key);
+                    logger.ProduceMessageSuccessfully(BaseTopics.AccountingPayments, message.Key);
                 }
                 catch (Exception ex)
                 {

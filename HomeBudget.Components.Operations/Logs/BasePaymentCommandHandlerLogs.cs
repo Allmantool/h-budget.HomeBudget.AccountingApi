@@ -26,5 +26,14 @@ namespace HomeBudget.Components.Operations.Logs
             string table,
             string reason,
             Exception exception);
+
+        [LoggerMessage(
+            EventId = 2003,
+            Level = LogLevel.Information,
+            Message = "Produced Kafka message to {Topic} (Key: {Key})")]
+        public static partial void ProduceMessageSuccessfully(
+            this ILogger logger,
+            string topic,
+            string key);
     }
 }

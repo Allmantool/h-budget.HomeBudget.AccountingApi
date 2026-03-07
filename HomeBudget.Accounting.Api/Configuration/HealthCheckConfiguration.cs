@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Api.Middlewares;
+using HomeBudget.Accounting.Infrastructure.Extensions;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -34,6 +35,11 @@ namespace HomeBudget.Accounting.Api.Configuration
 
         public static IApplicationBuilder SetUpHealthCheckEndpoints(this IApplicationBuilder builder, IWebHostEnvironment webHostEnvironment)
         {
+            if (webHostEnvironment.IsIntegrationTesting())
+            {
+                return builder;
+            }
+
             return builder.UseEndpoints(config =>
             {
                 config.MapHealthChecks(Endpoints.HealthCheckSource, new HealthCheckOptions

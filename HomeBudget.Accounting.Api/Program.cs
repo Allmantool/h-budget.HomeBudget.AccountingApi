@@ -39,10 +39,14 @@ services
 services
     .SetUpDi(configuration, environment)
     .AddEndpointsApiExplorer()
-    .SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
     .AddResponseCaching()
     .AddSwaggerGen()
     .SetupSwaggerGen();
+
+if (!environment.IsIntegrationTesting())
+{
+    services.SetUpHealthCheck(configuration, Environment.GetEnvironmentVariable("ASPNETCORE_URLS"));
+}
 
 services.AddHeaderPropagation(options =>
 {
