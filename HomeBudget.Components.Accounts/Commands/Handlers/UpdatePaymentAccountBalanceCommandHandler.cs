@@ -44,8 +44,8 @@ namespace HomeBudget.Components.Accounts.Commands.Handlers
             await notificationChannel.PublishAsync(
                 new PaymentAccountNotification(
                     Guid.NewGuid().ToString("N"),
-                    request.PaymentAccountId,
-                    nameof(UpdatePaymentAccountBalanceCommand)
+                    nameof(UpdatePaymentAccountBalanceCommand),
+                    request.PaymentAccountId
                 )
             );
 
