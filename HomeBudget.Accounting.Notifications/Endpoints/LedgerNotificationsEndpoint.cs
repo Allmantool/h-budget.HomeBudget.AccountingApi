@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 using HomeBudget.Accounting.Notifications.Models;
+using HomeBudget.Accounting.Notifications.Services;
 
 namespace HomeBudget.Accounting.Notifications.Endpoints
 {
@@ -23,7 +24,7 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
             app.MapGet(
                 "/notifications/account",
                 (
-                 [FromServices] NotificationChannel notifications,
+                 [FromServices] INotificationChannel notifications,
                  [FromHeader(Name = "Last-Event-ID")] string lastEventId,
                  HttpContext context,
                  CancellationToken ct) =>
@@ -39,8 +40,8 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
         }
 
         private static async IAsyncEnumerable<SseItem<PaymentAccountNotification>> StreamEventsAsync(
-            NotificationChannel notifications,
-            string? lastEventId,
+            INotificationChannel notifications,
+            string lastEventId,
             [EnumeratorCancellation] CancellationToken ct)
         {
             using var heartbeatTimer = new PeriodicTimer(HeartbeatInterval);
