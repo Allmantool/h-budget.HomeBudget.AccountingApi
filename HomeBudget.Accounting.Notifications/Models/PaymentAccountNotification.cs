@@ -2,7 +2,9 @@
 
 namespace HomeBudget.Accounting.Notifications.Models
 {
-    public record PaymentAccountNotification(string EventId, Guid AccountId, string EventType)
-    {
-    }
+    public sealed record PaymentAccountNotification(
+        string EventId,
+        string EventType,
+        Guid AccountId
+    );
 }
