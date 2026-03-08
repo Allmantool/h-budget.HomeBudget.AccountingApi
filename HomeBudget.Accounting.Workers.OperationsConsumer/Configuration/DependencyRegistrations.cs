@@ -8,6 +8,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Accounting.Notifications.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
@@ -36,7 +37,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
                 .AddSingleton<IEventStoreDbSubscriptionReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreSubscriptionReadClient>()
-                .AddSingleton<IEventStoreDbStreamReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreStreamReadClient>();
+                .AddSingleton<IEventStoreDbStreamReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreStreamReadClient>()
+                .AddNotifications();
         }
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
