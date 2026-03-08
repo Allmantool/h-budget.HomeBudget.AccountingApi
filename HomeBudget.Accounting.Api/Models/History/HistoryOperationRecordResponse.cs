@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Api.Models.History
 {
-    public record HistoryOperationRecordResponse
+    public sealed record HistoryOperationRecordResponse
     {
         public Guid Key { get; set; }
         public int TransactionType { get; set; }

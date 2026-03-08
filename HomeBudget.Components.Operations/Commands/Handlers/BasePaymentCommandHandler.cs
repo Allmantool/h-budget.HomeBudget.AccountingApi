@@ -20,6 +20,7 @@ using HomeBudget.Core.Commands;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
@@ -83,12 +84,14 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
                 try
                 {
-                    using var activity = Tracing.Source.StartActivity(ActivityTags.KafkaStartProduce, ActivityKind.Producer);
+                    using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Kafka.Produce, ActivityKind.Producer);
 
                     var deliveryResult = await producer.ProduceAsync(
                         BaseTopics.AccountingPayments,
                         message,
                         cancellationToken);
+
+                    activity?.AddEvent(ActivityEvents.KafkaPublished);
 
                     logger.ProduceMessageSuccessfully(BaseTopics.AccountingPayments, message.Key);
                 }

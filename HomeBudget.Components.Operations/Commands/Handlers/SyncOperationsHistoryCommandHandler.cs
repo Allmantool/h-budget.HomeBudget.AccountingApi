@@ -12,21 +12,21 @@ using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Accounts.Services.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
-using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class SyncOperationsHistoryCommandHandler(
-    ISender sender,
-    ILogger<SyncOperationsHistoryCommandHandler> logger,
-    IPaymentAccountService paymentAccountService,
-    IPaymentsHistoryDocumentsClient historyDocumentsClient,
-    IPaymentOperationsHistoryService operationsHistoryService)
+        ISender sender,
+        ILogger<SyncOperationsHistoryCommandHandler> logger,
+        IPaymentAccountService paymentAccountService,
+        IPaymentsHistoryDocumentsClient historyDocumentsClient,
+        IPaymentOperationsHistoryService operationsHistoryService)
     : IRequestHandler<SyncOperationsHistoryCommand, Result<decimal>>
     {
         public async Task<Result<decimal>> Handle(SyncOperationsHistoryCommand request, CancellationToken cancellationToken)
@@ -48,22 +48,22 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
             {
-                using var activity = Tracing.Source.StartActivity(
+                using var activity = Telemetry.ActivitySource.StartActivity(
                     "mongodb.sync_operations_history",
                     ActivityKind.Internal,
                     traceParent);
 
                 if (activity != null)
                 {
-                    activity.SetTag("correlation_id", correlationId);
-                    if (!string.IsNullOrEmpty(traceId))
+                    activity.SetCorrelationId(correlationId);
+                    if (!string.IsNullOrWhiteSpace(traceId))
                     {
-                        activity.SetTag("trace_id", traceId);
+                        activity.SetTraceId(traceId);
                     }
 
                     activity.SetTag("messaging.system", "mongodb");
                     activity.SetTag("messaging.event_count", events.Count());
-                    activity.SetTag("account.id", accountId);
+                    activity.SetAccount(accountId);
                     activity.SetTag("month.period", monthPeriodIdentifier);
                 }
 
@@ -100,12 +100,12 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 await BenchmarkService.WithBenchmarkAsync(
                     async () =>
                     {
-                        using var updateActivity = Tracing.Source.StartActivity("mongodb.update_payment_balance");
+                        using var updateActivity = Telemetry.ActivitySource.StartActivity("mongodb.update_payment_balance");
                         if (updateActivity != null)
                         {
-                            updateActivity.SetTag("correlation_id", correlationId);
-                            updateActivity.SetTag("trace_id", traceId);
-                            updateActivity.SetTag("account.id", accountId);
+                            updateActivity.SetCorrelationId(correlationId);
+                            updateActivity.SetTraceId(traceId);
+                            updateActivity.SetAccount(accountId);
                         }
 
                         await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, finalBalance), cancellationToken);
@@ -117,6 +117,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     new { PaymentAccountId = accountId });
 
                 activity?.SetStatus(ActivityStatusCode.Ok);
+                activity?.SetTag(ActivityTags.MongoCollection, "payments_projection");
+                activity?.AddEvent(ActivityEvents.ProjectionUpdated);
+
                 return Result<decimal>.Succeeded(finalBalance);
             }
         }

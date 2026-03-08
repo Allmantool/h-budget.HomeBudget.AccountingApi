@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 
 using MediatR;
 
+using HomeBudget.Accounting.Notifications.Models;
+using HomeBudget.Accounting.Notifications.Services;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Core.Models;
@@ -11,7 +13,8 @@ using HomeBudget.Core.Models;
 namespace HomeBudget.Components.Accounts.Commands.Handlers
 {
     internal class UpdatePaymentAccountBalanceCommandHandler(
-        IPaymentAccountDocumentClient paymentAccountDocumentClient)
+        IPaymentAccountDocumentClient paymentAccountDocumentClient,
+        INotificationChannel notificationChannel)
         : IRequestHandler<UpdatePaymentAccountBalanceCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(
@@ -37,6 +40,14 @@ namespace HomeBudget.Components.Accounts.Commands.Handlers
             paymentAccountForUpdate.Balance = request.Balance;
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(request.PaymentAccountId.ToString(), paymentAccountForUpdate);
+
+            await notificationChannel.PublishAsync(
+                new PaymentAccountNotification(
+                    Guid.NewGuid().ToString("N"),
+                    request.PaymentAccountId,
+                    nameof(UpdatePaymentAccountBalanceCommand)
+                )
+            );
 
             return Result<Guid>.Succeeded(updateResult.Payload);
         }

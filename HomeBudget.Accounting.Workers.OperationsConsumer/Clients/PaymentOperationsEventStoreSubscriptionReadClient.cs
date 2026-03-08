@@ -25,6 +25,8 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Exstensions;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
@@ -32,7 +34,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
     internal sealed class PaymentOperationsEventStoreSubscriptionReadClient
         : BaseEventStoreSubscriptionReadClient<PaymentOperationEvent>
     {
-        private const string Stream = "$ce-payment-account";
         private const string Group = "ps-homeledger-mongo-projection-v1";
 
         private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -159,7 +160,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             try
             {
-                // Extract trace info from the first event in the stream
                 var firstEvent = events.FirstOrDefault();
                 var correlationId = firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId);
                 var traceParent = firstEvent?.Metadata.Get(EventMetadataKeys.TraceParent);
@@ -167,16 +167,18 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
                 using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                 {
-                    using var activity = Tracing.Source.StartActivity(
-                        "mongodb.sync",
+                    using var activity = Telemetry.ActivitySource.StartActivity(
+                        "mongodb.operations.history.sync",
                         ActivityKind.Internal,
-                        traceParent); // restore parent trace
+                        traceParent);
 
                     if (activity != null)
                     {
-                        activity.SetTag("correlation_id", correlationId);
-                        if (!string.IsNullOrEmpty(traceId))
-                            activity.SetTag("trace_id", traceId);
+                        activity.SetCorrelationId(correlationId);
+                        if (!string.IsNullOrWhiteSpace(traceId))
+                        {
+                            activity.SetTraceId(traceId);
+                        }
 
                         activity.SetTag("messaging.system", "eventstore");
                         activity.SetTag("messaging.stream", paymentAccountStream);
@@ -186,6 +188,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     await SendSyncOperationsHistoryAsync(accountId, events, ct);
 
                     activity?.SetStatus(ActivityStatusCode.Ok);
+                    activity?.AddEvent(new("payment.sync.operation.send"));
                 }
             }
             catch (OperationCanceledException)
@@ -211,12 +214,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             // Continue the same correlation context inside the command
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
-            using (var activity = Tracing.Source.StartActivity("mongodb.send_command"))
+            using (var activity = Telemetry.ActivitySource.StartActivity("mongodb.send_command"))
             {
-                if (activity != null)
+                if (activity != null && !events.IsNullOrEmpty())
                 {
                     var firstEvent = events.FirstOrDefault();
-                    activity.SetTag("correlation_id", firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId));
+                    activity.SetCorrelationId(firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId));
                     activity.SetTag("messaging.system", "mongodb");
                     activity.SetTag("messaging.event_count", events.Count());
                 }

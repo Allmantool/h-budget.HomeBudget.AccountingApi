@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exstensions;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
@@ -116,17 +117,17 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                             {
-                                using var activity = Tracing.Source.StartActivity(
+                                using var activity = Telemetry.ActivitySource.StartActivity(
                                     "eventstore.consume",
                                     ActivityKind.Consumer,
                                     traceParent); // Restore parent from EventStore
 
                                 if (activity != null)
                                 {
-                                    activity.SetTag("correlation_id", correlationId);
-                                    if (!string.IsNullOrEmpty(traceId))
+                                    activity.SetCorrelationId(correlationId);
+                                    if (!string.IsNullOrWhiteSpace(traceId))
                                     {
-                                        activity.SetTag("trace_id", traceId);
+                                        activity.SetTraceId(traceId);
                                     }
 
                                     activity.SetTag("messaging.system", "eventstore");
@@ -147,6 +148,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                                 await sub.Ack(evt);
                                 activity?.SetStatus(ActivityStatusCode.Ok);
+                                activity?.AddEvent(ActivityEvents.EventStorePersisted);
                             }
                         }
                         catch (Exception ex)

@@ -52,6 +52,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workers", "Workers", "{02EA
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Accounting.Workers.OperationsConsumer", "HomeBudget.Accounting.Workers.OperationsConsumer\HomeBudget.Accounting.Workers.OperationsConsumer.csproj", "{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HomeBudget.Accounting.Notifications", "HomeBudget.Accounting.Notifications\HomeBudget.Accounting.Notifications.csproj", "{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -114,6 +116,10 @@ Global
 		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -133,6 +139,7 @@ Global
 		{461F2118-D177-46B9-81CC-9D2D5BA708F9} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{2BBF6C7E-C453-4A06-B27E-A4B08C8A8973} = {98DAF49C-A6E5-4450-80CF-D6DCBAD30ACC}
 		{6C828250-3BFE-4E6A-8F9C-98AC82B8A18D} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{E3C6AF29-1F84-44BC-BB8A-0F2FE8637B30} = {F5CE0C82-3388-42F9-99D2-ED17ADFB17F4}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CDA43629-25A6-4514-AA5B-1AD407073983}

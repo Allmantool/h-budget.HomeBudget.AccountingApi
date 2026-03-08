@@ -18,6 +18,7 @@ using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Consumers
@@ -71,18 +72,17 @@ namespace HomeBudget.Components.Operations.Consumers
 
                         var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
 
-                        var correlationId = paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId)
-                                           ?? string.Empty;
+                        var correlationId = paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId) ?? string.Empty;
 
-                        var traceParent = message.Headers.TryGetLastBytes("traceparent", out var tpBytes)
+                        var traceParent = message.Headers.TryGetLastBytes(KafkaMessageHeaders.Traceparent, out var tpBytes)
                             ? Encoding.UTF8.GetString(tpBytes)
                             : null;
 
-                        var traceId = message.Headers.TryGetLastBytes("traceId", out var tidBytes)
+                        var traceId = message.Headers.TryGetLastBytes(KafkaMessageHeaders.TraceId, out var tidBytes)
                             ? Encoding.UTF8.GetString(tidBytes)
                             : null;
 
-                        using var activity = Tracing.Source.StartActivity(
+                        using var activity = Telemetry.ActivitySource.StartActivity(
                             "payment.events.channel.process",
                             ActivityKind.Consumer,
                             traceParent);
@@ -94,11 +94,11 @@ namespace HomeBudget.Components.Operations.Consumers
                             activity.SetTag("messaging.kafka.partition", payload.Partition);
                             activity.SetTag("messaging.kafka.offset", payload.Offset);
                             activity.SetTag("messaging.message_id", message.Key);
-                            activity.SetTag("correlation_id", correlationId);
+                            activity.SetCorrelationId(correlationId);
 
-                            if (!string.IsNullOrEmpty(traceId))
+                            if (!string.IsNullOrWhiteSpace(traceId))
                             {
-                                activity.SetTag("trace_id", traceId);
+                                activity.SetTraceId(traceId);
                             }
                         }
 
@@ -116,6 +116,7 @@ namespace HomeBudget.Components.Operations.Consumers
                         var payloadData = paymentEvent.Payload;
                         var partitionKey = payloadData.GetPartitionKey();
                         outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Published);
+                        activity?.AddEvent(ActivityEvents.KafkaConsumed);
 
                         await paymentEventsChannel.Writer.WriteAsync(paymentEvent);
                     }
@@ -136,9 +137,18 @@ namespace HomeBudget.Components.Operations.Consumers
                         return;
                     }
 
+                    var traceParent = message.Headers.TryGetLastBytes("traceparent", out var tpBytes)
+                        ? Encoding.UTF8.GetString(tpBytes)
+                        : null;
+
                     message.Headers.Add(
                         KafkaMessageHeaders.ProcessedAt,
                         Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
+
+                    using var activity = Telemetry.ActivitySource.StartActivity(
+                        "outbox.status.acknowledged",
+                        ActivityKind.Consumer,
+                        traceParent);
 
                     logger.PaymentConsumed(message.Key);
 
@@ -147,6 +157,7 @@ namespace HomeBudget.Components.Operations.Consumers
                     var partitionKey = payloadData.GetPartitionKey();
 
                     outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Acknowledged);
+                    activity?.AddEvent(ActivityEvents.OutboxAcknowledged);
                 },
                 cancellationToken);
         }
