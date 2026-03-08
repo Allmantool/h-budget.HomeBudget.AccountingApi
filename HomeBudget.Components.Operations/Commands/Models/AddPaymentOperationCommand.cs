@@ -8,11 +8,10 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    public class AddPaymentOperationCommand(FinancialTransaction operationForAdd)
+    internal sealed class AddPaymentOperationCommand(FinancialTransaction operationForAdd)
         : IRequest<Result<Guid>>, ICorrelatedCommand
     {
         public string CorrelationId { get; set; }
-
         public FinancialTransaction OperationForAdd { get; } = operationForAdd;
     }
 }

@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exstensions;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
@@ -62,17 +63,17 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                         var traceId = firstEvent.Metadata.Get(EventMetadataKeys.TraceId);
                         var correlationId = firstEvent.Metadata.Get(EventMetadataKeys.CorrelationId);
 
-                        using var activity = Tracing.Source.StartActivity(
+                        using var activity = Telemetry.ActivitySource.StartActivity(
                             "eventstore.write",
                             ActivityKind.Internal,
                             traceParent);
 
                         if (activity != null)
                         {
-                            activity.SetTag("correlation_id", correlationId);
+                            activity.SetCorrelationId(correlationId);
                             if (!string.IsNullOrWhiteSpace(traceId))
                             {
-                                activity.SetTag("trace_id", traceId);
+                                activity.SetTraceId(traceId);
                             }
 
                             activity.SetTag("messaging.system", "eventstore");
@@ -88,6 +89,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                             cancellationToken);
 
                         activity?.SetStatus(ActivityStatusCode.Ok);
+                        activity?.AddEvent(ActivityEvents.EventStoreSend);
                     }
                     catch (Exception ex)
                     {

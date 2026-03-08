@@ -12,8 +12,8 @@ using OpenTelemetry.Trace;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Constants;
-using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
 {
@@ -72,7 +72,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                 .WithTracing(traceBuilder =>
                 {
                     traceBuilder
-                        .AddSource(Observability.ActivitySourceName)
+                        .AddSource(Telemetry.ActivitySource.Name)
                         .AddAspNetCoreInstrumentation(options =>
                         {
                             options.EnrichWithHttpRequest = (activity, request) =>

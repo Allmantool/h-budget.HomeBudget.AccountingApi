@@ -8,7 +8,7 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    internal class RemovePaymentOperationCommand(FinancialTransaction operationForDelete)
+    internal sealed class RemovePaymentOperationCommand(FinancialTransaction operationForDelete)
         : IRequest<Result<Guid>>, ICorrelatedCommand
     {
         public string CorrelationId { get; set; }

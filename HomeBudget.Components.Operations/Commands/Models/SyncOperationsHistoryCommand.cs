@@ -9,7 +9,7 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    public class SyncOperationsHistoryCommand(
+    public sealed class SyncOperationsHistoryCommand(
         Guid paymentAccountId,
         IEnumerable<PaymentOperationEvent> events)
         : IRequest<Result<decimal>>, ICorrelatedCommand
