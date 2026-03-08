@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 using HomeBudget.Accounting.Notifications.Models;
@@ -23,7 +24,7 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
             app.MapGet(
                 "/notifications/account",
                 (
-                    NotificationChannel notifications,
+                    [FromServices] NotificationChannel notifications,
                     CancellationToken ct) =>
                 {
                     async IAsyncEnumerable<SseItem<PaymentAccountNotification>> Stream(
