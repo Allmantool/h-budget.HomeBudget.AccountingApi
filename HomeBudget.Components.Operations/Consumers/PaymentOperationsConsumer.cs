@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -26,7 +27,7 @@ namespace HomeBudget.Components.Operations.Consumers
     internal class PaymentOperationsConsumer(
         ILogger<PaymentOperationsConsumer> logger,
         IDateTimeProvider dateTimeProvider,
-        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IServiceScopeFactory scopeFactory,
         Channel<PaymentOperationEvent> paymentEventsChannel,
         IOptions<KafkaOptions> kafkaOptions)
         : BaseKafkaConsumer<string, string>(EnrichConsumerOptions(kafkaOptions.Value), logger)
@@ -115,6 +116,12 @@ namespace HomeBudget.Components.Operations.Consumers
 
                         var payloadData = paymentEvent.Payload;
                         var partitionKey = payloadData.GetPartitionKey();
+
+                        using var scope = scopeFactory.CreateScope();
+
+                        var outboxPaymentStatusService = scope.ServiceProvider
+                            .GetRequiredService<IOutboxPaymentStatusService>();
+
                         outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Published);
                         activity?.AddEvent(ActivityEvents.KafkaConsumed);
 
@@ -155,6 +162,11 @@ namespace HomeBudget.Components.Operations.Consumers
                     var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(message.Value);
                     var payloadData = paymentEvent.Payload;
                     var partitionKey = payloadData.GetPartitionKey();
+
+                    using var scope = scopeFactory.CreateScope();
+
+                    var outboxPaymentStatusService = scope.ServiceProvider
+                        .GetRequiredService<IOutboxPaymentStatusService>();
 
                     outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Acknowledged);
                     activity?.AddEvent(ActivityEvents.OutboxAcknowledged);

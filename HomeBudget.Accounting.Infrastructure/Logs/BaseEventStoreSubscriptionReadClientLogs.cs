@@ -16,7 +16,7 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
 
         [LoggerMessage(
             EventId = 1001,
-            Level = LogLevel.Information,
+            Level = LogLevel.Debug,
             Message = "Persistent subscription '{Group}' already exists")]
         public static partial void PersistentSubscriptionAlreadyExists(this ILogger logger, RpcException ex, string group);
 

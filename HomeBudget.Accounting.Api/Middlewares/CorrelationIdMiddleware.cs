@@ -21,6 +21,13 @@ namespace HomeBudget.Accounting.Api.Middlewares
             var isHealthCheckRequest =
                 string.Equals(requestPath, "/health", StringComparison.OrdinalIgnoreCase);
 
+            if (isHealthCheckRequest)
+            {
+                await next(context);
+
+                return;
+            }
+
             var requestHeaders = context.Request.Headers;
 
             var traceId = Activity.Current?.TraceId.ToString();
