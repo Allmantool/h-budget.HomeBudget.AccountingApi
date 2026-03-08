@@ -50,9 +50,12 @@ internal class NotificationChannel : INotificationChannel
             }
         }
 
-        await foreach (var evt in _channel.Reader.ReadAllAsync(ct))
+        while (await _channel.Reader.WaitToReadAsync(ct))
         {
-            yield return evt;
+            while (_channel.Reader.TryRead(out var evt))
+            {
+                yield return evt;
+            }
         }
     }
 }

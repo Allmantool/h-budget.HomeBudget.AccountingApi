@@ -29,6 +29,7 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                  HttpContext context,
                  CancellationToken ct) =>
                 {
+                    context.Response.Headers.Append("Content-Type", "text/event-stream");
                     context.Response.Headers.Append("Cache-Control", "no-store");
                     context.Response.Headers.Append("X-Accel-Buffering", "no");
                     context.Response.Headers.Append("Connection", "keep-alive");
