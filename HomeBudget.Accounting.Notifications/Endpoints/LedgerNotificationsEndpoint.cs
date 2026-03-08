@@ -46,6 +46,11 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
 
             await foreach (var evt in notifications.ReadAsync(lastEventId, ct))
             {
+                if (evt is null)
+                {
+                    continue;
+                }
+
                 yield return new SseItem<PaymentAccountNotification>(evt, evt.EventType)
                 {
                     EventId = evt.EventId,
