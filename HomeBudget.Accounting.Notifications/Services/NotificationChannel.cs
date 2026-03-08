@@ -1,29 +1,58 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Notifications.Models;
+using HomeBudget.Accounting.Notifications.Services;
 
-namespace HomeBudget.Accounting.Notifications.Services
+internal class NotificationChannel : INotificationChannel
 {
-    public sealed class NotificationChannel : INotificationChannel
+    private readonly Channel<PaymentAccountNotification> _channel = Channel.CreateUnbounded<PaymentAccountNotification>();
+    private readonly int _bufferSize = 100;
+    private readonly LinkedList<PaymentAccountNotification> _recentEvents = new();
+
+    public async Task PublishAsync(PaymentAccountNotification evt)
     {
-        private readonly Channel<PaymentAccountNotification> _channel =
-            Channel.CreateUnbounded<PaymentAccountNotification>(
-                new UnboundedChannelOptions
-                {
-                    SingleReader = false,
-                    SingleWriter = false
-                });
+        lock (_recentEvents)
+        {
+            _recentEvents.AddLast(evt);
+            if (_recentEvents.Count > _bufferSize)
+            {
+                _recentEvents.RemoveFirst();
+            }
+        }
 
-        public ValueTask PublishAsync(PaymentAccountNotification notification)
-            => _channel.Writer.WriteAsync(notification);
+        await _channel.Writer.WriteAsync(evt);
+    }
 
-        public ValueTask<PaymentAccountNotification> ReadAsync(CancellationToken ct)
-            => _channel.Reader.ReadAsync(ct);
+    public async IAsyncEnumerable<PaymentAccountNotification> ReadAsync(
+        string lastEventId = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (!string.IsNullOrWhiteSpace(lastEventId))
+        {
+            List<PaymentAccountNotification> toReplay;
 
-        public IAsyncEnumerable<PaymentAccountNotification> ReadAllAsync(CancellationToken ct)
-            => _channel.Reader.ReadAllAsync(ct);
+            lock (_recentEvents)
+            {
+                toReplay = _recentEvents
+                    .SkipWhile(e => e.EventId != lastEventId)
+                    .Skip(1) // skip the last delivered
+                    .ToList();
+            }
+
+            foreach (var evt in toReplay)
+            {
+                yield return evt;
+            }
+        }
+
+        await foreach (var evt in _channel.Reader.ReadAllAsync(ct))
+        {
+            yield return evt;
+        }
     }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +10,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 using HomeBudget.Accounting.Notifications.Models;
-using HomeBudget.Accounting.Notifications.Services;
 
 namespace HomeBudget.Accounting.Notifications.Endpoints
 {
@@ -24,53 +22,41 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
             app.MapGet(
                 "/notifications/account",
                 (
-                    [FromServices] NotificationChannel notifications,
-                    CancellationToken ct) =>
+                 [FromServices] NotificationChannel notifications,
+                 [FromHeader(Name = "Last-Event-ID")] string lastEventId,
+                 HttpContext context,
+                 CancellationToken ct) =>
                 {
-                    async IAsyncEnumerable<SseItem<PaymentAccountNotification>> Stream(
-                        [EnumeratorCancellation] CancellationToken token)
-                    {
-                        var heartbeatTimer = new PeriodicTimer(HeartbeatInterval);
+                    context.Response.Headers.Add("Cache-Control", "no-store");
+                    context.Response.Headers.Add("X-Accel-Buffering", "no");
+                    context.Response.Headers.Add("Connection", "keep-alive");
 
-                        try
-                        {
-                            while (!token.IsCancellationRequested)
-                            {
-                                var readTask = notifications.ReadAsync(token).AsTask();
-                                var heartbeatTask = heartbeatTimer.WaitForNextTickAsync(token).AsTask();
-
-                                var completed = await Task.WhenAny(readTask, heartbeatTask);
-
-                                if (completed == readTask)
-                                {
-                                    var evt = await readTask;
-
-                                    yield return new SseItem<PaymentAccountNotification>(
-                                        evt,
-                                        evt.EventType)
-                                    {
-                                        EventId = evt.EventId,
-                                        ReconnectionInterval = TimeSpan.FromSeconds(2)
-                                    };
-                                }
-                                else
-                                {
-                                    yield return new SseItem<PaymentAccountNotification>(
-                                        default!,
-                                        "heartbeat");
-                                }
-                            }
-                        }
-                        finally
-                        {
-                            heartbeatTimer.Dispose();
-                        }
-                    }
-
-                    return TypedResults.ServerSentEvents(Stream(ct));
+                    return TypedResults.ServerSentEvents(StreamEventsAsync(notifications, lastEventId, ct));
                 });
 
             return app;
+        }
+
+        private static async IAsyncEnumerable<SseItem<PaymentAccountNotification>> StreamEventsAsync(
+            NotificationChannel notifications,
+            string lastEventId,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            using var heartbeatTimer = new PeriodicTimer(HeartbeatInterval);
+
+            await foreach (var evt in notifications.ReadAsync(lastEventId, ct))
+            {
+                yield return new SseItem<PaymentAccountNotification>(evt, evt.EventType)
+                {
+                    EventId = evt.EventId,
+                    ReconnectionInterval = TimeSpan.FromSeconds(2)
+                };
+
+                if (await heartbeatTimer.WaitForNextTickAsync(ct))
+                {
+                    yield return new SseItem<PaymentAccountNotification>(default!, "heartbeat");
+                }
+            }
         }
     }
 }

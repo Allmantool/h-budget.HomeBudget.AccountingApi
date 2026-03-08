@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,8 +9,10 @@ namespace HomeBudget.Accounting.Notifications.Services
 {
     public interface INotificationChannel
     {
-        ValueTask PublishAsync(PaymentAccountNotification notification);
+        Task PublishAsync(PaymentAccountNotification evt);
 
-        IAsyncEnumerable<PaymentAccountNotification> ReadAllAsync(CancellationToken ct);
+        IAsyncEnumerable<PaymentAccountNotification> ReadAsync(
+            string lastEventId = null,
+            [EnumeratorCancellation] CancellationToken ct = default);
     }
 }
