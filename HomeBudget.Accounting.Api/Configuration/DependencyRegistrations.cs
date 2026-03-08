@@ -8,6 +8,7 @@ using MongoDB.Bson.Serialization.Serializers;
 
 using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Infrastructure.Configuration;
+using HomeBudget.Accounting.Notifications.Configuration;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
@@ -33,7 +34,8 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
                 .RegisterCategoriesDependencies()
                 .RegisterInfrastructureDependencies(configuration)
-                .RegisterCommandHandlers();
+                .RegisterCommandHandlers()
+                .AddNotifications();
         }
 
         private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)

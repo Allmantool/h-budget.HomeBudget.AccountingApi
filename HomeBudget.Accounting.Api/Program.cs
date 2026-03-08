@@ -14,6 +14,7 @@ using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
+using HomeBudget.Accounting.Notifications.Configuration;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
@@ -86,6 +87,8 @@ app.SetupHttpLogging();
 app.SetUpBaseApplication(services, environment, configuration);
 app.UseAuthorization();
 app.MapControllers();
+
+app.MapNotifications();
 
 try
 {

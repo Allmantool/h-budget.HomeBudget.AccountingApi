@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Confluent.Kafka;
-
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
@@ -17,6 +16,7 @@ using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
@@ -184,12 +184,12 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         {
                             // Extract traceparent header (optional)
                             string traceParent = null;
-                            if (consumedMessage.Headers.TryGetLastBytes("traceparent", out var traceParentBytes))
+                            if (consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.Traceparent, out var traceParentBytes))
                             {
                                 traceParent = Encoding.UTF8.GetString(traceParentBytes);
                             }
 
-                            using var activity = Tracing.Source.StartActivity(
+                            using var activity = Telemetry.ActivitySource.StartActivity(
                                 "kafka.consume",
                                 ActivityKind.Consumer,
                                 traceParent // correctly restore parent if available
@@ -203,7 +203,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                                 activity.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
                                 activity.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
 
-                                activity.SetTag("correlation_id", correlationId);
+                                activity.SetCorrelationId(correlationId);
                             }
 
                             await processMessageAsync(consumeResult);
@@ -218,6 +218,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                                 }
 
                                 activity?.SetStatus(ActivityStatusCode.Ok);
+
+                                activity?.AddEvent(ActivityEvents.KafkaConsumed);
                             }
                         }
                     }

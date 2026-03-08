@@ -1,4 +1,6 @@
-﻿namespace HomeBudget.Core.Commands
+﻿using System;
+
+namespace HomeBudget.Core.Commands
 {
     public interface ICorrelatedCommand
     {

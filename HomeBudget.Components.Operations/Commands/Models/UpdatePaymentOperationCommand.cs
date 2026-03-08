@@ -8,7 +8,7 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    public class UpdatePaymentOperationCommand(FinancialTransaction operationForUpdate)
+    internal sealed class UpdatePaymentOperationCommand(FinancialTransaction operationForUpdate)
         : IRequest<Result<Guid>>, ICorrelatedCommand
     {
         public string CorrelationId { get; set; }

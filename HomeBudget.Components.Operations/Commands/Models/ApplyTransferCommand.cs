@@ -9,7 +9,7 @@ using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
-    internal class ApplyTransferCommand(CrossAccountsTransferOperation crossAccountsTransferOperations)
+    internal sealed class ApplyTransferCommand(CrossAccountsTransferOperation crossAccountsTransferOperations)
         : IRequest<Result<Guid>>, ICorrelatedCommand
     {
         public string CorrelationId { get; set; }

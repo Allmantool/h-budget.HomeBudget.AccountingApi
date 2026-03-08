@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using MediatR;
@@ -26,13 +27,14 @@ namespace HomeBudget.Components.Operations.PIpelines
         {
             if (request is ICorrelatedCommand correlated)
             {
-                var correlationId =
-                    _httpContextAccessor.HttpContext?
+                var correlationId = _httpContextAccessor.HttpContext?
                         .Items[HttpHeaderKeys.CorrelationId]
                         ?.ToString();
 
-                if (!string.IsNullOrWhiteSpace(correlationId) &&
-                    string.IsNullOrWhiteSpace(correlated.CorrelationId))
+                if (!string.IsNullOrWhiteSpace(correlationId)
+                    && string.IsNullOrWhiteSpace(correlated.CorrelationId)
+                    && Guid.TryParse(correlationId, out var _)
+                   )
                 {
                     correlated.CorrelationId = correlationId;
                 }
