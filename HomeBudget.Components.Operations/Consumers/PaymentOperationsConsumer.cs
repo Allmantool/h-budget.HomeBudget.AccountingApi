@@ -83,7 +83,7 @@ namespace HomeBudget.Components.Operations.Consumers
                             ? Encoding.UTF8.GetString(tidBytes)
                             : null;
 
-                        using var activity = Telemetry.ActivitySource.StartActivity(
+                        using var activity = ActivityPropagation.StartActivity(
                             "payment.events.channel.process",
                             ActivityKind.Consumer,
                             traceParent);
@@ -97,10 +97,7 @@ namespace HomeBudget.Components.Operations.Consumers
                             activity.SetTag("messaging.message_id", message.Key);
                             activity.SetCorrelationId(correlationId);
 
-                            if (!string.IsNullOrWhiteSpace(traceId))
-                            {
-                                activity.SetTraceId(traceId);
-                            }
+                            activity.SetTraceId(traceId);
                         }
 
                         paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = correlationId;
@@ -152,7 +149,7 @@ namespace HomeBudget.Components.Operations.Consumers
                         KafkaMessageHeaders.ProcessedAt,
                         Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
 
-                    using var activity = Telemetry.ActivitySource.StartActivity(
+                    using var activity = ActivityPropagation.StartActivity(
                         "outbox.status.acknowledged",
                         ActivityKind.Consumer,
                         traceParent);

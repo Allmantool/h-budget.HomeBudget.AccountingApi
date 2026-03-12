@@ -117,10 +117,10 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                             {
-                                using var activity = Telemetry.ActivitySource.StartActivity(
+                                using var activity = ActivityPropagation.StartActivity(
                                     "eventstore.consume",
                                     ActivityKind.Consumer,
-                                    traceParent); // Restore parent from EventStore
+                                    traceParent);
 
                                 if (activity != null)
                                 {

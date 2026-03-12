@@ -47,6 +47,12 @@ namespace HomeBudget.Components.Operations
                 .With(
                     KafkaMessageHeaders.CorrelationId,
                     paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId))
+                .With(
+                    KafkaMessageHeaders.Traceparent,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.TraceParent))
+                .With(
+                    KafkaMessageHeaders.TraceId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.TraceId))
                 .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
                 .With(KafkaMessageHeaders.Version, "2.0")
                 .With(KafkaMessageHeaders.Source, nameof(BasePaymentCommandHandler))
