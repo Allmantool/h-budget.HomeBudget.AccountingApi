@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net.ServerSentEvents;
 using System.Runtime.CompilerServices;
@@ -29,9 +29,10 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                  HttpContext context,
                  CancellationToken ct) =>
                 {
-                    context.Response.Headers.Append("Cache-Control", "no-store");
+                    context.Response.Headers.Append("Cache-Control", "no-cache, no-store, no-transform");
+                    context.Response.Headers.Append("Pragma", "no-cache");
                     context.Response.Headers.Append("X-Accel-Buffering", "no");
-                    context.Response.Headers.Append("Connection", "keep-alive");
+                    context.Response.Headers.Append("Content-Encoding", "identity");
 
                     return TypedResults.ServerSentEvents(StreamEventsAsync(notifications, lastEventId, ct));
                 });
