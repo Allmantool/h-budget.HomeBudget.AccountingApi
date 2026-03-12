@@ -50,6 +50,10 @@ namespace HomeBudget.Accounting.Api.Configuration
                         typeof(IPipelineBehavior<,>),
                         typeof(CorrelationIdBehavior<,>)
                     );
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(TracingBehavior<,>)
+                    );
                 });
         }
     }

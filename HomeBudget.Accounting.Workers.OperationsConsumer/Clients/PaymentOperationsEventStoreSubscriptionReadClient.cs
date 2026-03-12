@@ -167,7 +167,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
                 using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                 {
-                    using var activity = Telemetry.ActivitySource.StartActivity(
+                    using var activity = ActivityPropagation.StartActivity(
                         "mongodb.operations.history.sync",
                         ActivityKind.Internal,
                         traceParent);
@@ -214,12 +214,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             // Continue the same correlation context inside the command
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
-            using (var activity = Telemetry.ActivitySource.StartActivity("mongodb.send_command"))
+            using (var activity = ActivityPropagation.StartActivity("mongodb.send_command", ActivityKind.Internal))
             {
                 if (activity != null && !events.IsNullOrEmpty())
                 {
                     var firstEvent = events.FirstOrDefault();
                     activity.SetCorrelationId(firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId));
+                    activity.SetTraceId(firstEvent?.Metadata.Get(EventMetadataKeys.TraceId));
                     activity.SetTag("messaging.system", "mongodb");
                     activity.SetTag("messaging.event_count", events.Count());
                 }

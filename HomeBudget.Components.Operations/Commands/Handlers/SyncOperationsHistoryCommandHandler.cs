@@ -48,7 +48,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
             {
-                using var activity = Telemetry.ActivitySource.StartActivity(
+                using var activity = ActivityPropagation.StartActivity(
                     "mongodb.sync_operations_history",
                     ActivityKind.Internal,
                     traceParent);
@@ -100,7 +100,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 await BenchmarkService.WithBenchmarkAsync(
                     async () =>
                     {
-                        using var updateActivity = Telemetry.ActivitySource.StartActivity("mongodb.update_payment_balance");
+                        using var updateActivity = ActivityPropagation.StartActivity("mongodb.update_payment_balance", ActivityKind.Internal);
                         if (updateActivity != null)
                         {
                             updateActivity.SetCorrelationId(correlationId);

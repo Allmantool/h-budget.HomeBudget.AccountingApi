@@ -63,9 +63,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                         var traceId = firstEvent.Metadata.Get(EventMetadataKeys.TraceId);
                         var correlationId = firstEvent.Metadata.Get(EventMetadataKeys.CorrelationId);
 
-                        using var activity = Telemetry.ActivitySource.StartActivity(
+                        using var activity = ActivityPropagation.StartActivity(
                             "eventstore.write",
-                            ActivityKind.Internal,
+                            ActivityKind.Producer,
                             traceParent);
 
                         if (activity != null)

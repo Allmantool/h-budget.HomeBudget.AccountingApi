@@ -189,11 +189,10 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                                 traceParent = Encoding.UTF8.GetString(traceParentBytes);
                             }
 
-                            using var activity = Telemetry.ActivitySource.StartActivity(
+                            using var activity = ActivityPropagation.StartActivity(
                                 "kafka.consume",
                                 ActivityKind.Consumer,
-                                traceParent // correctly restore parent if available
-                            );
+                                traceParent);
 
                             if (activity != null)
                             {

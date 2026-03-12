@@ -36,28 +36,26 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             CancellationToken cancellationToken)
             where T : ICorrelatedCommand
         {
+            using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Kafka.Produce, ActivityKind.Producer);
+
             var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
-
-            var currentActivity = Activity.Current;
-
-            var traceId = currentActivity?.TraceId.ToString();
-            var traceParent = currentActivity?.Id;
-
-            if (traceId != null)
-            {
-                paymentEvent.Metadata[EventMetadataKeys.TraceId] = traceId;
-            }
-
-            if (traceParent != null)
-            {
-                paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
-            }
-
-            paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = request.CorrelationId;
-
             var payload = paymentEvent.Payload;
             var paymentAccountId = payload.PaymentAccountId;
             var createdAt = dateTimeProvider.GetNowUtc();
+
+            paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = request.CorrelationId;
+
+            if (activity != null)
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceId] = activity.TraceId.ToString();
+                paymentEvent.Metadata[EventMetadataKeys.TraceParent] = activity.Id;
+                activity.SetCorrelationId(request.CorrelationId);
+                activity.SetAccount(paymentAccountId);
+                activity.SetPayment(paymentEvent.Payload.Key);
+                activity.SetTag("messaging.system", "kafka");
+                activity.SetTag("messaging.destination", BaseTopics.AccountingPayments);
+                activity.SetTag("outbox.partition_key", paymentEvent.Payload.GetPaymentAccountIdentifier());
+            }
 
             var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent, createdAt);
 
@@ -71,22 +69,29 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 UpdatedAt = createdAt
             };
 
-            outboxPaymentStatusService.WriteRecord(dbEntity);
+            using (var outboxActivity = ActivityPropagation.StartActivity("outbox.write", ActivityKind.Internal))
+            {
+                if (outboxActivity != null)
+                {
+                    outboxActivity.SetCorrelationId(request.CorrelationId);
+                    outboxActivity.SetAccount(paymentAccountId);
+                    outboxActivity.SetPayment(paymentEvent.Payload.Key);
+                    outboxActivity.SetTag("db.system", "outbox");
+                    outboxActivity.SetTag("outbox.partition_key", paymentEvent.Payload.GetPaymentAccountIdentifier());
+                }
+
+                outboxPaymentStatusService.WriteRecord(dbEntity);
+                outboxActivity?.SetStatus(ActivityStatusCode.Ok);
+                outboxActivity?.AddEvent(new("outbox.persisted"));
+            }
 
             await kafkaHandler.ExecuteAndWaitAsync(async producer =>
             {
                 var message = paymentMessageResult.Payload;
-                var messageHeaders = message.Headers;
-
-                messageHeaders.TryAddHeader(KafkaMessageHeaders.Traceparent, traceParent);
-                messageHeaders.TryAddHeader(KafkaMessageHeaders.TraceId, traceId);
-                messageHeaders.TryAddHeader(KafkaMessageHeaders.CorrelationId, request?.CorrelationId);
 
                 try
                 {
-                    using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Kafka.Produce, ActivityKind.Producer);
-
-                    var deliveryResult = await producer.ProduceAsync(
+                    await producer.ProduceAsync(
                         BaseTopics.AccountingPayments,
                         message,
                         cancellationToken);
@@ -97,10 +102,14 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 }
                 catch (Exception ex)
                 {
+                    activity?.RecordException(ex);
+
                     var reason = ex.InnerException?.Message ?? ex.Message;
                     logger.ProduceFailed(BaseTopics.AccountingPayments, message.Key, reason, ex);
                 }
             });
+
+            activity?.SetStatus(ActivityStatusCode.Ok);
 
             return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
         }

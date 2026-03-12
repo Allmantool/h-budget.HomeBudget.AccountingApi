@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using MediatR;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -16,6 +17,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.PIpelines;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
@@ -53,6 +55,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 {
                     configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
                     configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(TracingBehavior<,>));
                 });
         }
     }
