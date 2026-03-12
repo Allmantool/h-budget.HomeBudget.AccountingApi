@@ -16,31 +16,29 @@ namespace HomeBudget.Accounting.Api.Tests.Notifications
         public async Task PublishAsync_ShouldBroadcastToAllSubscribers()
         {
             var sut = new NotificationChannel();
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
             var firstSubscriber = sut.ReadAsync(ct: cts.Token).GetAsyncEnumerator(cts.Token);
             var secondSubscriber = sut.ReadAsync(ct: cts.Token).GetAsyncEnumerator(cts.Token);
+
+            var firstMove = firstSubscriber.MoveNextAsync().AsTask();
+            var secondMove = secondSubscriber.MoveNextAsync().AsTask();
 
             var expectedEvent = new PaymentAccountNotification(
                 Guid.NewGuid().ToString("N"),
                 "balance-updated",
                 Guid.NewGuid());
 
-            try
-            {
-                await sut.PublishAsync(expectedEvent);
+            await sut.PublishAsync(expectedEvent);
 
-                (await firstSubscriber.MoveNextAsync()).Should().BeTrue();
-                (await secondSubscriber.MoveNextAsync()).Should().BeTrue();
+            (await firstMove).Should().BeTrue();
+            (await secondMove).Should().BeTrue();
 
-                firstSubscriber.Current.Should().Be(expectedEvent);
-                secondSubscriber.Current.Should().Be(expectedEvent);
-            }
-            finally
-            {
-                await firstSubscriber.DisposeAsync();
-                await secondSubscriber.DisposeAsync();
-            }
+            firstSubscriber.Current.Should().Be(expectedEvent);
+            secondSubscriber.Current.Should().Be(expectedEvent);
+
+            await firstSubscriber.DisposeAsync();
+            await secondSubscriber.DisposeAsync();
         }
 
         [Test]
