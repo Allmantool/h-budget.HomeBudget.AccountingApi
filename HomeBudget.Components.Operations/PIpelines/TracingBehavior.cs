@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,7 +10,7 @@ using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.PIpelines
 {
-    internal sealed class TracingBehavior<TRequest, TResponse>
+    public sealed class TracingBehavior<TRequest, TResponse>
         : IPipelineBehavior<TRequest, TResponse>
     {
         public async Task<TResponse> Handle(
