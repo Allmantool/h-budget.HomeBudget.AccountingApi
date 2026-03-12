@@ -1,8 +1,8 @@
+﻿using HomeBudget.Accounting.Notifications.Endpoints;
+using HomeBudget.Accounting.Notifications.Services;
+
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-
-using HomeBudget.Accounting.Notifications.Endpoints;
-using HomeBudget.Accounting.Notifications.Services;
 
 namespace HomeBudget.Accounting.Notifications.Configuration
 {
