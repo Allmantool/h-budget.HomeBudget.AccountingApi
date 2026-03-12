@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +12,6 @@ namespace HomeBudget.Accounting.Notifications.Services
 
         IAsyncEnumerable<PaymentAccountNotification> ReadAsync(
             string lastEventId = null,
-            [EnumeratorCancellation] CancellationToken ct = default);
+            CancellationToken ct = default);
     }
 }
