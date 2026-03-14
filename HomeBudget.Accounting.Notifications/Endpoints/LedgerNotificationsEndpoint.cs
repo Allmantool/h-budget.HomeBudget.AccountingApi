@@ -26,6 +26,7 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                 (
                  [FromServices] INotificationChannel notifications,
                  [FromHeader(Name = "Last-Event-ID")] string lastEventId,
+                 [FromQuery(Name = "lastEventId")] string lastEventIdQuery,
                  HttpContext context,
                  CancellationToken ct) =>
                 {
@@ -34,7 +35,10 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                     context.Response.Headers.Append("X-Accel-Buffering", "no");
                     context.Response.Headers.Append("Content-Encoding", "identity");
 
-                    return TypedResults.ServerSentEvents(StreamEventsAsync(notifications, lastEventId, ct));
+                    return TypedResults.ServerSentEvents(StreamEventsAsync(
+                        notifications,
+                        string.IsNullOrWhiteSpace(lastEventId) ? lastEventIdQuery : lastEventId,
+                        ct));
                 });
 
             return app;
@@ -67,9 +71,7 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                             continue;
                         }
 
-                        yield return new SseItem<PaymentAccountNotification>(
-                            evt,
-                            evt.EventType ?? "notification")
+                        yield return new SseItem<PaymentAccountNotification>(evt)
                         {
                             EventId = evt.EventId ?? Guid.NewGuid().ToString("N"),
                             ReconnectionInterval = TimeSpan.FromSeconds(2)
