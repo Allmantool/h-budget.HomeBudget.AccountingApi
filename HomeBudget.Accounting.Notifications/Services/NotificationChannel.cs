@@ -6,11 +6,16 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.SignalR;
+
+using HomeBudget.Accounting.Notifications.Hubs;
 using HomeBudget.Accounting.Notifications.Models;
 
 namespace HomeBudget.Accounting.Notifications.Services
 {
-    internal sealed class NotificationChannel : INotificationChannel
+    internal sealed class NotificationChannel(
+        IHubContext<LedgerNotificationsHub, ILedgerNotificationsClient> hubContext = null)
+        : INotificationChannel
     {
         private const int ReplayBufferSize = 100;
 
@@ -41,6 +46,11 @@ namespace HomeBudget.Accounting.Notifications.Services
             foreach (var (_, subscriber) in subscribers)
             {
                 await subscriber.Writer.WriteAsync(evt);
+            }
+
+            if (hubContext != null)
+            {
+                await hubContext.Clients.All.ReceiveAccountNotification(evt);
             }
         }
 
