@@ -50,8 +50,6 @@ namespace HomeBudget.Test.Core.Models
 
         public ushort GetMappedPublicPort(int containerPort) => (ushort)containerPort;
         public ushort GetMappedPublicPort(string containerPort) => ushort.Parse(containerPort);
-        public string GetConnectionString(ConnectionMode connectionMode) => string.Empty;
-        public string GetConnectionString(string name, ConnectionMode connectionMode) => string.Empty;
 
         // Fixed: Return 0 (invalid port) since no default port mapping exists
         public ushort GetMappedPublicPort() => 0;

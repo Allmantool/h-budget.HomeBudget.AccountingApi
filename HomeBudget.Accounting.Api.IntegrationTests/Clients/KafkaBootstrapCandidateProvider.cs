@@ -41,7 +41,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var list = new List<string>();
 
             // Add testcontainers' own bootstrap address if present
-            var bootstrap = _container.GetBootstrapAddress();
+            var bootstrap = TryGetBootstrapAddress();
             if (!string.IsNullOrWhiteSpace(bootstrap))
             {
                 list.Add(bootstrap);
@@ -53,8 +53,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             foreach (var kv in mappedPorts)
             {
                 var mappedPort = kv.Value;
-                list.Add($"{_container.IpAddress}:{mappedPort}");
-                list.Add($"{_container.Hostname}:{mappedPort}");
+                if (!string.IsNullOrWhiteSpace(_container.IpAddress))
+                {
+                    list.Add($"{_container.IpAddress}:{mappedPort}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(_container.Hostname))
+                {
+                    list.Add($"{_container.Hostname}:{mappedPort}");
+                }
             }
 
             return list;
@@ -96,6 +103,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             }
 
             return result;
+        }
+
+        private string TryGetBootstrapAddress()
+        {
+            try
+            {
+                return _container.GetBootstrapAddress();
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static (string host, int port) SplitHostPort(string candidate)
