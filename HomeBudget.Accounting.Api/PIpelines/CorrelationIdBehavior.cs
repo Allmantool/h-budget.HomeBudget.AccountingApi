@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 
 using MediatR;
@@ -32,9 +31,7 @@ namespace HomeBudget.Components.Operations.PIpelines
                         ?.ToString();
 
                 if (!string.IsNullOrWhiteSpace(correlationId)
-                    && string.IsNullOrWhiteSpace(correlated.CorrelationId)
-                    && Guid.TryParse(correlationId, out var _)
-                   )
+                    && string.IsNullOrWhiteSpace(correlated.CorrelationId))
                 {
                     correlated.CorrelationId = correlationId;
                 }

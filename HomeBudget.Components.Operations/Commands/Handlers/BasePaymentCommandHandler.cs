@@ -52,8 +52,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 activity.SetCorrelationId(request.CorrelationId);
                 activity.SetAccount(paymentAccountId);
                 activity.SetPayment(paymentEvent.Payload.Key);
-                activity.SetTag("messaging.system", "kafka");
-                activity.SetTag("messaging.destination", BaseTopics.AccountingPayments);
+                activity.SetTag(ActivityTags.MessagingSystem, "kafka");
+                activity.SetTag(ActivityTags.KafkaTopic, BaseTopics.AccountingPayments);
+                activity.SetTag(ActivityTags.MessagingOperation, "publish");
                 activity.SetTag("outbox.partition_key", paymentEvent.Payload.GetPaymentAccountIdentifier());
             }
 

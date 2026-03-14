@@ -196,8 +196,9 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
                             if (activity != null)
                             {
-                                activity.SetTag("messaging.system", "kafka");
-                                activity.SetTag("messaging.destination", consumeResult.Topic);
+                                activity.SetTag(ActivityTags.MessagingSystem, "kafka");
+                                activity.SetTag(ActivityTags.KafkaTopic, consumeResult.Topic);
+                                activity.SetTag(ActivityTags.MessagingOperation, "receive");
                                 activity.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
                                 activity.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
                                 activity.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());

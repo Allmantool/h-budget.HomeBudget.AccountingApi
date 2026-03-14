@@ -54,6 +54,8 @@ services.AddHeaderPropagation(options =>
     options.Headers.Add(HttpHeaderKeys.HostService, HostServiceOptions.AccountingApiName);
     options.Headers.Add(HttpHeaderKeys.CorrelationId);
     options.Headers.Add("traceparent");
+    options.Headers.Add("tracestate");
+    options.Headers.Add("baggage");
 });
 
 services.AddAutoMapper(cfg =>

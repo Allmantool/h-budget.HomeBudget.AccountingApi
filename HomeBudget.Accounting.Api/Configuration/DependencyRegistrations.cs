@@ -28,6 +28,7 @@ namespace HomeBudget.Accounting.Api.Configuration
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
             return services
+                .AddHttpContextAccessor()
                 .SetUpConfigurationOptions(configuration)
                 .RegisterPaymentAccountsDependencies()
                 .RegisterContractorsDependencies()

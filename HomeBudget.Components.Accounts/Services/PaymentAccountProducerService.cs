@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -15,6 +16,7 @@ using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Accounts.Services
 {
@@ -50,6 +52,18 @@ namespace HomeBudget.Components.Accounts.Services
                     new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),
                 };
 
+                if (Activity.Current is not null)
+                {
+                    headers.Add(KafkaMessageHeaders.Traceparent, Encoding.UTF8.GetBytes(Activity.Current.Id));
+                    headers.Add(KafkaMessageHeaders.TraceId, Encoding.UTF8.GetBytes(Activity.Current.TraceId.ToString()));
+                }
+
+                var correlationId = Activity.Current?.GetBaggageItem(ActivityTags.CorrelationId);
+                if (!string.IsNullOrWhiteSpace(correlationId))
+                {
+                    headers.Add(KafkaMessageHeaders.CorrelationId, Encoding.UTF8.GetBytes(correlationId));
+                }
+
                 var message = new Message<string, string>
                 {
                     Key = $"{accountRecord.Id}",
@@ -67,3 +81,4 @@ namespace HomeBudget.Components.Accounts.Services
         }
     }
 }
+

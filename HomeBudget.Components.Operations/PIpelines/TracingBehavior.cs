@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 
 using MediatR;
 
-using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Core.Commands;
 using HomeBudget.Core.Observability;
 
@@ -19,17 +18,17 @@ namespace HomeBudget.Components.Operations.PIpelines
             CancellationToken cancellationToken)
         {
             using var activity = ActivityPropagation.StartActivity(
-                $"mediatr.{typeof(TRequest).Name}",
+                ActivityNames.Mediator.Request,
                 ActivityKind.Internal);
+
+            if (activity != null)
+            {
+                activity.SetTag(ActivityTags.MediatorRequestType, typeof(TRequest).FullName);
+            }
 
             if (activity != null && request is ICorrelatedCommand correlatedCommand)
             {
                 activity.SetCorrelationId(correlatedCommand.CorrelationId);
-            }
-
-            if (activity != null && Activity.Current?.TraceId != default)
-            {
-                activity.SetTag(HttpHeaderKeys.TraceId, Activity.Current.TraceId.ToString());
             }
 
             try
@@ -46,3 +45,4 @@ namespace HomeBudget.Components.Operations.PIpelines
         }
     }
 }
+

@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System.Collections.Generic;
+
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using OpenTelemetry.Logs;
 using Serilog;
 using Serilog.Core;
 using Serilog.Enrichers.Span;
@@ -24,7 +25,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
             ConfigureHostBuilder host,
             string hostServiceName)
         {
-            var logger = new LoggerConfiguration()
+            var loggerConfiguration = new LoggerConfiguration()
                 .ReadFrom.Configuration(configuration)
                 .Enrich.FromLogContext()
                 .Enrich.WithEnvironmentName()
@@ -44,29 +45,35 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
                     new RenderedCompactJsonFormatter(),
                     restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
-                .WriteTo.OpenTelemetry(o =>
-                 {
-                     o.Endpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
-                     o.Protocol = OtlpProtocol.Grpc;
-                 })
                 .TryAddSeqSupport(configuration)
-                .TryAddElasticSearchSupport(configuration, environment, hostServiceName)
-                .CreateLogger();
+                .TryAddElasticSearchSupport(configuration, environment, hostServiceName);
+
+            var logsEndpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
+            if (!string.IsNullOrWhiteSpace(logsEndpoint))
+            {
+                var serviceVersion = typeof(CustomLoggerExtensions).Assembly.GetName().Version?.ToString() ?? "unknown";
+                loggerConfiguration = loggerConfiguration.WriteTo.OpenTelemetry(o =>
+                {
+                    o.Endpoint = logsEndpoint;
+                    o.Protocol = OtlpProtocol.Grpc;
+                    o.ResourceAttributes = new Dictionary<string, object>
+                    {
+                        ["service.name"] = hostServiceName,
+                        ["service.version"] = serviceVersion,
+                        [LoggerTags.Environment] = environment.EnvironmentName,
+                        [LoggerTags.HostService] = hostServiceName,
+                        [LoggerTags.ApplicationName] = environment.ApplicationName,
+                    };
+                });
+            }
+
+            var logger = loggerConfiguration.CreateLogger();
 
             loggingBuilder.ClearProviders();
             loggingBuilder.AddSerilog(logger);
 
-            loggingBuilder.AddOpenTelemetry(options =>
-            {
-                options.IncludeScopes = true;
-                options.ParseStateValues = true;
-                options.IncludeFormattedMessage = true;
-                options.AddOtlpExporter();
-            });
-
             host.UseSerilog(logger);
 
-            // SelfLog.Enable(msg => File.AppendAllText("serilog-accounting-api-selflog.txt", msg));
             Log.Logger = logger;
 
             return logger;
@@ -83,3 +90,4 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
         }
     }
 }
+

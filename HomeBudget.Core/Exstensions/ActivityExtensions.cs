@@ -12,6 +12,11 @@ public static class ActivityExtensions
 
     public static void SetCorrelationId(this Activity activity, string id)
     {
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            activity?.AddBaggage(ActivityTags.CorrelationId, id);
+        }
+
         activity?.SetTag(ActivityTags.CorrelationId, id);
     }
 

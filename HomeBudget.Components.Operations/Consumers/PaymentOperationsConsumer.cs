@@ -90,8 +90,9 @@ namespace HomeBudget.Components.Operations.Consumers
 
                         if (activity != null)
                         {
-                            activity.SetTag("messaging.system", "kafka");
-                            activity.SetTag("messaging.destination", payload.Topic);
+                            activity.SetTag(ActivityTags.MessagingSystem, "kafka");
+                            activity.SetTag(ActivityTags.KafkaTopic, payload.Topic);
+                            activity.SetTag(ActivityTags.MessagingOperation, "process");
                             activity.SetTag("messaging.kafka.partition", payload.Partition);
                             activity.SetTag("messaging.kafka.offset", payload.Offset);
                             activity.SetTag("messaging.message_id", message.Key);
