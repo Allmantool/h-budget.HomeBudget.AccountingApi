@@ -33,35 +33,10 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                 return false;
             }
 
-            var applicationName = environment.ApplicationName;
-
             services
                .AddOpenTelemetry()
                .ConfigureResource(r => r
                    .AddService(
-                       serviceName: applicationName,
-                       serviceVersion: serviceVersion,
-                       serviceInstanceId: Environment.MachineName))
-               .WithMetrics(m =>
-               {
-                   m.AddRuntimeInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddPrometheusExporter();
-               })
-               .WithTracing(t =>
-               {
-                   t.AddHttpClientInstrumentation()
-                    .AddSource(applicationName)
-                    .AddOtlpExporter(o =>
-                    {
-                        o.Endpoint = new Uri(alloyHost);
-                    });
-               });
-
-            services
-                .AddOpenTelemetry()
-                .ConfigureResource(r => r
-                    .AddService(
                        serviceName: serviceName,
                        serviceVersion: serviceVersion,
                        serviceInstanceId: Environment.MachineName)
@@ -75,6 +50,14 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                         .AddSource(Telemetry.ActivitySource.Name)
                         .AddAspNetCoreInstrumentation(options =>
                         {
+                            options.RecordException = true;
+                            options.Filter = httpContext =>
+                            {
+                                var path = httpContext.Request.Path;
+                                return !path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)
+                                       && !path.StartsWithSegments("/metrics", StringComparison.OrdinalIgnoreCase);
+                            };
+
                             options.EnrichWithHttpRequest = (activity, request) =>
                             {
                                 if (request.Headers.TryGetValue(HttpHeaderKeys.CorrelationId, out var cid))
@@ -93,15 +76,16 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                                 activity.SetTag(ActivityTags.ExceptionMessage, exception.Message);
                             };
                         })
-                         .AddHttpClientInstrumentation()
-                         .AddSource(HostServiceOptions.AccountingApiName)
+                         .AddHttpClientInstrumentation(options =>
+                         {
+                             options.RecordException = true;
+                         })
                          .AddOtlpExporter(o =>
                          {
                              o.Endpoint = new Uri(alloyHost);
                              o.Protocol = OtlpExportProtocol.Grpc;
                          });
                 })
-                .ConfigureResource(resource => resource.AddService(serviceName: environment.ApplicationName))
                 .WithMetrics(metrics => metrics
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Serilog.Context;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Accounting.Api.Middlewares
 {
@@ -47,11 +48,15 @@ namespace HomeBudget.Accounting.Api.Middlewares
                     correlationId);
             }
 
+            context.Items[HttpHeaderKeys.CorrelationId] = correlationId;
             context.Response.Headers[HttpHeaderKeys.CorrelationId] = correlationId;
 
-            if (traceId != null)
+            if (Activity.Current is not null)
             {
-                context.Response.Headers[HttpHeaderKeys.TraceId] = traceId;
+                Activity.Current.SetCorrelationId(correlationId);
+                Activity.Current.AddBaggage(ActivityTags.CorrelationId, correlationId);
+                context.Response.Headers[HttpHeaderKeys.TraceId] = Activity.Current.TraceId.ToString();
+                context.Response.Headers["traceparent"] = Activity.Current.Id;
             }
 
             using (LogContext.PushProperty(HttpHeaderKeys.CorrelationId, correlationId))
