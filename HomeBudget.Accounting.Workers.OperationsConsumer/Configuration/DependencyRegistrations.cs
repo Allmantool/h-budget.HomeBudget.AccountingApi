@@ -1,4 +1,6 @@
-﻿using MediatR;
+﻿using System;
+
+using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
@@ -9,16 +11,18 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
-using HomeBudget.Accounting.Notifications.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Notifications;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.PIpelines;
 using HomeBudget.Core.Options;
+
+using INotificationPublisher = HomeBudget.Accounting.Notifications.Services.INotificationPublisher;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
 {
@@ -29,7 +33,11 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
             BsonSerializer.TryRegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
             BsonSerializer.TryRegisterSerializer(new DateOnlySerializer());
 
-            return services
+            var notificationPublisherOptions =
+                configuration.GetSection(NotificationPublisherOptions.SectionName).Get<NotificationPublisherOptions>()
+                ?? new NotificationPublisherOptions();
+
+            services
                 .RegisterBackgroundServices()
                 .RegisterPaymentAccountsDependencies()
                 .RegisterCategoriesDependencies()
@@ -39,8 +47,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()
                 .AddSingleton<IEventStoreDbSubscriptionReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreSubscriptionReadClient>()
-                .AddSingleton<IEventStoreDbStreamReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreStreamReadClient>()
-                .AddNotifications();
+                .AddSingleton<IEventStoreDbStreamReadClient<PaymentOperationEvent>, PaymentOperationsEventStoreStreamReadClient>();
+
+            services.AddHttpClient<INotificationPublisher, AccountingApiNotificationPublisher>(httpClient =>
+            {
+                httpClient.BaseAddress = new Uri(notificationPublisherOptions.AccountingApiBaseUrl, UriKind.Absolute);
+            });
+
+            return services;
         }
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
