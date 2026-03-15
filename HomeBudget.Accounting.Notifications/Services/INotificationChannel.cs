@@ -6,10 +6,8 @@ using HomeBudget.Accounting.Notifications.Models;
 
 namespace HomeBudget.Accounting.Notifications.Services
 {
-    public interface INotificationChannel
+    public interface INotificationChannel : INotificationPublisher
     {
-        Task PublishAsync(PaymentAccountNotification evt);
-
         IAsyncEnumerable<PaymentAccountNotification> ReadAsync(
             string lastEventId = null,
             CancellationToken ct = default);

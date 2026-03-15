@@ -41,6 +41,16 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                         ct));
                 });
 
+            app.MapPost(
+                "/notifications/account/publish",
+                async (
+                    [FromServices] INotificationPublisher notifications,
+                    [FromBody] PaymentAccountNotification notification) =>
+                {
+                    await notifications.PublishAsync(notification);
+                    return TypedResults.Ok();
+                });
+
             return app;
         }
 
@@ -52,18 +62,26 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
             using var heartbeatTimer = new PeriodicTimer(HeartbeatInterval);
 
             var events = notifications.ReadAsync(lastEventId, ct).GetAsyncEnumerator(ct);
+            Task<bool> pendingMoveNextTask = null;
 
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    var moveNextTask = events.MoveNextAsync().AsTask();
+                    pendingMoveNextTask ??= events.MoveNextAsync().AsTask();
+
                     var heartbeatTask = heartbeatTimer.WaitForNextTickAsync(ct).AsTask();
+                    var completed = await Task.WhenAny(pendingMoveNextTask, heartbeatTask);
 
-                    var completed = await Task.WhenAny(moveNextTask, heartbeatTask);
-
-                    if (completed == moveNextTask && await moveNextTask)
+                    if (completed == pendingMoveNextTask)
                     {
+                        if (!await pendingMoveNextTask)
+                        {
+                            yield break;
+                        }
+
+                        pendingMoveNextTask = null;
+
                         var evt = events.Current;
 
                         if (evt is null)
@@ -76,8 +94,11 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
                             EventId = evt.EventId ?? Guid.NewGuid().ToString("N"),
                             ReconnectionInterval = TimeSpan.FromSeconds(2)
                         };
+
+                        continue;
                     }
-                    else
+
+                    if (await heartbeatTask)
                     {
                         yield return new SseItem<PaymentAccountNotification>(
                             new PaymentAccountNotification(
@@ -90,6 +111,17 @@ namespace HomeBudget.Accounting.Notifications.Endpoints
             }
             finally
             {
+                if (pendingMoveNextTask != null)
+                {
+                    try
+                    {
+                        await pendingMoveNextTask;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                    }
+                }
+
                 await events.DisposeAsync();
             }
         }
