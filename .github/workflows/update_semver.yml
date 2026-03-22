@@ -50,7 +50,22 @@ jobs:
           bump_each_commit: false
           version_from_branch: false
 
+      - name: Summary for already tagged commit
+        if: steps.semver.outputs.is_tagged == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Semver update skipped"
+            echo ""
+            echo "- Existing tag: \`${{ steps.semver.outputs.version_tag }}\`"
+            echo "- Reason: merge commit is already tagged"
+            echo "- PR: #${{ github.event.pull_request.number }}"
+            echo "- Merge commit: \`${{ github.event.pull_request.merge_commit_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolve tag
+        if: steps.semver.outputs.is_tagged != 'true'
         id: tag
         shell: bash
         run: |
@@ -67,6 +82,7 @@ jobs:
           echo "Resolved tag: $TAG"
 
       - name: Ensure tag does not already exist
+        if: steps.semver.outputs.is_tagged != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -84,6 +100,7 @@ jobs:
           fi
 
       - name: Create annotated tag
+        if: steps.semver.outputs.is_tagged != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -94,12 +111,14 @@ jobs:
           git tag -a "$TAG" "$SHA" -m "Release $TAG"
 
       - name: Push tag
+        if: steps.semver.outputs.is_tagged != 'true'
         shell: bash
         run: |
           set -euo pipefail
           git push origin "${{ steps.tag.outputs.tag }}"
 
       - name: Create GitHub Release
+        if: steps.semver.outputs.is_tagged != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
@@ -108,12 +127,15 @@ jobs:
           generate_release_notes: true
 
       - name: Summary
+        if: steps.semver.outputs.is_tagged != 'true'
         shell: bash
         run: |
+          set -euo pipefail
           {
             echo "## Semver update complete"
             echo ""
             echo "- Tag: \`${{ steps.tag.outputs.tag }}\`"
-            echo "- Merge commit: \`${{ github.event.pull_request.merge_commit_sha }}\`"
             echo "- PR: #${{ github.event.pull_request.number }}"
+            echo "- Merge commit: \`${{ github.event.pull_request.merge_commit_sha }}\`"
+            echo "- Release: auto-generated notes published"
           } >> "$GITHUB_STEP_SUMMARY"
