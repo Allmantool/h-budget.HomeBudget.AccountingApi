@@ -402,7 +402,7 @@ jobs:
           fi
 
           printf 'Sample OpenCover source paths:\n'
-          grep -h -o 'fullPath="[^"]*"' "${opencover_reports[@]}" | head -n 10
+          grep -h -o 'fullPath="[^"]*"' "${opencover_reports[@]}" | sed -n '1,10p'
 
       - name: Show merged coverage files
         shell: bash
