@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   update-semver-if-merged:
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -27,11 +27,14 @@ jobs:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Configure Git
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch tags
+        shell: bash
         run: |
           set -euo pipefail
           git fetch --force --tags origin
@@ -49,6 +52,7 @@ jobs:
 
       - name: Resolve tag
         id: tag
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -63,6 +67,7 @@ jobs:
           echo "Resolved tag: $TAG"
 
       - name: Ensure tag does not already exist
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -79,6 +84,7 @@ jobs:
           fi
 
       - name: Create annotated tag
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -88,10 +94,26 @@ jobs:
           git tag -a "$TAG" "$SHA" -m "Release $TAG"
 
       - name: Push tag
+        shell: bash
         run: |
           set -euo pipefail
           git push origin "${{ steps.tag.outputs.tag }}"
 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
+          name: Release ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+
       - name: Summary
+        shell: bash
         run: |
-          echo "Created tag: ${{ steps.tag.outputs.tag }}"
+          {
+            echo "## Semver update complete"
+            echo ""
+            echo "- Tag: \`${{ steps.tag.outputs.tag }}\`"
+            echo "- Merge commit: \`${{ github.event.pull_request.merge_commit_sha }}\`"
+            echo "- PR: #${{ github.event.pull_request.number }}"
+          } >> "$GITHUB_STEP_SUMMARY"
