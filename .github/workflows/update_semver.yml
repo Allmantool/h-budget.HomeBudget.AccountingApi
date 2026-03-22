@@ -1,130 +1,23 @@
-name: Prod CI/CD
+name: Update Semver
 
 on:
   pull_request:
+    types: [closed]
     branches:
       - master
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-      - closed
-
-  push:
-    branches:
-      - master
-
-  workflow_dispatch:
 
 permissions:
-  contents: read
-
-env:
-  DEFAULT_BRANCH: master
+  contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: semver-${{ github.event.pull_request.base.ref }}
+  cancel-in-progress: false
 
 jobs:
-  ci:
-    name: CI
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+  update-semver-if-merged:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Validate repo basics
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.head_ref }}"
-          echo "PR title: ${{ github.event.pull_request.title }}"
-          git status --short
-          test -f .gitignore || echo "No .gitignore found"
-
-      - name: Set up build environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Install language/runtime dependencies here"
-          # Examples:
-          # npm ci
-          # pip install -r requirements.txt
-          # dotnet restore
-
-      - name: Lint
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Run linter here"
-          # Examples:
-          # npm run lint
-          # ruff check .
-          # golangci-lint run
-
-      - name: Unit tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Run tests here"
-          # Examples:
-          # npm test -- --ci
-          # pytest -q
-          # go test ./...
-
-      - name: Build
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Build project here"
-          mkdir -p dist
-          echo "build-output" > dist/build.txt
-          # Examples:
-          # npm run build
-          # python -m build
-          # go build ./...
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-build-pr-${{ github.event.pull_request.number }}
-          path: dist/
-          if-no-files-found: error
-          retention-days: 7
-
-  release:
-    name: Release Tag
-    if: github.event_name == 'pull_request' &&
-      github.event.action == 'closed' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    permissions:
-      contents: write
-      pull-requests: read
-
-    concurrency:
-      group: release-${{ github.event.pull_request.base.ref }}
-      cancel-in-progress: false
-
-    outputs:
-      tag: ${{ steps.version.outputs.tag }}
-      version: ${{ steps.version.outputs.version }}
-      bump: ${{ steps.version.outputs.bump }}
+    timeout-minutes: 10
 
     steps:
       - name: Check out merge commit
@@ -134,229 +27,71 @@ jobs:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Configure Git
-        shell: bash
         run: |
-          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch tags
-        shell: bash
         run: |
           set -euo pipefail
           git fetch --force --tags origin
 
-      - name: Determine release bump
-        id: bump
-        shell: bash
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-          LABELS_JSON: ${{ toJson(github.event.pull_request.labels) }}
+      - name: Calculate semantic version
+        id: semver
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          major_pattern: "(MAJOR)"
+          minor_pattern: "(MINOR)"
+          search_commit_body: true
+          bump_each_commit: false
+          version_from_branch: false
+
+      - name: Resolve tag
+        id: tag
         run: |
           set -euo pipefail
 
-          bump="patch"
+          TAG="${{ steps.semver.outputs.version_tag }}"
 
-          if echo "$LABELS_JSON" | jq -e '.[] | select(.name == "semver:major")' >/dev/null; then
-            bump="major"
-          elif echo "$LABELS_JSON" | jq -e '.[] | select(.name == "semver:minor")' >/dev/null; then
-            bump="minor"
-          elif echo "$LABELS_JSON" | jq -e '.[] | select(.name == "semver:patch")' >/dev/null; then
-            bump="patch"
-          elif [[ "$PR_TITLE" =~ \(MAJOR\) ]] || [[ "$PR_BODY" =~ \(MAJOR\) ]]; then
-            bump="major"
-          elif [[ "$PR_TITLE" =~ \(MINOR\) ]] || [[ "$PR_BODY" =~ \(MINOR\) ]]; then
-            bump="minor"
-          else
-            bump="patch"
+          if [[ -z "$TAG" ]]; then
+            echo "semantic-version did not produce version_tag"
+            exit 1
           fi
 
-          echo "bump=$bump" >> "$GITHUB_OUTPUT"
-          echo "Resolved bump: $bump"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: $TAG"
 
-      - name: Calculate next semantic version
-        id: version
-        shell: bash
-        env:
-          BUMP: ${{ steps.bump.outputs.bump }}
+      - name: Ensure tag does not already exist
         run: |
           set -euo pipefail
 
-          latest_tag="$(git tag --list 'v*.*.*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          TAG="${{ steps.tag.outputs.tag }}"
 
-          if [[ -z "${latest_tag}" ]]; then
-            major=0
-            minor=0
-            patch=0
-          else
-            version="${latest_tag#v}"
-            IFS='.' read -r major minor patch <<< "$version"
-          fi
-
-          case "$BUMP" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              patch=$((patch + 1))
-              ;;
-            *)
-              echo "Unsupported bump: $BUMP"
-              exit 1
-              ;;
-          esac
-
-          new_version="${major}.${minor}.${patch}"
-          new_tag="v${new_version}"
-
-          if git rev-parse -q --verify "refs/tags/${new_tag}" >/dev/null; then
-            echo "Tag already exists locally: ${new_tag}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag already exists locally: $TAG"
             exit 1
           fi
 
-          if git ls-remote --exit-code --tags origin "refs/tags/${new_tag}" >/dev/null 2>&1; then
-            echo "Tag already exists remotely: ${new_tag}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists on remote: $TAG"
             exit 1
           fi
-
-          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
-          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
-          echo "bump=${BUMP}" >> "$GITHUB_OUTPUT"
-
-          echo "Latest stable tag: ${latest_tag:-<none>}"
-          echo "Next version: ${new_version}"
-          echo "Next tag: ${new_tag}"
 
       - name: Create annotated tag
-        shell: bash
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-          TARGET_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           set -euo pipefail
-          git tag -a "$TAG" "$TARGET_SHA" -m "Release $TAG"
+
+          TAG="${{ steps.tag.outputs.tag }}"
+          SHA="${{ github.event.pull_request.merge_commit_sha }}"
+
+          git tag -a "$TAG" "$SHA" -m "Release $TAG"
 
       - name: Push tag
-        shell: bash
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          git push origin "$TAG"
+          git push origin "${{ steps.tag.outputs.tag }}"
 
-      - name: Release summary
-        shell: bash
+      - name: Summary
         run: |
-          {
-            echo "## Release created"
-            echo ""
-            echo "- Tag: \`${{ steps.version.outputs.tag }}\`"
-            echo "- Version: \`${{ steps.version.outputs.version }}\`"
-            echo "- Bump: \`${{ steps.version.outputs.bump }}\`"
-            echo "- PR: #${{ github.event.pull_request.number }}"
-            echo "- Merge commit: \`${{ github.event.pull_request.merge_commit_sha }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  package:
-    name: Package
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Fetch tags
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --force --tags origin
-
-      - name: Resolve current version
-        id: package_version
-        shell: bash
-        run: |
-          set -euo pipefail
-          latest_tag="$(git tag --list 'v*.*.*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
-          if [[ -z "$latest_tag" ]]; then
-            echo "No release tag found on master yet"
-            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${latest_tag#v}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build distributable
-        shell: bash
-        env:
-          APP_VERSION: ${{ steps.package_version.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          echo "version=${APP_VERSION}" > dist/version.txt
-          echo "Build/package commands go here"
-          # Examples:
-          # npm ci && npm run build
-          # docker build -t my-app:${APP_VERSION} .
-          # make package
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-package-${{ github.sha }}
-          path: dist/
-          if-no-files-found: error
-          retention-days: 14
-
-  deploy-production:
-    name: Deploy to Production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs:
-      - package
-
-    permissions:
-      contents: read
-      id-token: write
-
-    environment:
-      name: production
-
-    steps:
-      - name: Download packaged artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: release-package-${{ github.sha }}
-          path: dist
-
-      - name: Verify deployment payload
-        shell: bash
-        run: |
-          set -euo pipefail
-          ls -la dist
-          test -f dist/version.txt
-
-      - name: Deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Production deploy goes here"
-          # Strongly prefer OIDC or environment-scoped secrets over PAT/static cloud keys
-          # Examples:
-          # ./scripts/deploy.sh dist
-          # aws s3 sync dist/ s3://my-bucket/
-          # helm upgrade --install ...
+          echo "Created tag: ${{ steps.tag.outputs.tag }}"
