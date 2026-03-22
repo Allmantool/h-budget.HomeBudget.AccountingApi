@@ -1,62 +1,93 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo ">> Starting Sonar Scanner"
-echo ">> GitHub Ref: ${GITHUB_REF_NAME}"
-echo ">> Coverage files: ${COVERAGE_FILES}"
-echo ">> Test result files: ${TEST_RESULTS_FILES}"
+SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-allmantool}"
+SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-Allmantool_h-budget-accounting-api}"
+SONAR_PROJECT_NAME="${SONAR_PROJECT_NAME:-h-budget-accounting-api}"
+SONAR_GITHUB_REPOSITORY="${SONAR_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-Allmantool/h-budget.HomeBudget.AccountingApi}}"
+COVERAGE_FILE="${COVERAGE_FILE:-test-results/merged-coverage/SonarQube.xml}"
+TEST_RESULTS_PATH="${TEST_RESULTS_PATH:-test-results/**/*.trx}"
 
-# Check if we have coverage files
-if [ -z "${COVERAGE_FILES}" ] || [ "${COVERAGE_FILES}" = "," ]; then
-    echo ">> ERROR: No coverage files found!"
-    echo ">> Searching for coverage files in raw-coverage-files:"
-    find raw-coverage-files -name "*.cobertura.xml" -type f
-    exit 1
+sanitize_csv_property() {
+    local raw_value="${1:-}"
+
+    if [[ -z "${raw_value}" ]]; then
+        return 0
+    fi
+
+    printf '%s' "${raw_value}" | awk '
+        BEGIN {
+            RS = ","
+            ORS = ""
+        }
+        {
+            value = $0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            gsub(/^"+|"+$/, "", value)
+
+            if (value != "" && !seen[value]++) {
+                values[++count] = value
+            }
+        }
+        END {
+            for (i = 1; i <= count; i++) {
+                printf "%s%s", values[i], (i < count ? "," : "")
+            }
+        }'
+}
+
+SONAR_EXCLUSIONS_SANITIZED="$(sanitize_csv_property "${SONAR_EXCLUSIONS:-}")"
+SONAR_COVERAGE_EXCLUSIONS_SANITIZED="$(sanitize_csv_property "${SONAR_COVERAGE_EXCLUSIONS:-}")"
+
+echo "DEBUG: SONAR_PROJECT_KEY='${SONAR_PROJECT_KEY}'"
+echo "DEBUG: SONAR_PROJECT_NAME='${SONAR_PROJECT_NAME}'"
+echo "DEBUG: SONAR_GITHUB_REPOSITORY='${SONAR_GITHUB_REPOSITORY}'"
+echo "DEBUG: COVERAGE_FILE='${COVERAGE_FILE}'"
+echo "DEBUG: TEST_RESULTS_PATH='${TEST_RESULTS_PATH}'"
+
+scanner_args=(
+    begin
+    /o:"${SONAR_ORGANIZATION}"
+    /k:"${SONAR_PROJECT_KEY}"
+    /n:"${SONAR_PROJECT_NAME}"
+    /v:"${GITHUB_RUN_ID}"
+    /d:sonar.token="${SONAR_TOKEN}"
+    /d:sonar.host.url="https://sonarcloud.io"
+)
+
+if [[ -n "${COVERAGE_FILE}" ]]; then
+    scanner_args+=("/d:sonar.coverageReportPaths=${COVERAGE_FILE}")
 fi
 
-# Remove trailing comma if present
-COVERAGE_FILES=${COVERAGE_FILES%,}
-TEST_RESULTS_FILES=${TEST_RESULTS_FILES%,}
+if [[ -n "${TEST_RESULTS_PATH}" ]]; then
+    scanner_args+=("/d:sonar.cs.vstest.reportsPaths=${TEST_RESULTS_PATH}")
+fi
 
-echo ">> Processed coverage files: ${COVERAGE_FILES}"
-echo ">> Processed test result files: ${TEST_RESULTS_FILES}"
-
-if [ -n "${PULL_REQUEST_ID}" ] && [ "${PULL_REQUEST_ID}" != "0" ]; then
-    echo ">> Running in PR mode for PR #${PULL_REQUEST_ID}"
-
-    dotnet-sonarscanner begin \
-        /o:"allmantool" \
-        /k:"Allmantool_h-budget-accounting" \
-        /n:"h-budget-accounting" \
-        /v:"${GITHUB_RUN_ID}" \
-        /d:sonar.login="${SONAR_TOKEN}" \
-        /d:sonar.host.url="https://sonarcloud.io" \
-        /d:sonar.pullrequest.key="${PULL_REQUEST_ID}" \
-        /d:sonar.pullrequest.branch="${PULL_REQUEST_SOURCE_BRANCH}" \
-        /d:sonar.pullrequest.base="${PULL_REQUEST_TARGET_BRANCH}" \
-        /d:sonar.cs.cobertura.reportsPaths="${COVERAGE_FILES}" \
-        /d:sonar.cs.vstest.reportsPaths="${TEST_RESULTS_FILES}" \
-        /d:sonar.exclusions="**/*.Tests/**" \
-        /d:sonar.coverage.exclusions="**/*.Tests/**,**/*Test.cs,**/*Tests.cs" \
-        /d:sonar.pullrequest.provider="github" \
-        /d:sonar.pullrequest.github.repository="Allmantool/h-budget.HomeBudget.AccountingApi" \
-        /d:sonar.pullrequest.github.endpoint="https://api.github.com/" \
-        /d:sonar.verbose="true"
-
+if [[ -n "${PULL_REQUEST_ID:-}" && "${PULL_REQUEST_ID}" != "0" ]]; then
+    scanner_args+=(
+        /d:sonar.pullrequest.key="${PULL_REQUEST_ID}"
+        /d:sonar.pullrequest.branch="${PULL_REQUEST_SOURCE_BRANCH}"
+        /d:sonar.pullrequest.base="${PULL_REQUEST_TARGET_BRANCH}"
+        /d:sonar.pullrequest.provider="github"
+        /d:sonar.pullrequest.github.repository="${SONAR_GITHUB_REPOSITORY}"
+        /d:sonar.pullrequest.github.endpoint="https://api.github.com/"
+    )
 else
-    echo ">> Running for branch: ${GITHUB_REF_NAME}"
+    BRANCH_NAME="${GITHUB_REF_NAME:-master}"
 
-    dotnet-sonarscanner begin \
-        /o:"allmantool" \
-        /k:"Allmantool_h-budget-accounting" \
-        /n:"h-budget-accounting" \
-        /v:"${GITHUB_RUN_ID}" \
-        /d:sonar.branch.name="${GITHUB_REF_NAME}" \
-        /d:sonar.login="${SONAR_TOKEN}" \
-        /d:sonar.host.url="https://sonarcloud.io" \
-        /d:sonar.cs.cobertura.reportsPaths="${COVERAGE_FILES}" \
-        /d:sonar.cs.vstest.reportsPaths="${TEST_RESULTS_FILES}" \
-        /d:sonar.exclusions="**/*.Tests/**" \
-        /d:sonar.coverage.exclusions="**/*.Tests/**,**/*Test.cs,**/*Tests.cs" \
-        /d:sonar.verbose="true"
+    if [[ "${BRANCH_NAME}" == "master" ]]; then
+        scanner_args+=("/d:sonar.branch.name=master")
+    else
+        scanner_args+=("/d:sonar.branch.name=${BRANCH_NAME}")
+    fi
 fi
+
+if [[ -n "${SONAR_EXCLUSIONS_SANITIZED}" ]]; then
+    scanner_args+=("/d:sonar.exclusions=${SONAR_EXCLUSIONS_SANITIZED}")
+fi
+
+if [[ -n "${SONAR_COVERAGE_EXCLUSIONS_SANITIZED}" ]]; then
+    scanner_args+=("/d:sonar.coverage.exclusions=${SONAR_COVERAGE_EXCLUSIONS_SANITIZED}")
+fi
+
+dotnet-sonarscanner "${scanner_args[@]}"
