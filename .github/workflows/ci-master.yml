@@ -48,15 +48,212 @@ jobs:
             echo "sonar_reason=SONAR_TOKEN is missing; CI will run without Sonar publishing." >> "$GITHUB_OUTPUT"
           fi
 
-  validate-test-and-analyze:
-    name: Restore, Build, Test, Merge Coverage, Sonar
+  validate-application-build:
+    name: Validate Application Build
     runs-on: ubuntu-latest
-    needs: determine-sonar-mode
     outputs:
       restore_outcome: ${{ steps.collect-status.outputs.restore_outcome }}
       build_outcome: ${{ steps.collect-status.outputs.build_outcome }}
-      api_tests_outcome: ${{ steps.collect-status.outputs.api_tests_outcome }}
-      workers_tests_outcome: ${{ steps.collect-status.outputs.workers_tests_outcome }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore .NET packages
+        id: restore
+        run: dotnet restore HomeBudgetAccountingApi.sln
+
+      - name: Build solution
+        id: build
+        run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore --no-incremental
+
+      - name: Collect step outcomes
+        id: collect-status
+        if: ${{ always() }}
+        env:
+          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        shell: bash
+        run: |
+          echo "restore_outcome=${RESTORE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+          echo "build_outcome=${BUILD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+
+  run-unit-and-component-tests:
+    name: Run Unit And Component Tests
+    runs-on: ubuntu-latest
+    needs: validate-application-build
+    outputs:
+      tests_outcome: ${{ steps.collect-status.outputs.tests_outcome }}
+      diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore .NET packages
+        run: dotnet restore HomeBudgetAccountingApi.sln
+
+      - name: Build solution
+        run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore --no-incremental
+
+      - name: Run unit and component tests with coverage
+        id: run-tests
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/unit
+
+          dotnet test HomeBudget.Accounting.Api.Tests/HomeBudget.Accounting.Api.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --settings coverlet.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=HomeBudget.Accounting.Api.Tests.trx" \
+            --results-directory test-results/unit/HomeBudget.Accounting.Api.Tests
+
+          dotnet test HomeBudget.Components.Categories.Tests/HomeBudget.Components.Categories.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --settings coverlet.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=HomeBudget.Components.Categories.Tests.trx" \
+            --results-directory test-results/unit/HomeBudget.Components.Categories.Tests
+
+          dotnet test HomeBudget.Components.Operations.Tests/HomeBudget.Components.Operations.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --settings coverlet.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=HomeBudget.Components.Operations.Tests.trx" \
+            --results-directory test-results/unit/HomeBudget.Components.Operations.Tests
+
+      - name: Upload unit and component test diagnostics
+        id: upload-diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-unit-test-results
+          path: test-results/unit/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Collect step outcomes
+        id: collect-status
+        if: ${{ always() }}
+        env:
+          TESTS_OUTCOME: ${{ steps.run-tests.outcome }}
+          DIAGNOSTICS_UPLOAD_OUTCOME: ${{ steps.upload-diagnostics.outcome }}
+        shell: bash
+        run: |
+          echo "tests_outcome=${TESTS_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+          echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+
+  run-api-integration-tests:
+    name: Run API Integration Tests
+    runs-on: ubuntu-latest
+    needs: validate-application-build
+    outputs:
+      tests_outcome: ${{ steps.collect-status.outputs.tests_outcome }}
+      diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: |
+            Directory.Packages.props
+            **/*.csproj
+
+      - name: Restore .NET packages
+        run: dotnet restore HomeBudgetAccountingApi.sln
+
+      - name: Build solution
+        run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore --no-incremental
+
+      - name: Prepare Docker host for integration tests
+        shell: bash
+        run: |
+          docker system prune -af || true
+          docker network prune -f || true
+
+      - name: Run integration tests with coverage
+        id: run-tests
+        timeout-minutes: 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/integration
+
+          dotnet test HomeBudget.Accounting.Api.IntegrationTests/HomeBudget.Accounting.Api.IntegrationTests.csproj \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            --settings coverlet.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=HomeBudget.Accounting.Api.IntegrationTests.trx" \
+            --results-directory test-results/integration/HomeBudget.Accounting.Api.IntegrationTests
+
+      - name: Upload integration test diagnostics
+        id: upload-diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ci-integration-test-results
+          path: test-results/integration/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Collect step outcomes
+        id: collect-status
+        if: ${{ always() }}
+        env:
+          TESTS_OUTCOME: ${{ steps.run-tests.outcome }}
+          DIAGNOSTICS_UPLOAD_OUTCOME: ${{ steps.upload-diagnostics.outcome }}
+        shell: bash
+        run: |
+          echo "tests_outcome=${TESTS_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+          echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+
+  analyze-master-quality:
+    name: Analyze Master Quality
+    runs-on: ubuntu-latest
+    needs:
+      - determine-sonar-mode
+      - validate-application-build
+      - run-unit-and-component-tests
+      - run-api-integration-tests
+    if: ${{ always() && needs.validate-application-build.result == 'success' && needs.run-unit-and-component-tests.result == 'success' && needs.run-api-integration-tests.result == 'success' }}
+    outputs:
       api_merge_outcome: ${{ steps.collect-status.outputs.api_merge_outcome }}
       workers_merge_outcome: ${{ steps.collect-status.outputs.workers_merge_outcome }}
       final_merge_outcome: ${{ steps.collect-status.outputs.final_merge_outcome }}
@@ -64,12 +261,25 @@ jobs:
       cobertura_report_exists: ${{ steps.collect-status.outputs.cobertura_report_exists }}
       diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
       sonar_begin_outcome: ${{ steps.collect-status.outputs.sonar_begin_outcome }}
+      sonar_build_outcome: ${{ steps.collect-status.outputs.sonar_build_outcome }}
       sonar_end_outcome: ${{ steps.collect-status.outputs.sonar_end_outcome }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Download unit and component test diagnostics
+        uses: actions/download-artifact@v5
+        with:
+          name: ci-unit-test-results
+          path: artifacts/unit
+
+      - name: Download integration test diagnostics
+        uses: actions/download-artifact@v5
+        with:
+          name: ci-integration-test-results
+          path: artifacts/integration
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -99,8 +309,11 @@ jobs:
           dotnet tool update --global dotnet-sonarscanner --version 9.0.2 || \
           dotnet tool install --global dotnet-sonarscanner --version 9.0.2
 
+      - name: Add .NET global tools to PATH
+        shell: bash
+        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
       - name: Restore .NET packages
-        id: restore
         run: dotnet restore HomeBudgetAccountingApi.sln
 
       - name: Make scanner script executable
@@ -117,74 +330,15 @@ jobs:
           PULL_REQUEST_SOURCE_BRANCH: ${{ github.head_ref }}
           PULL_REQUEST_TARGET_BRANCH: ${{ github.base_ref }}
           COVERAGE_FILE: test-results/merged-coverage/SonarQube.xml
-          TEST_RESULTS_PATH: test-results/**/*.trx
-          SONAR_EXCLUSIONS: test-results/**
+          TEST_RESULTS_PATH: artifacts/**/*.trx
+          SONAR_EXCLUSIONS: test-results/**,artifacts/**
           SONAR_COVERAGE_EXCLUSIONS: "**/Test[s]/**/*"
         shell: bash
         run: ./startsonar.sh
 
-      - name: Build solution
-        id: build
+      - name: Build solution for Sonar analysis
+        id: sonar-build
         run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore --no-incremental
-
-      - name: Prepare Docker host for integration tests
-        id: prepare-docker
-        shell: bash
-        run: |
-          docker system prune -af || true
-          docker network prune -f || true
-
-      - name: Run API tests with coverage
-        id: api-tests
-        timeout-minutes: 35
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p test-results/api
-
-          dotnet test HomeBudget.Accounting.Api.Tests/HomeBudget.Accounting.Api.Tests.csproj \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --settings coverlet.runsettings \
-            --collect:"XPlat Code Coverage" \
-            --logger "trx;LogFileName=HomeBudget.Accounting.Api.Tests.trx" \
-            --results-directory test-results/api/HomeBudget.Accounting.Api.Tests
-
-          dotnet test HomeBudget.Accounting.Api.IntegrationTests/HomeBudget.Accounting.Api.IntegrationTests.csproj \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --settings coverlet.runsettings \
-            --collect:"XPlat Code Coverage" \
-            --logger "trx;LogFileName=HomeBudget.Accounting.Api.IntegrationTests.trx" \
-            --results-directory test-results/api/HomeBudget.Accounting.Api.IntegrationTests
-
-      - name: Run workers tests with coverage
-        id: workers-tests
-        timeout-minutes: 20
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p test-results/workers
-
-          dotnet test HomeBudget.Components.Categories.Tests/HomeBudget.Components.Categories.Tests.csproj \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --settings coverlet.runsettings \
-            --collect:"XPlat Code Coverage" \
-            --logger "trx;LogFileName=HomeBudget.Components.Categories.Tests.trx" \
-            --results-directory test-results/workers/HomeBudget.Components.Categories.Tests
-
-          dotnet test HomeBudget.Components.Operations.Tests/HomeBudget.Components.Operations.Tests.csproj \
-            --configuration Release \
-            --no-build \
-            --no-restore \
-            --settings coverlet.runsettings \
-            --collect:"XPlat Code Coverage" \
-            --logger "trx;LogFileName=HomeBudget.Components.Operations.Tests.trx" \
-            --results-directory test-results/workers/HomeBudget.Components.Operations.Tests
 
       - name: Merge API coverage reports
         id: merge-api-coverage
@@ -193,13 +347,8 @@ jobs:
           set -euo pipefail
           mkdir -p test-results/api-coverage
 
-          if ! find test-results/api -name 'coverage.cobertura.xml' -print -quit | grep -q .; then
-            echo "::error::No API coverage files were found under test-results/api."
-            exit 1
-          fi
-
           reportgenerator \
-            -reports:"test-results/api/**/coverage.cobertura.xml" \
+            -reports:"artifacts/unit/HomeBudget.Accounting.Api.Tests/**/coverage.cobertura.xml;artifacts/integration/HomeBudget.Accounting.Api.IntegrationTests/**/coverage.cobertura.xml" \
             -targetdir:"test-results/api-coverage" \
             -reporttypes:"Cobertura;SonarQube;MarkdownSummary;TextSummary" \
             -verbosity:Info
@@ -214,13 +363,8 @@ jobs:
           set -euo pipefail
           mkdir -p test-results/workers-coverage
 
-          if ! find test-results/workers -name 'coverage.cobertura.xml' -print -quit | grep -q .; then
-            echo "::error::No workers coverage files were found under test-results/workers."
-            exit 1
-          fi
-
           reportgenerator \
-            -reports:"test-results/workers/**/coverage.cobertura.xml" \
+            -reports:"artifacts/unit/HomeBudget.Components.Categories.Tests/**/coverage.cobertura.xml;artifacts/unit/HomeBudget.Components.Operations.Tests/**/coverage.cobertura.xml" \
             -targetdir:"test-results/workers-coverage" \
             -reporttypes:"Cobertura;SonarQube;MarkdownSummary;TextSummary" \
             -verbosity:Info
@@ -245,20 +389,21 @@ jobs:
           test -f test-results/merged-coverage/SonarQube.xml
 
       - name: Show merged coverage files
-        id: verify-coverage
         shell: bash
         run: |
           set -euo pipefail
           printf 'Resolved coverage outputs:\n'
           find test-results -maxdepth 2 \( -name 'SonarQube.xml' -o -name 'Cobertura.xml' -o -name 'Summary.txt' -o -name '*.trx' \) -print | sort
 
-      - name: Upload CI diagnostics
+      - name: Upload merged quality diagnostics
         id: upload-diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
-          name: ci-test-results
-          path: test-results/
+          name: ci-merged-quality-results
+          path: |
+            test-results/
+            artifacts/
           if-no-files-found: warn
           retention-days: 14
 
@@ -272,15 +417,12 @@ jobs:
         id: collect-status
         if: ${{ always() }}
         env:
-          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-          API_TESTS_OUTCOME: ${{ steps.api-tests.outcome }}
-          WORKERS_TESTS_OUTCOME: ${{ steps.workers-tests.outcome }}
           API_MERGE_OUTCOME: ${{ steps.merge-api-coverage.outcome }}
           WORKERS_MERGE_OUTCOME: ${{ steps.merge-workers-coverage.outcome }}
           FINAL_MERGE_OUTCOME: ${{ steps.merge-final-coverage.outcome }}
           DIAGNOSTICS_UPLOAD_OUTCOME: ${{ steps.upload-diagnostics.outcome }}
           SONAR_BEGIN_OUTCOME: ${{ steps.sonar-begin.outcome }}
+          SONAR_BUILD_OUTCOME: ${{ steps.sonar-build.outcome }}
           SONAR_END_OUTCOME: ${{ steps.sonar-end.outcome }}
         shell: bash
         run: |
@@ -295,10 +437,6 @@ jobs:
             cobertura_report_exists="true"
           fi
 
-          echo "restore_outcome=${RESTORE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
-          echo "build_outcome=${BUILD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
-          echo "api_tests_outcome=${API_TESTS_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
-          echo "workers_tests_outcome=${WORKERS_TESTS_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "api_merge_outcome=${API_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "workers_merge_outcome=${WORKERS_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "final_merge_outcome=${FINAL_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
@@ -306,6 +444,7 @@ jobs:
           echo "cobertura_report_exists=${cobertura_report_exists}" >> "$GITHUB_OUTPUT"
           echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "sonar_begin_outcome=${SONAR_BEGIN_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
+          echo "sonar_build_outcome=${SONAR_BUILD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "sonar_end_outcome=${SONAR_END_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
 
   publish-ci-summary:
@@ -314,7 +453,10 @@ jobs:
     if: ${{ always() }}
     needs:
       - determine-sonar-mode
-      - validate-test-and-analyze
+      - validate-application-build
+      - run-unit-and-component-tests
+      - run-api-integration-tests
+      - analyze-master-quality
     steps:
       - name: Write workflow summary
         shell: bash
@@ -324,19 +466,20 @@ jobs:
             echo
             echo "- Sonar enabled: ${{ needs.determine-sonar-mode.outputs.sonar_enabled }}"
             echo "- Sonar reason: ${{ needs.determine-sonar-mode.outputs.sonar_reason }}"
-            echo "- Restore: ${{ needs.validate-test-and-analyze.outputs.restore_outcome }}"
-            echo "- Build: ${{ needs.validate-test-and-analyze.outputs.build_outcome }}"
-            echo "- API tests: ${{ needs.validate-test-and-analyze.outputs.api_tests_outcome }}"
-            echo "- Workers tests: ${{ needs.validate-test-and-analyze.outputs.workers_tests_outcome }}"
-            echo "- API coverage merge: ${{ needs.validate-test-and-analyze.outputs.api_merge_outcome }}"
-            echo "- Workers coverage merge: ${{ needs.validate-test-and-analyze.outputs.workers_merge_outcome }}"
-            echo "- Final coverage merge: ${{ needs.validate-test-and-analyze.outputs.final_merge_outcome }}"
-            echo "- Final Sonar coverage report present: ${{ needs.validate-test-and-analyze.outputs.sonar_report_exists }}"
-            echo "- Final Cobertura report present: ${{ needs.validate-test-and-analyze.outputs.cobertura_report_exists }}"
-            echo "- Final Sonar report path: test-results/merged-coverage/SonarQube.xml"
-            echo "- Final Cobertura report path: test-results/merged-coverage/Cobertura.xml"
-            echo "- Diagnostics upload: ${{ needs.validate-test-and-analyze.outputs.diagnostics_upload_outcome }}"
-            echo "- Sonar begin: ${{ needs.validate-test-and-analyze.outputs.sonar_begin_outcome }}"
-            echo "- Sonar end: ${{ needs.validate-test-and-analyze.outputs.sonar_end_outcome }}"
-            echo "- Main analysis job result: ${{ needs.validate-test-and-analyze.result }}"
+            echo "- Restore: ${{ needs.validate-application-build.outputs.restore_outcome }}"
+            echo "- Build validation: ${{ needs.validate-application-build.outputs.build_outcome }}"
+            echo "- Unit and component tests: ${{ needs.run-unit-and-component-tests.outputs.tests_outcome }}"
+            echo "- Unit diagnostics upload: ${{ needs.run-unit-and-component-tests.outputs.diagnostics_upload_outcome }}"
+            echo "- Integration tests: ${{ needs.run-api-integration-tests.outputs.tests_outcome }}"
+            echo "- Integration diagnostics upload: ${{ needs.run-api-integration-tests.outputs.diagnostics_upload_outcome }}"
+            echo "- Analysis job result: ${{ needs.analyze-master-quality.result }}"
+            echo "- API coverage merge: ${{ needs.analyze-master-quality.outputs.api_merge_outcome }}"
+            echo "- Workers coverage merge: ${{ needs.analyze-master-quality.outputs.workers_merge_outcome }}"
+            echo "- Final coverage merge: ${{ needs.analyze-master-quality.outputs.final_merge_outcome }}"
+            echo "- Final Sonar coverage report present: ${{ needs.analyze-master-quality.outputs.sonar_report_exists }}"
+            echo "- Final Cobertura report present: ${{ needs.analyze-master-quality.outputs.cobertura_report_exists }}"
+            echo "- Merged diagnostics upload: ${{ needs.analyze-master-quality.outputs.diagnostics_upload_outcome }}"
+            echo "- Sonar begin: ${{ needs.analyze-master-quality.outputs.sonar_begin_outcome }}"
+            echo "- Sonar build: ${{ needs.analyze-master-quality.outputs.sonar_build_outcome }}"
+            echo "- Sonar end: ${{ needs.analyze-master-quality.outputs.sonar_end_outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
