@@ -124,9 +124,17 @@ jobs:
       - name: Push tag
         if: steps.tag_check.outputs.exists != 'true'
         shell: bash
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
-          git push origin "${{ steps.version.outputs.tag }}"
+
+          if [[ -z "${GH_PAT}" ]]; then
+            echo "::error::GH_PAT secret is not configured."
+            exit 1
+          fi
+
+          git push "https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git" "refs/tags/${{ steps.version.outputs.tag }}"
 
       - name: Create GitHub Release
         if: steps.tag_check.outputs.exists != 'true'
@@ -140,6 +148,13 @@ jobs:
       - name: Summary
         shell: bash
         run: |
+          set -euo pipefail
+
+          LAST_TAG="${{ steps.version.outputs.last_tag }}"
+          if [[ -z "$LAST_TAG" ]]; then
+            LAST_TAG="none"
+          fi
+
           {
             if [[ "${{ steps.tag_check.outputs.exists }}" == "true" ]]; then
               echo "## Semver update skipped"
@@ -148,7 +163,7 @@ jobs:
             else
               echo "## Semver update complete"
               echo ""
-              echo "- Previous tag: \`${{ steps.version.outputs.last_tag || 'none' }}\`"
+              echo "- Previous tag: \`${LAST_TAG}\`"
               echo "- Bump: \`${{ steps.version.outputs.bump }}\`"
               echo "- New tag: \`${{ steps.version.outputs.tag }}\`"
               echo "- Release notes: generated automatically"
