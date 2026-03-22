@@ -343,15 +343,12 @@ jobs:
             const apiPushResult = '${{ needs.push-api-image.result }}';
             const workerPushResult = '${{ needs.push-worker-image.result }}';
             const metadataResult = '${{ needs.publish-release-metadata.result }}';
+
             const isSuccess =
               apiPushResult === 'success' &&
               workerPushResult === 'success' &&
               metadataResult === 'success';
 
-            const apiImageRef = '${{ needs.push-api-image.outputs.image_ref }}';
-            const apiImageDigest = '${{ needs.push-api-image.outputs.image_digest }}';
-            const workerImageRef = '${{ needs.push-worker-image.outputs.image_ref }}';
-            const workerImageDigest = '${{ needs.push-worker-image.outputs.image_digest }}';
             const state = isSuccess ? 'success' : 'failure';
             let failureStage = 'metadata publication';
 
@@ -362,7 +359,7 @@ jobs:
             }
 
             const description = isSuccess
-              ? `Released ${releaseTag} as ${apiImageRef}@${apiImageDigest} and ${workerImageRef}@${workerImageDigest}`
+              ? `Released ${releaseTag}: API and worker images published`
               : `Release ${releaseTag} failed during ${failureStage}`;
 
             const payload = {
@@ -370,7 +367,8 @@ jobs:
               repo: context.repo.repo,
               deployment_id: Number('${{ needs.create-deployment.outputs.deployment_id }}'),
               state,
-              description
+              description,
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             };
 
             if (isSuccess) {
