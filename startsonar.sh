@@ -5,7 +5,8 @@ SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-allmantool}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-Allmantool_h-budget-accounting-api}"
 SONAR_PROJECT_NAME="${SONAR_PROJECT_NAME:-h-budget-accounting-api}"
 SONAR_GITHUB_REPOSITORY="${SONAR_GITHUB_REPOSITORY:-${GITHUB_REPOSITORY:-Allmantool/h-budget.HomeBudget.AccountingApi}}"
-COVERAGE_FILE="${COVERAGE_FILE:-test-results/merged-coverage/SonarQube.xml}"
+OPENCOVER_REPORTS_PATH="${OPENCOVER_REPORTS_PATH:-}"
+COVERAGE_FILE="${COVERAGE_FILE:-}"
 TEST_RESULTS_PATH="${TEST_RESULTS_PATH:-test-results/**/*.trx}"
 
 sanitize_csv_property() {
@@ -42,6 +43,7 @@ SONAR_COVERAGE_EXCLUSIONS_SANITIZED="$(sanitize_csv_property "${SONAR_COVERAGE_E
 echo "DEBUG: SONAR_PROJECT_KEY='${SONAR_PROJECT_KEY}'"
 echo "DEBUG: SONAR_PROJECT_NAME='${SONAR_PROJECT_NAME}'"
 echo "DEBUG: SONAR_GITHUB_REPOSITORY='${SONAR_GITHUB_REPOSITORY}'"
+echo "DEBUG: OPENCOVER_REPORTS_PATH='${OPENCOVER_REPORTS_PATH}'"
 echo "DEBUG: COVERAGE_FILE='${COVERAGE_FILE}'"
 echo "DEBUG: TEST_RESULTS_PATH='${TEST_RESULTS_PATH}'"
 
@@ -54,6 +56,10 @@ scanner_args=(
     /d:sonar.token="${SONAR_TOKEN}"
     /d:sonar.host.url="https://sonarcloud.io"
 )
+
+if [[ -n "${OPENCOVER_REPORTS_PATH}" ]]; then
+    scanner_args+=("/d:sonar.cs.opencover.reportsPaths=${OPENCOVER_REPORTS_PATH}")
+fi
 
 if [[ -n "${COVERAGE_FILE}" ]]; then
     scanner_args+=("/d:sonar.coverageReportPaths=${COVERAGE_FILE}")
