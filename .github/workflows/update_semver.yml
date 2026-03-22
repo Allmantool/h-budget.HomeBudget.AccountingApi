@@ -25,6 +25,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
 
       - name: Configure Git
         shell: bash
@@ -125,17 +126,16 @@ jobs:
         if: steps.tag_check.outputs.exists != 'true'
         shell: bash
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+          PAT_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${GH_PAT}" ]]; then
-            echo "::error::GH_PAT secret is not configured."
+          if [[ -z "${PAT_TOKEN}" ]]; then
+            echo "::error::PAT_TOKEN secret is not configured."
             exit 1
           fi
 
-          git push "https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git" "refs/tags/${{ steps.version.outputs.tag }}"
-
+          git push "https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git" "refs/tags/${{ steps.version.outputs.tag }}"
       - name: Create GitHub Release
         if: steps.tag_check.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
