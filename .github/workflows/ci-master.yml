@@ -24,8 +24,8 @@ concurrency:
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  SONAR_PROJECT_KEY: Allmantool_h-budget-accounting-api
-  SONAR_PROJECT_NAME: h-budget-accounting-api
+  SONAR_PROJECT_KEY: Allmantool_h-budget-accounting
+  SONAR_PROJECT_NAME: h-budget-accounting
   SONAR_GITHUB_REPOSITORY: Allmantool/h-budget.HomeBudget.AccountingApi
 
 jobs:
