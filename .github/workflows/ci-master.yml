@@ -257,7 +257,7 @@ jobs:
       api_merge_outcome: ${{ steps.collect-status.outputs.api_merge_outcome }}
       workers_merge_outcome: ${{ steps.collect-status.outputs.workers_merge_outcome }}
       final_merge_outcome: ${{ steps.collect-status.outputs.final_merge_outcome }}
-      sonar_report_exists: ${{ steps.collect-status.outputs.sonar_report_exists }}
+      opencover_inputs_exist: ${{ steps.collect-status.outputs.opencover_inputs_exist }}
       cobertura_report_exists: ${{ steps.collect-status.outputs.cobertura_report_exists }}
       diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
       sonar_begin_outcome: ${{ steps.collect-status.outputs.sonar_begin_outcome }}
@@ -329,7 +329,7 @@ jobs:
           PULL_REQUEST_ID: ${{ github.event.pull_request.number }}
           PULL_REQUEST_SOURCE_BRANCH: ${{ github.head_ref }}
           PULL_REQUEST_TARGET_BRANCH: ${{ github.base_ref }}
-          COVERAGE_FILE: test-results/merged-coverage/SonarQube.xml
+          OPENCOVER_REPORTS_PATH: artifacts/**/coverage.opencover.xml
           TEST_RESULTS_PATH: artifacts/**/*.trx
           SONAR_EXCLUSIONS: test-results/**,artifacts/**
           SONAR_COVERAGE_EXCLUSIONS: "**/Test[s]/**/*"
@@ -348,13 +348,12 @@ jobs:
           mkdir -p test-results/api-coverage
 
           reportgenerator \
-            -reports:"artifacts/unit/HomeBudget.Accounting.Api.Tests/**/coverage.cobertura.xml;artifacts/integration/HomeBudget.Accounting.Api.IntegrationTests/**/coverage.cobertura.xml" \
+            -reports:"artifacts/unit/HomeBudget.Accounting.Api.Tests/**/coverage.opencover.xml;artifacts/integration/HomeBudget.Accounting.Api.IntegrationTests/**/coverage.opencover.xml" \
             -targetdir:"test-results/api-coverage" \
-            -reporttypes:"Cobertura;SonarQube;MarkdownSummary;TextSummary" \
+            -reporttypes:"Cobertura;MarkdownSummary;TextSummary" \
             -verbosity:Info
 
           test -f test-results/api-coverage/Cobertura.xml
-          test -f test-results/api-coverage/SonarQube.xml
 
       - name: Merge workers coverage reports
         id: merge-workers-coverage
@@ -364,15 +363,14 @@ jobs:
           mkdir -p test-results/workers-coverage
 
           reportgenerator \
-            -reports:"artifacts/unit/HomeBudget.Components.Categories.Tests/**/coverage.cobertura.xml;artifacts/unit/HomeBudget.Components.Operations.Tests/**/coverage.cobertura.xml" \
+            -reports:"artifacts/unit/HomeBudget.Components.Categories.Tests/**/coverage.opencover.xml;artifacts/unit/HomeBudget.Components.Operations.Tests/**/coverage.opencover.xml" \
             -targetdir:"test-results/workers-coverage" \
-            -reporttypes:"Cobertura;SonarQube;MarkdownSummary;TextSummary" \
+            -reporttypes:"Cobertura;MarkdownSummary;TextSummary" \
             -verbosity:Info
 
           test -f test-results/workers-coverage/Cobertura.xml
-          test -f test-results/workers-coverage/SonarQube.xml
 
-      - name: Merge final coverage for Sonar
+      - name: Merge final coverage diagnostics
         id: merge-final-coverage
         shell: bash
         run: |
@@ -382,18 +380,38 @@ jobs:
           reportgenerator \
             -reports:"test-results/api-coverage/Cobertura.xml;test-results/workers-coverage/Cobertura.xml" \
             -targetdir:"test-results/merged-coverage" \
-            -reporttypes:"Cobertura;SonarQube;MarkdownSummary;TextSummary" \
+            -reporttypes:"Cobertura;MarkdownSummary;TextSummary" \
             -verbosity:Info
 
           test -f test-results/merged-coverage/Cobertura.xml
-          test -f test-results/merged-coverage/SonarQube.xml
+
+      - name: Verify OpenCover paths for Sonar are local
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t opencover_reports < <(find artifacts -name 'coverage.opencover.xml' -print | sort)
+
+          if [[ "${#opencover_reports[@]}" -eq 0 ]]; then
+            echo 'No OpenCover reports were downloaded for Sonar.'
+            exit 1
+          fi
+
+          if grep -q 'raw.githubusercontent.com' "${opencover_reports[@]}"; then
+            echo 'OpenCover reports still contain SourceLink URLs.'
+            exit 1
+          fi
+
+          printf 'Sample OpenCover source paths:\n'
+          grep -h -o 'fullPath="[^"]*"' "${opencover_reports[@]}" | head -n 10
 
       - name: Show merged coverage files
         shell: bash
         run: |
           set -euo pipefail
-          printf 'Resolved coverage outputs:\n'
-          find test-results -maxdepth 2 \( -name 'SonarQube.xml' -o -name 'Cobertura.xml' -o -name 'Summary.txt' -o -name '*.trx' \) -print | sort
+          printf 'Resolved OpenCover inputs for Sonar:\n'
+          find artifacts -name 'coverage.opencover.xml' -print | sort
+          printf '\nResolved merged coverage outputs:\n'
+          find test-results -maxdepth 2 \( -name 'Cobertura.xml' -o -name 'Summary.txt' -o -name '*.trx' \) -print | sort
 
       - name: Upload merged quality diagnostics
         id: upload-diagnostics
@@ -426,11 +444,11 @@ jobs:
           SONAR_END_OUTCOME: ${{ steps.sonar-end.outcome }}
         shell: bash
         run: |
-          sonar_report_exists="false"
+          opencover_inputs_exist="false"
           cobertura_report_exists="false"
 
-          if [[ -f "test-results/merged-coverage/SonarQube.xml" ]]; then
-            sonar_report_exists="true"
+          if find artifacts -name 'coverage.opencover.xml' -print -quit | grep -q .; then
+            opencover_inputs_exist="true"
           fi
 
           if [[ -f "test-results/merged-coverage/Cobertura.xml" ]]; then
@@ -440,7 +458,7 @@ jobs:
           echo "api_merge_outcome=${API_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "workers_merge_outcome=${WORKERS_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "final_merge_outcome=${FINAL_MERGE_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
-          echo "sonar_report_exists=${sonar_report_exists}" >> "$GITHUB_OUTPUT"
+          echo "opencover_inputs_exist=${opencover_inputs_exist}" >> "$GITHUB_OUTPUT"
           echo "cobertura_report_exists=${cobertura_report_exists}" >> "$GITHUB_OUTPUT"
           echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
           echo "sonar_begin_outcome=${SONAR_BEGIN_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
@@ -476,7 +494,7 @@ jobs:
             echo "- API coverage merge: ${{ needs.analyze-master-quality.outputs.api_merge_outcome }}"
             echo "- Workers coverage merge: ${{ needs.analyze-master-quality.outputs.workers_merge_outcome }}"
             echo "- Final coverage merge: ${{ needs.analyze-master-quality.outputs.final_merge_outcome }}"
-            echo "- Final Sonar coverage report present: ${{ needs.analyze-master-quality.outputs.sonar_report_exists }}"
+            echo "- OpenCover inputs present for Sonar: ${{ needs.analyze-master-quality.outputs.opencover_inputs_exist }}"
             echo "- Final Cobertura report present: ${{ needs.analyze-master-quality.outputs.cobertura_report_exists }}"
             echo "- Merged diagnostics upload: ${{ needs.analyze-master-quality.outputs.diagnostics_upload_outcome }}"
             echo "- Sonar begin: ${{ needs.analyze-master-quality.outputs.sonar_begin_outcome }}"
