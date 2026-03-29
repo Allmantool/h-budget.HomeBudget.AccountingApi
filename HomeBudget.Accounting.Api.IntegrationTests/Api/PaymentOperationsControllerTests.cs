@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -29,6 +30,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     public class PaymentOperationsControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
+        private static readonly TimeSpan HistoryProjectionTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan HistoryPollInterval = TimeSpan.FromMilliseconds(500);
 
         private readonly OperationsTestWebApp _sut = new();
         private RestClient _restClient;
@@ -281,14 +284,42 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var response = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
-            response.Data.IsSucceeded.Should().BeFalse();
+            Assert.Multiple(() =>
+            {
+                response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+                response.Data.IsSucceeded.Should().BeFalse(DescribeResponse(response));
+                response.Data.StatusMessage.Should().Contain(missingOperationId.ToString(), DescribeResponse(response));
+                response.Data.StatusMessage.Should().Contain(accountId.ToString(), DescribeResponse(response));
+            });
         }
 
         [Test]
         public async Task Update_WithValid_ThenSuccessful()
         {
-            const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
-            const string accountId = "92e8c2b2-97d9-4d6d-a9b7-48cb0d039a84";
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+
+            var createCategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"{nameof(Update_WithValid_ThenSuccessful)}-seed");
+            var createRequestBody = new CreateOperationRequest
+            {
+                Amount = 12.34m,
+                Comment = "seed-operation",
+                CategoryId = createCategoryId.Payload,
+                ContractorId = Guid.NewGuid().ToString(),
+                OperationDate = new DateOnly(2024, 1, 6)
+            };
+
+            var createOperationRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                .AddJsonBody(createRequestBody);
+
+            var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(
+                createOperationRequest,
+                executionDelayAfterInMs: 1000);
+
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+            var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+            var seededOperation = await WaitForHistoryRecordAsync(accountId, operationId);
 
             var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithValid_ThenSuccessful));
 
@@ -303,11 +334,35 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = await _sut.RestHttpClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            var response = await _sut.RestHttpClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
 
             var result = response.Data;
 
-            result.IsSucceeded.Should().BeTrue();
+            Assert.Multiple(() =>
+            {
+                response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+                result.IsSucceeded.Should().BeTrue(DescribeResponse(response));
+                result.StatusMessage.Should().BeNullOrEmpty(DescribeResponse(response));
+                result.Payload.PaymentAccountId.Should().Be(accountId.ToString(), DescribeResponse(response));
+                result.Payload.PaymentOperationId.Should().Be(operationId.ToString(), DescribeResponse(response));
+                seededOperation.Record.PaymentAccountId.Should().Be(accountId);
+                seededOperation.Record.Key.Should().Be(operationId);
+            });
+
+            var updatedOperation = await WaitForHistoryRecordAsync(
+                accountId,
+                operationId,
+                record => record.Record.Amount == requestBody.Amount &&
+                          record.Record.Comment == requestBody.Comment &&
+                          record.Record.CategoryId == Guid.Parse(requestBody.CategoryId));
+
+            Assert.Multiple(() =>
+            {
+                updatedOperation.Record.PaymentAccountId.Should().Be(accountId);
+                updatedOperation.Record.Key.Should().Be(operationId);
+                updatedOperation.Record.Amount.Should().Be(requestBody.Amount);
+                updatedOperation.Record.Comment.Should().Be(requestBody.Comment);
+            });
         }
 
         [Test]
@@ -330,7 +385,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestCreateBody);
 
             var saveResponseResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 1000);
-            var justCreatedOperationId = saveResponseResult.Data?.Payload.PaymentOperationId;
+            saveResponseResult.IsSuccessful.Should().BeTrue(DescribeResponse(saveResponseResult));
+            saveResponseResult.Data.IsSucceeded.Should().BeTrue(DescribeResponse(saveResponseResult));
+
+            var justCreatedOperationId = Guid.Parse(saveResponseResult.Data.Payload.PaymentOperationId);
+            await WaitForHistoryRecordAsync(accountId, justCreatedOperationId);
 
             var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
 
@@ -346,7 +405,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{justCreatedOperationId}", Method.Patch)
                 .AddJsonBody(requestUpdateBody);
 
-            await _restClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation, executionDelayAfterInMs: 8_000);
+            var updateResponse = await _restClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(patchUpdateOperation, executionDelayAfterInMs: 8_000);
+
+            Assert.Multiple(() =>
+            {
+                updateResponse.IsSuccessful.Should().BeTrue(DescribeResponse(updateResponse));
+                updateResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(updateResponse));
+                updateResponse.Data.StatusMessage.Should().BeNullOrEmpty(DescribeResponse(updateResponse));
+            });
 
             var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
 
@@ -371,6 +437,70 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest, executionDelayBeforeInMs: 5000);
 
             return getResponse.Data.Payload;
+        }
+
+        private async Task<PaymentOperationHistoryRecordResponse> WaitForHistoryRecordAsync(
+            Guid paymentAccountId,
+            Guid operationId,
+            Func<PaymentOperationHistoryRecordResponse, bool> condition = null,
+            CancellationToken cancellationToken = default)
+        {
+            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
+            PaymentOperationHistoryRecordResponse lastRecord = null;
+            Exception lastException = null;
+
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    lastRecord = await GetHistoryRecordAsync(paymentAccountId, operationId);
+
+                    if (lastRecord is not null && (condition == null || condition(lastRecord)))
+                    {
+                        return lastRecord;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+
+                await Task.Delay(HistoryPollInterval, cancellationToken);
+            }
+
+            var snapshot = lastRecord is null
+                ? "<missing>"
+                : $"{lastRecord.Record.Key}:{lastRecord.Record.OperationDay:yyyy-MM-dd}:{lastRecord.Record.Amount}:{lastRecord.Balance}";
+
+            Assert.Fail(
+                $"Payment history record '{operationId}' for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
+
+            return lastRecord;
+        }
+
+        private async Task<PaymentOperationHistoryRecordResponse> GetHistoryRecordAsync(Guid paymentAccountId, Guid operationId)
+        {
+            var request = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}/byId/{operationId}");
+            var response = await _restClient.ExecuteAsync<Result<PaymentOperationHistoryRecordResponse>>(request);
+
+            if (!response.IsSuccessful || response.Data?.Payload == null)
+            {
+                return null;
+            }
+
+            return response.Data.Payload;
+        }
+
+        private static string DescribeResponse<T>(RestResponse<Result<T>> response)
+        {
+            if (response == null)
+            {
+                return "Response was null.";
+            }
+
+            return $"HTTP {(int)response.StatusCode} {response.StatusCode}, transport-success={response.IsSuccessful}, rest-error='{response.ErrorMessage}', domain-success={response.Data?.IsSucceeded}, status='{response.Data?.StatusMessage}', content='{response.Content}'";
         }
 
         private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string category)
