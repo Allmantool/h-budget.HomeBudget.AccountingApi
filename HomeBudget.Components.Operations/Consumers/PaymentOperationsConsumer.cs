@@ -28,7 +28,7 @@ namespace HomeBudget.Components.Operations.Consumers
         ILogger<PaymentOperationsConsumer> logger,
         IDateTimeProvider dateTimeProvider,
         IServiceScopeFactory scopeFactory,
-        Channel<PaymentOperationEvent> paymentEventsChannel,
+        Channel<ActivityEnvelope<PaymentOperationEvent>> paymentEventsChannel,
         IOptions<KafkaOptions> kafkaOptions)
         : BaseKafkaConsumer<string, string>(EnrichConsumerOptions(kafkaOptions.Value), logger)
     {
@@ -159,7 +159,9 @@ namespace HomeBudget.Components.Operations.Consumers
                         outboxPaymentStatusService.SetStatus(partitionKey, OutboxStatus.Published);
                         activity?.AddEvent(ActivityEvents.KafkaConsumed);
 
-                        await paymentEventsChannel.Writer.WriteAsync(paymentEvent);
+                        await paymentEventsChannel.Writer.WriteAsync(
+                            ActivityEnvelope<PaymentOperationEvent>.Capture(paymentEvent),
+                            cancellationToken);
                     }
                     catch (JsonException ex)
                     {

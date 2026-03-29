@@ -101,6 +101,52 @@ public static class TraceContextPropagation
             .ToArray();
     }
 
+    public static ActivityContext[] ExtractContexts(IEnumerable<IReadOnlyDictionary<string, string>> carriers)
+    {
+        if (carriers is null)
+        {
+            return [];
+        }
+
+        return carriers
+            .Select(Extract)
+            .Select(pc => pc.ActivityContext)
+            .Where(context => context != default)
+            .Distinct()
+            .ToArray();
+    }
+
+    public static (ActivityContext ParentContext, ActivityLink[] Links) ResolveParentAndLinks(
+        IEnumerable<IReadOnlyDictionary<string, string>> carriers)
+        => ResolveParentAndLinks(ExtractContexts(carriers));
+
+    public static (ActivityContext ParentContext, ActivityLink[] Links) ResolveParentAndLinks(
+        IEnumerable<ActivityContext> contexts)
+    {
+        if (contexts is null)
+        {
+            return (default, []);
+        }
+
+        var orderedContexts = contexts
+            .Where(context => context != default)
+            .Distinct()
+            .ToArray();
+
+        if (orderedContexts.Length == 0)
+        {
+            return (default, []);
+        }
+
+        var parentContext = orderedContexts[0];
+        var links = orderedContexts
+            .Skip(1)
+            .Select(context => new ActivityLink(context))
+            .ToArray();
+
+        return (parentContext, links);
+    }
+
     public static BaggageScope UseExtractedBaggage(PropagationContext propagationContext)
     {
         var previous = OpenTelemetry.Baggage.Current;

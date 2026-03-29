@@ -16,7 +16,6 @@ using Serilog.Context;
 
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
@@ -39,8 +38,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly ILogger<PaymentOperationsEventStoreSubscriptionReadClient> _logger;
-        private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
-        private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
+        private readonly ConcurrentDictionary<string, ProjectionBatchContext> _latestEventsPerAccount = new();
+        private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsBuffer;
         private readonly EventStoreDbOptions _opts;
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
@@ -83,7 +82,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         {
             try
             {
-                await _paymentEventsBuffer.Writer.WriteAsync(eventData, _cts.Token);
+                await _paymentEventsBuffer.Writer.WriteAsync(
+                    ActivityEnvelope<PaymentOperationEvent>.Capture(eventData),
+                    _cts.Token);
             }
             catch (ChannelClosedException)
             {
@@ -103,7 +104,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             {
                 while (_paymentEventsBuffer.Reader.TryRead(out var evt))
                 {
-                    _latestEventsPerAccount[evt.Payload.GetMonthPeriodPaymentAccountIdentifier()] = evt;
+                    var periodKey = evt.Item.Payload.GetMonthPeriodPaymentAccountIdentifier();
+                    _latestEventsPerAccount.AddOrUpdate(
+                        periodKey,
+                        _ => ProjectionBatchContext.Create(evt),
+                        (_, existing) =>
+                        {
+                            existing.LatestEvent = evt.Item;
+                            existing.PropagationCarriers.Add(evt.PropagationCarrier);
+                            return existing;
+                        });
                 }
 
                 if (delayMs > 0)
@@ -121,7 +131,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 {
                     try
                     {
-                        await HandlePaymentOperationEventAsync(latestEvent.Payload, _cts.Token);
+                        await HandlePaymentOperationEventAsync(latestEvent, _cts.Token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -139,8 +149,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
-        private async Task HandlePaymentOperationEventAsync(FinancialTransaction transaction, CancellationToken ct)
+        private async Task HandlePaymentOperationEventAsync(ProjectionBatchContext projectionBatch, CancellationToken ct)
         {
+            var transaction = projectionBatch.LatestEvent.Payload;
             var accountId = transaction.PaymentAccountId;
             var monthPeriodPaymentAccountIdentifier = transaction.GetMonthPeriodPaymentAccountIdentifier();
 
@@ -172,26 +183,39 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 var baggage = firstEvent?.Metadata.Get(EventMetadataKeys.Baggage);
                 var messageId = firstEvent?.Metadata.Get(EventMetadataKeys.MessageId);
                 var propagationContext = TraceContextPropagation.Extract(
-                    TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
-                var links = TraceContextPropagation.CreateLinks(
+                    projectionBatch.PropagationCarriers.FirstOrDefault()
+                    ?? TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
+                var storedEventContexts = TraceContextPropagation.ExtractContexts(
                     events.Select(ev => (IReadOnlyDictionary<string, string>)TraceContextPropagation.BuildCarrier(
                         ev.Metadata.Get(EventMetadataKeys.TraceParent),
                         ev.Metadata.Get(EventMetadataKeys.TraceState),
                         ev.Metadata.Get(EventMetadataKeys.Baggage))));
+                var consumedEventContexts = TraceContextPropagation.ExtractContexts(projectionBatch.PropagationCarriers);
+                var parentContext = consumedEventContexts.FirstOrDefault();
+
+                if (parentContext == default)
+                {
+                    parentContext = storedEventContexts.FirstOrDefault();
+                }
+
+                var links = consumedEventContexts
+                    .Concat(storedEventContexts)
+                    .Where(context => context != default && context != parentContext)
+                    .Distinct()
+                    .Select(context => new ActivityLink(context))
+                    .ToArray();
 
                 using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                 using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
+                using (LogContext.PushProperty("projection_name", "sync_operations_history"))
+                using (LogContext.PushProperty("stream_id", paymentAccountStream))
+                using (LogContext.PushProperty("aggregate_id", accountId))
                 {
-                    using var activity = events.Count > 1
-                        ? ActivityPropagation.StartActivity(
-                            "mongodb.operations.history.sync",
-                            ActivityKind.Internal,
-                            default(ActivityContext),
-                            links)
-                        : ActivityPropagation.StartActivity(
-                            "mongodb.operations.history.sync",
-                            ActivityKind.Internal,
-                            propagationContext);
+                    using var activity = ActivityPropagation.StartActivity(
+                        "projection.sync_operations_history",
+                        ActivityKind.Internal,
+                        parentContext,
+                        links);
                     using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
                     var syncStopwatch = Stopwatch.StartNew();
 
@@ -202,6 +226,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                         activity.SetTag("messaging.stream", paymentAccountStream);
                         activity.SetTag("messaging.event_count", events.Count);
                         activity.SetTag("messaging.message_id", messageId);
+                        activity.SetTag("projection.name", "sync_operations_history");
+                        activity.SetAccount(accountId);
                     }
 
                     var oldestOccurredOn = events.Min(ev => ev.OccurredOn);
@@ -241,17 +267,18 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             _logger.DispatchingSync(paymentAccountId, events.Count());
 
-            // Continue the same correlation context inside the command
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
-            using (var activity = ActivityPropagation.StartActivity("mongodb.send_command", ActivityKind.Internal))
+            using (var activity = ActivityPropagation.StartActivity("mediatr.send.sync_operations_history", ActivityKind.Internal))
             {
                 if (activity != null && !events.IsNullOrEmpty())
                 {
                     var firstEvent = events.FirstOrDefault();
                     activity.SetCorrelationId(firstEvent?.Metadata.Get(EventMetadataKeys.CorrelationId));
-                    activity.SetTag("messaging.system", "mongodb");
+                    activity.SetTag("messaging.system", "eventstore");
                     activity.SetTag("messaging.event_count", events.Count());
                     activity.SetTag("messaging.message_id", firstEvent?.Metadata.Get(EventMetadataKeys.MessageId));
+                    activity.SetTag("projection.name", "sync_operations_history");
+                    activity.SetAccount(paymentAccountId);
                 }
 
                 await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);

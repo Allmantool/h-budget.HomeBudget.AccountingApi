@@ -44,5 +44,37 @@ namespace HomeBudget.Components.Operations.Tests.Observability
                 OpenTelemetry.Baggage.Current = previousBaggage;
             }
         }
+
+        [Test]
+        public void ResolveParentAndLinks_WhenMultipleCarriersProvided_ThenUsesFirstContextAsParentAndRestAsLinks()
+        {
+            using var activitySource = new ActivitySource("TraceContextPropagationTests.Resolve");
+            using var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == activitySource.Name,
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+            };
+
+            ActivitySource.AddActivityListener(listener);
+
+            using var first = activitySource.StartActivity("first", ActivityKind.Internal);
+            using var second = activitySource.StartActivity("second", ActivityKind.Internal);
+
+            var firstCarrier = TraceContextPropagation.Capture(first);
+            var secondCarrier = TraceContextPropagation.Capture(second);
+
+            var (parentContext, links) = TraceContextPropagation.ResolveParentAndLinks(
+                new[]
+                {
+                    new Dictionary<string, string>(firstCarrier),
+                    new Dictionary<string, string>(secondCarrier)
+                });
+
+            parentContext.TraceId.Should().Be(first!.TraceId);
+            parentContext.SpanId.Should().Be(first.SpanId);
+            links.Should().HaveCount(1);
+            links[0].Context.TraceId.Should().Be(second!.TraceId);
+            links[0].Context.SpanId.Should().Be(second.SpanId);
+        }
     }
 }

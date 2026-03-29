@@ -1,12 +1,14 @@
 ﻿using System.Threading.Channels;
+
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
 {
     internal static class PaymentOperationEventChannelFactory
     {
-        public static Channel<PaymentOperationEvent> CreateBufferChannel(EventStoreDbOptions opts)
+        public static Channel<ActivityEnvelope<PaymentOperationEvent>> CreateBufferChannel(EventStoreDbOptions opts)
         {
             var capacity = opts.ChannelCapacity > 0 ? opts.ChannelCapacity : 10000;
             var boundedOptions = new BoundedChannelOptions(capacity)
@@ -16,7 +18,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
                 FullMode = BoundedChannelFullMode.Wait
             };
 
-            return Channel.CreateBounded<PaymentOperationEvent>(boundedOptions);
+            return Channel.CreateBounded<ActivityEnvelope<PaymentOperationEvent>>(boundedOptions);
         }
     }
 }
