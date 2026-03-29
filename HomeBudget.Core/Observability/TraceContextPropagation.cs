@@ -9,11 +9,11 @@ namespace HomeBudget.Core.Observability;
 
 public static class TraceContextPropagation
 {
-    public const string TraceParent = "traceparent";
-    public const string TraceState = "tracestate";
-    public const string Baggage = "baggage";
+    public static readonly string TraceParent = "traceparent";
+    public static readonly string TraceState = "tracestate";
+    public static readonly string Baggage = "baggage";
 
-    private static readonly TextMapPropagator Propagator = new CompositeTextMapPropagator(
+    private static readonly CompositeTextMapPropagator Propagator = new CompositeTextMapPropagator(
     [
         new TraceContextPropagator(),
         new BaggagePropagator()
@@ -107,20 +107,5 @@ public static class TraceContextPropagation
         OpenTelemetry.Baggage.Current = propagationContext.Baggage;
 
         return new BaggageScope(previous);
-    }
-
-    public readonly struct BaggageScope : System.IDisposable
-    {
-        private readonly OpenTelemetry.Baggage _previous;
-
-        public BaggageScope(OpenTelemetry.Baggage previous)
-        {
-            _previous = previous;
-        }
-
-        public void Dispose()
-        {
-            OpenTelemetry.Baggage.Current = _previous;
-        }
     }
 }

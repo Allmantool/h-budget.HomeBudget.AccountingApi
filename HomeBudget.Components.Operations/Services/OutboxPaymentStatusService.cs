@@ -122,14 +122,5 @@ namespace HomeBudget.Components.Operations.Services
                 }
             });
         }
-
-        private sealed record OutboxStatusUpdateEntity : HomeBudget.Accounting.Infrastructure.Data.IDbEntity
-        {
-            public byte Status { get; init; }
-
-            public DateTime UpdatedAt { get; init; }
-
-            public string PartitionKey { get; init; }
-        }
     }
 }
