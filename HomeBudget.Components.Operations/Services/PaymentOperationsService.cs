@@ -96,14 +96,14 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!isPaymentAccountExist)
             {
-                return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment account '{paymentAccountId}' hasn't been found");
             }
 
             var currentOperationStateDocument = await paymentsHistoryDocumentsClient.GetByIdAsync(paymentAccountId, operationId);
 
             if (currentOperationStateDocument is null)
             {
-                return Result<Guid>.Failure($"The payment operation '{nameof(operationId)}' for account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment operation '{operationId}' for account '{paymentAccountId}' hasn't been found");
             }
 
             var currentOperaiton = currentOperationStateDocument.Payload;

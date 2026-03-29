@@ -260,6 +260,31 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task Update_WithMissingOperationForValidAccount_ThenFail()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+
+            var categoryIdResult = await SaveCategoryAsync(CategoryTypes.Income, nameof(Update_WithMissingOperationForValidAccount_ThenFail));
+
+            var requestBody = new UpdateOperationRequest
+            {
+                Amount = 100,
+                Comment = "Some description",
+                CategoryId = categoryIdResult.Payload,
+                ContractorId = Guid.NewGuid().ToString()
+            };
+
+            var missingOperationId = Guid.NewGuid();
+
+            var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{missingOperationId}", Method.Patch)
+                .AddJsonBody(requestBody);
+
+            var response = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
+
+            response.Data.IsSucceeded.Should().BeFalse();
+        }
+
+        [Test]
         public async Task Update_WithValid_ThenSuccessful()
         {
             const string operationId = "2adb60a8-6367-4b8b-afa0-4ff7f7b1c92c";
