@@ -64,13 +64,26 @@ namespace HomeBudget.Components.Operations.Services
 
             var documents = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
 
-            var operationForDelete = documents
-                .Where(op => op.Payload.Record.PaymentAccountId.CompareTo(paymentAccountId) == 0)
-                .SingleOrDefault(p => p.Payload.Record.Key.CompareTo(operationId) == 0);
+            var matches = documents
+                .Where(d => d.Payload.Record.PaymentAccountId == paymentAccountId && d.Payload.Record.Key == operationId)
+                .ToList();
 
-            return operationForDelete == null
-                ? Result<Guid>.Failure($"The operation '{operationId}' doesn't exist")
-                : await mediator.Send(new RemovePaymentOperationCommand(operationForDelete.Payload.Record), token);
+            if (matches.Count == 0)
+            {
+                return Result<Guid>.Failure($"The operation '{operationId}' doesn't exist");
+            }
+
+            if (matches.Count > 1)
+            {
+                return Result<Guid>.Failure(
+                    $"Duplicate payment operations were found for account '{paymentAccountId}' and operation '{operationId}'.");
+            }
+
+            var operationForDelete = matches[0];
+
+            return await mediator.Send(
+                new RemovePaymentOperationCommand(operationForDelete.Payload.Record),
+                token);
         }
 
         public async Task<Result<Guid>> UpdateAsync(
@@ -83,14 +96,14 @@ namespace HomeBudget.Components.Operations.Services
 
             if (!isPaymentAccountExist)
             {
-                return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment account '{paymentAccountId}' hasn't been found");
             }
 
             var currentOperationStateDocument = await paymentsHistoryDocumentsClient.GetByIdAsync(paymentAccountId, operationId);
 
             if (currentOperationStateDocument is null)
             {
-                return Result<Guid>.Failure($"The payment operation '{nameof(operationId)}' for account '{nameof(paymentAccountId)}' hasn't been found");
+                return Result<Guid>.Failure($"The payment operation '{operationId}' for account '{paymentAccountId}' hasn't been found");
             }
 
             var currentOperaiton = currentOperationStateDocument.Payload;

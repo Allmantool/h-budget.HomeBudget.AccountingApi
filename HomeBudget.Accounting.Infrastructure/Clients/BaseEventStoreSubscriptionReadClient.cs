@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -111,29 +112,36 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 return;
                             }
 
+                            MergeMetadata(resolvedEvent.Metadata.Span, eventData);
+
                             var correlationId = eventData.Metadata.Get(EventMetadataKeys.CorrelationId);
                             var traceParent = eventData.Metadata.Get(EventMetadataKeys.TraceParent);
-                            var traceId = eventData.Metadata.Get(EventMetadataKeys.TraceId);
+                            var traceState = eventData.Metadata.Get(EventMetadataKeys.TraceState);
+                            var baggage = eventData.Metadata.Get(EventMetadataKeys.Baggage);
+                            var messageId = eventData.Metadata.Get(EventMetadataKeys.MessageId);
+                            var causationId = eventData.Metadata.Get(EventMetadataKeys.CausationId);
+                            var propagationContext = TraceContextPropagation.Extract(
+                                TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
 
                             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
+                            using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
+                            using (LogContext.PushProperty(EventMetadataKeys.CausationId, causationId))
                             {
                                 using var activity = ActivityPropagation.StartActivity(
                                     "eventstore.consume",
                                     ActivityKind.Consumer,
-                                    traceParent);
+                                    propagationContext);
+                                using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
 
                                 if (activity != null)
                                 {
                                     activity.SetCorrelationId(correlationId);
-                                    if (!string.IsNullOrWhiteSpace(traceId))
-                                    {
-                                        activity.SetTraceId(traceId);
-                                    }
-
                                     activity.SetTag("messaging.system", "eventstore");
                                     activity.SetTag("messaging.stream", resolvedEvent.EventStreamId);
                                     activity.SetTag("messaging.event_type", resolvedEvent.EventType);
                                     activity.SetTag("messaging.event_id", resolvedEvent.EventId.ToString());
+                                    activity.SetTag("messaging.message_id", messageId);
+                                    activity.SetTag("messaging.conversation_id", causationId);
                                 }
 
                                 // Call the handler
@@ -196,6 +204,25 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             CancellationToken ct = default) => Task.FromResult<PersistentSubscription>(null);
 
         protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
+
+        private static void MergeMetadata(ReadOnlySpan<byte> metadataBytes, T target)
+        {
+            if (metadataBytes.IsEmpty || target is not BaseEvent baseEvent)
+            {
+                return;
+            }
+
+            var metadata = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(metadataBytes);
+            if (metadata is null)
+            {
+                return;
+            }
+
+            foreach (var item in metadata)
+            {
+                baseEvent.Metadata[item.Key] = item.Value;
+            }
+        }
 
         protected virtual void Dispose(bool disposing)
         {

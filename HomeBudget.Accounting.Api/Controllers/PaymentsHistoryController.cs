@@ -39,9 +39,11 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .Select(gr => gr
                     .OrderBy(op => op.Record.OperationDay)
                     .ThenBy(op => op.Record.OperationUnixTime)
+                    .ThenBy(op => op.Record.Key)
                     .Last())
                 .OrderBy(r => r.Record.OperationDay)
-                .ThenBy(r => r.Record.OperationUnixTime);
+                .ThenBy(r => r.Record.OperationUnixTime)
+                .ThenBy(r => r.Record.Key);
 
             var categoriesResult = await categoryDocumentsClient.GetAsync();
             var categories = categoriesResult.Payload;

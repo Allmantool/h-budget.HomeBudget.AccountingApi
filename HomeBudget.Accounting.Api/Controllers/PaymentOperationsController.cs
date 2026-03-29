@@ -89,17 +89,26 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<UpdateOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
+            if (!Guid.TryParse(operationId, out var targetOperationGuid))
+            {
+                return Result<UpdateOperationResponse>.Failure($"Invalid payment operation '{operationId}' has been provided");
+            }
+
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
 
-            var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, Guid.Parse(operationId), operationPayload, token);
+            var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, targetOperationGuid, operationPayload, token);
 
             var response = new UpdateOperationResponse
             {
                 PaymentAccountId = paymentAccountId,
-                PaymentOperationId = updateResponseResult.Payload.ToString(),
+                PaymentOperationId = updateResponseResult.Payload == Guid.Empty
+                    ? operationId
+                    : updateResponseResult.Payload.ToString(),
             };
 
-            return Result<UpdateOperationResponse>.Succeeded(response);
+            return updateResponseResult.IsSucceeded
+                ? Result<UpdateOperationResponse>.Succeeded(response)
+                : Result<UpdateOperationResponse>.Failure(updateResponseResult.StatusMessage);
         }
     }
 }

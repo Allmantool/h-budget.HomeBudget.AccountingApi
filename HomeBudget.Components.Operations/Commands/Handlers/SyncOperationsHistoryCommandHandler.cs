@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,26 +45,43 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var correlationId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId);
             var traceParent = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.TraceParent);
-            var traceId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.TraceId);
+            var traceState = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.TraceState);
+            var baggage = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.Baggage);
+            var messageId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.MessageId);
+            var propagationContext = TraceContextPropagation.Extract(
+                TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
+            var links = TraceContextPropagation.CreateLinks(
+                events.Select(ev => (IReadOnlyDictionary<string, string>)TraceContextPropagation.BuildCarrier(
+                    ev.Metadata.Get(EventMetadataKeys.TraceParent),
+                    ev.Metadata.Get(EventMetadataKeys.TraceState),
+                    ev.Metadata.Get(EventMetadataKeys.Baggage))));
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
+            using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
             {
-                using var activity = ActivityPropagation.StartActivity(
-                    "mongodb.sync_operations_history",
-                    ActivityKind.Internal,
-                    traceParent);
+                using var activity = Activity.Current != null
+                    ? ActivityPropagation.StartActivity(
+                        "mongodb.sync_operations_history",
+                        ActivityKind.Internal)
+                    : events.Count() > 1
+                        ? ActivityPropagation.StartActivity(
+                            "mongodb.sync_operations_history",
+                            ActivityKind.Internal,
+                            default(ActivityContext),
+                            links)
+                        : ActivityPropagation.StartActivity(
+                            "mongodb.sync_operations_history",
+                            ActivityKind.Internal,
+                            propagationContext);
+                using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
 
                 if (activity != null)
                 {
                     activity.SetCorrelationId(correlationId);
-                    if (!string.IsNullOrWhiteSpace(traceId))
-                    {
-                        activity.SetTraceId(traceId);
-                    }
-
                     activity.SetTag("messaging.system", "mongodb");
                     activity.SetTag("messaging.event_count", events.Count());
                     activity.SetAccount(accountId);
+                    activity.SetTag("messaging.message_id", messageId);
                     activity.SetTag("month.period", monthPeriodIdentifier);
                 }
 
@@ -104,8 +122,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                         if (updateActivity != null)
                         {
                             updateActivity.SetCorrelationId(correlationId);
-                            updateActivity.SetTraceId(traceId);
                             updateActivity.SetAccount(accountId);
+                            updateActivity.SetTag("messaging.message_id", messageId);
                         }
 
                         await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, finalBalance), cancellationToken);

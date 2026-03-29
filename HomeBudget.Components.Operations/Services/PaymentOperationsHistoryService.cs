@@ -31,6 +31,7 @@ namespace HomeBudget.Components.Operations.Services
             var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount)
                 .OrderBy(ev => ev.Payload.OperationDay)
                 .ThenBy(ev => ev.Payload.OperationUnixTime)
+                .ThenBy(ev => ev.Payload.Key)
                 .ToList();
 
             if (validAndMostUpToDateOperations.IsNullOrEmpty())
@@ -131,6 +132,7 @@ namespace HomeBudget.Components.Operations.Services
                 .Select(gr => gr
                     .OrderBy(ev => ev.Payload.OperationDay)
                     .ThenBy(ev => ev.Payload.OperationUnixTime)
+                    .ThenBy(ev => ev.Payload.Key)
                     .Last())
                 .ToList();
         }

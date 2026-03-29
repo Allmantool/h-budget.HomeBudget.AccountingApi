@@ -10,7 +10,7 @@ namespace HomeBudget.Accounting.Infrastructure.Data.Extensions
         public static DataTable ToDataTable<T>(this T origin)
             where T : IDbEntity
         {
-            return new[] { origin }.ToDataTable<T>();
+            return new[] { origin }.ToDataTable();
         }
 
         public static DataTable ToDataTable<T>(this IEnumerable<T> collection)

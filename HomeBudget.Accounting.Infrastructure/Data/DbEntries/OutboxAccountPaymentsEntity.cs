@@ -16,9 +16,23 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public string PartitionKey { get; init; }
 
+        public string CorrelationId { get; init; }
+
+        public string MessageId { get; init; }
+
+        public string CausationId { get; init; }
+
+        public string TraceParent { get; init; }
+
+        public string TraceState { get; init; }
+
         public DateTime CreatedAt { get; init; }
 
         public DateTime UpdatedAt { get; init; }
+
+        public DateTime? PublishedAt { get; private set; }
+
+        public DateTime? ProcessedAt { get; private set; }
 
         public int RetryCount { get; private set; }
 
@@ -29,11 +43,13 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
         public void MarkPublished()
         {
             Status = OutboxStatus.Published.Key;
+            PublishedAt = DateTime.UtcNow;
         }
 
         public void MarkAcknowledged()
         {
             Status = OutboxStatus.Acknowledged.Key;
+            ProcessedAt = DateTime.UtcNow;
         }
 
         public void MarkRetry(string error)

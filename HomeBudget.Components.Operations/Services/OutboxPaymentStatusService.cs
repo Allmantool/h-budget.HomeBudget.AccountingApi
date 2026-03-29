@@ -9,6 +9,7 @@ using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Handlers;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Services
 {
@@ -28,6 +29,11 @@ namespace HomeBudget.Components.Operations.Services
                         EventType,
                         AggregateId,
                         PartitionKey,
+                        CorrelationId,
+                        MessageId,
+                        CausationId,
+                        TraceParent,
+                        TraceState,
                         Payload,
                         CreatedAt,
                         Status,
@@ -38,6 +44,11 @@ namespace HomeBudget.Components.Operations.Services
                         @EventType,
                         @AggregateId,
                         @PartitionKey,
+                        @CorrelationId,
+                        @MessageId,
+                        @CausationId,
+                        @TraceParent,
+                        @TraceState,
                         @Payload,
                         @CreatedAt,
                         @Status,
@@ -47,6 +58,12 @@ namespace HomeBudget.Components.Operations.Services
                 try
                 {
                     await cdcWriter.ExecuteAsync(sql, record);
+                    TelemetryMetrics.OutboxStatusTransitions.Add(
+                        1,
+                        [
+                            new("status", OutboxStatus.Pending.Name),
+                            new("event_type", record.EventType)
+                        ]);
                 }
                 catch (Exception ex)
                 {
@@ -66,16 +83,31 @@ namespace HomeBudget.Components.Operations.Services
         {
             cdcWriteHandler.ExecuteFireAndForget(async cdcWriter =>
             {
-                var updateSql = $@"
+                const string updateSql = @"
                                 UPDATE dbo.OutboxAccountPayments
-                                   SET Status = {status.Key},
-                                       UpdatedAt = '{dateTimeProvider.GetNowUtc()}'
-                                 WHERE PartitionKey = '{partitionKey}';
+                                   SET Status = @Status,
+                                       UpdatedAt = @UpdatedAt,
+                                       PublishedAt = CASE
+                                           WHEN @Status = 1 AND PublishedAt IS NULL THEN @UpdatedAt
+                                           ELSE PublishedAt
+                                       END,
+                                       ProcessedAt = CASE
+                                           WHEN @Status = 2 THEN @UpdatedAt
+                                           ELSE ProcessedAt
+                                       END
+                                 WHERE PartitionKey = @PartitionKey;
                             ";
+                var updatedAt = dateTimeProvider.GetNowUtc();
 
                 try
                 {
-                    await cdcWriter.ExecuteAsync(updateSql);
+                    await cdcWriter.ExecuteAsync(updateSql, new OutboxStatusUpdateEntity
+                    {
+                        Status = status.Key,
+                        UpdatedAt = updatedAt,
+                        PartitionKey = partitionKey
+                    });
+                    TelemetryMetrics.OutboxStatusTransitions.Add(1, [new("status", status.Name)]);
                 }
                 catch (Exception ex)
                 {

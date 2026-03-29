@@ -42,20 +42,38 @@ namespace HomeBudget.Components.Accounts.Services
 
                 var enquiredAt = dateTimeProvider.GetNowUtc();
                 var messagePayload = JsonSerializer.Serialize(accountEvent);
+                var messageId = Guid.NewGuid().ToString("N");
 
                 var headers = new Headers
                 {
                     new Header(KafkaMessageHeaders.Type, Encoding.UTF8.GetBytes(nameof(AccountRecord))),
                     new Header(KafkaMessageHeaders.Version, Encoding.UTF8.GetBytes("1.0")),
                     new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(PaymentAccountProducerService))),
-                    new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(messageId)),
                     new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),
                 };
 
                 if (Activity.Current is not null)
                 {
-                    headers.Add(KafkaMessageHeaders.Traceparent, Encoding.UTF8.GetBytes(Activity.Current.Id));
+                    var propagationCarrier = TraceContextPropagation.Capture(Activity.Current);
+
+                    if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceParent, out var traceParent))
+                    {
+                        headers.Add(KafkaMessageHeaders.Traceparent, Encoding.UTF8.GetBytes(traceParent));
+                    }
+
+                    if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceState, out var traceState))
+                    {
+                        headers.Add(KafkaMessageHeaders.Tracestate, Encoding.UTF8.GetBytes(traceState));
+                    }
+
+                    if (propagationCarrier.TryGetValue(TraceContextPropagation.Baggage, out var baggage))
+                    {
+                        headers.Add(KafkaMessageHeaders.Baggage, Encoding.UTF8.GetBytes(baggage));
+                    }
+
                     headers.Add(KafkaMessageHeaders.TraceId, Encoding.UTF8.GetBytes(Activity.Current.TraceId.ToString()));
+                    headers.Add(KafkaMessageHeaders.CausationId, Encoding.UTF8.GetBytes(Activity.Current.SpanId.ToString()));
                 }
 
                 var correlationId = Activity.Current?.GetBaggageItem(ActivityTags.CorrelationId);
@@ -63,6 +81,8 @@ namespace HomeBudget.Components.Accounts.Services
                 {
                     headers.Add(KafkaMessageHeaders.CorrelationId, Encoding.UTF8.GetBytes(correlationId));
                 }
+
+                headers.Add(KafkaMessageHeaders.MessageId, Encoding.UTF8.GetBytes(messageId));
 
                 var message = new Message<string, string>
                 {

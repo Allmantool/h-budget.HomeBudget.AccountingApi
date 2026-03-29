@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
@@ -6,6 +7,7 @@ using Polly;
 using Polly.Retry;
 
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations
@@ -43,6 +45,11 @@ namespace HomeBudget.Components.Operations
                             delay,
                             eventType,
                             key);
+
+                        Activity.Current?.AddEvent(ActivityEvents.RetryAttempt(attempt));
+                        TelemetryMetrics.EventStoreRetries.Add(
+                            1,
+                            [new("event_type", eventType ?? "unknown")]);
                     });
         }
     }

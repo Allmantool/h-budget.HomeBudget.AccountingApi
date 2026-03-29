@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Logs;
+using HomeBudget.Core;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
@@ -60,6 +61,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
                 if (evt != null)
                 {
+                    MergeMetadata(resolvedEvent.Event.Metadata.Span, evt);
                     count++;
                     yield return evt;
                 }
@@ -81,6 +83,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                         var evt = JsonSerializer.Deserialize<T>(resolvedEvent.Event.Data.Span);
                         if (evt != null)
                         {
+                            MergeMetadata(resolvedEvent.Event.Metadata.Span, evt);
                             await onEventAppeared(evt);
                         }
                     },
@@ -101,6 +104,25 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         }
 
         protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
+
+        private static void MergeMetadata(ReadOnlySpan<byte> metadataBytes, T target)
+        {
+            if (target is not BaseEvent baseEvent || metadataBytes.IsEmpty)
+            {
+                return;
+            }
+
+            var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataBytes);
+            if (metadata is null)
+            {
+                return;
+            }
+
+            foreach (var item in metadata)
+            {
+                baseEvent.Metadata[item.Key] = item.Value;
+            }
+        }
 
         protected virtual void Dispose(bool disposing)
         {

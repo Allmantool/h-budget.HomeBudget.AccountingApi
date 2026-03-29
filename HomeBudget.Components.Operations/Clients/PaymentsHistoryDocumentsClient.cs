@@ -42,6 +42,8 @@ namespace HomeBudget.Components.Operations.Clients
 
             return await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
                 .SortByDescending(f => f.Payload.Record.OperationDay)
+                .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
+                .ThenByDescending(f => f.Payload.Record.Key)
                 .Limit(1)
                 .FirstOrDefaultAsync();
         }
@@ -51,6 +53,8 @@ namespace HomeBudget.Components.Operations.Clients
             var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
             var tasks = targetCollections.Select(cl => cl.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
                 .SortByDescending(f => f.Payload.Record.OperationDay)
+                .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
+                .ThenByDescending(f => f.Payload.Record.Key)
                 .Limit(1)
                 .FirstOrDefaultAsync());
 

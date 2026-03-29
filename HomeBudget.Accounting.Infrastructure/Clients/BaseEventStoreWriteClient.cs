@@ -12,6 +12,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
@@ -94,6 +95,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 StreamState.Any,
                 [data],
                 cancellationToken: CancellationToken.None);
+            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object?>("event_type", eventForSending.GetType().Name)]);
         }
 
         public async Task SendToDeadLetterQueueAsync(
@@ -115,12 +117,19 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 StreamState.Any,
                 data,
                 cancellationToken: cts.Token);
+            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object?>("event_type", typeof(T).Name)]);
         }
 
         private static EventData CreateEventData(T @event, string eventType)
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(@event);
-            return new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory());
+            var metadataBytes = @event is BaseEvent baseEvent && baseEvent.Metadata?.Count > 0
+                ? JsonSerializer.SerializeToUtf8Bytes(baseEvent.Metadata)
+                : null;
+
+            return metadataBytes is null
+                ? new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory())
+                : new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory(), metadataBytes.AsMemory());
         }
 
         public void Dispose()
