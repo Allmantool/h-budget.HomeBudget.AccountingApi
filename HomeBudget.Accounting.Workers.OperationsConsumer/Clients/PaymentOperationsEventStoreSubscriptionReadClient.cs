@@ -16,7 +16,6 @@ using Serilog.Context;
 
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
@@ -284,24 +283,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
                 await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
                 activity?.SetStatus(ActivityStatusCode.Ok);
-            }
-        }
-
-        private sealed class ProjectionBatchContext
-        {
-            private ProjectionBatchContext(PaymentOperationEvent latestEvent, IReadOnlyDictionary<string, string> propagationCarrier)
-            {
-                LatestEvent = latestEvent;
-                PropagationCarriers = new List<IReadOnlyDictionary<string, string>> { propagationCarrier };
-            }
-
-            public PaymentOperationEvent LatestEvent { get; set; }
-
-            public List<IReadOnlyDictionary<string, string>> PropagationCarriers { get; }
-
-            public static ProjectionBatchContext Create(ActivityEnvelope<PaymentOperationEvent> envelope)
-            {
-                return new ProjectionBatchContext(envelope.Item, envelope.PropagationCarrier);
             }
         }
     }
