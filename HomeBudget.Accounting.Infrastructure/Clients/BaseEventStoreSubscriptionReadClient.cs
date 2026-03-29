@@ -126,12 +126,17 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                             using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
                             using (LogContext.PushProperty(EventMetadataKeys.CausationId, causationId))
+                            using (LogContext.PushProperty("stream_id", resolvedEvent.EventStreamId))
+                            using (LogContext.PushProperty("event_type", resolvedEvent.EventType))
+                            using (LogContext.PushProperty("retry_count", retryCount))
                             {
+                                var retryAttempt = retryCount ?? 0;
                                 using var activity = ActivityPropagation.StartActivity(
                                     "eventstore.consume",
                                     ActivityKind.Consumer,
                                     propagationContext);
                                 using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
+                                var consumeStopwatch = Stopwatch.StartNew();
 
                                 if (activity != null)
                                 {
@@ -142,6 +147,15 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                     activity.SetTag("messaging.event_id", resolvedEvent.EventId.ToString());
                                     activity.SetTag("messaging.message_id", messageId);
                                     activity.SetTag("messaging.conversation_id", causationId);
+                                    activity.SetTag("messaging.retry.count", retryAttempt);
+                                }
+
+                                if (retryAttempt > 0)
+                                {
+                                    TelemetryMetrics.EventStoreRetries.Add(
+                                        1,
+                                        [new KeyValuePair<string, object>("event_type", resolvedEvent.EventType)]);
+                                    activity?.AddEvent(ActivityEvents.RetryAttempt(retryAttempt));
                                 }
 
                                 // Call the handler
@@ -155,6 +169,10 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 }
 
                                 await sub.Ack(evt);
+                                consumeStopwatch.Stop();
+                                TelemetryMetrics.EventStoreConsumeDurationMs.Record(
+                                    consumeStopwatch.Elapsed.TotalMilliseconds,
+                                    [new KeyValuePair<string, object>("event_type", resolvedEvent.EventType)]);
                                 activity?.SetStatus(ActivityStatusCode.Ok);
                                 activity?.AddEvent(ActivityEvents.EventStorePersisted);
                             }

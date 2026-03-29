@@ -21,6 +21,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
@@ -28,7 +29,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
     internal sealed class PaymentOperationsEventStoreStreamReadClient
         : BaseEventStoreStreamReadClient<PaymentOperationEvent>, IDisposable
     {
-        private readonly Channel<PaymentOperationEvent> _paymentEventsBuffer;
+        private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsBuffer;
         private readonly ConcurrentDictionary<string, PaymentOperationEvent> _latestEventsPerAccount = new();
 
         private readonly ILogger<PaymentOperationsEventStoreStreamReadClient> _logger;
@@ -70,7 +71,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         {
             try
             {
-                await _paymentEventsBuffer.Writer.WriteAsync(eventData, _cts.Token);
+                await _paymentEventsBuffer.Writer.WriteAsync(
+                    ActivityEnvelope<PaymentOperationEvent>.Capture(eventData),
+                    _cts.Token);
             }
             catch (ChannelClosedException)
             {
@@ -108,7 +111,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             {
                 while (_paymentEventsBuffer.Reader.TryRead(out var evt))
                 {
-                    _latestEventsPerAccount[evt.Payload.GetMonthPeriodPaymentAccountIdentifier()] = evt;
+                    _latestEventsPerAccount[evt.Item.Payload.GetMonthPeriodPaymentAccountIdentifier()] = evt.Item;
                 }
 
                 if (delayMs > 0)

@@ -36,7 +36,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             _eventStoreDbWriteClient = eventStoreDbWriteClient;
         }
 
-        public async Task HandleAsync(IEnumerable<PaymentOperationEvent> paymentEvents, CancellationToken cancellationToken)
+        public async Task HandleAsync(IEnumerable<ActivityEnvelope<PaymentOperationEvent>> paymentEvents, CancellationToken cancellationToken)
         {
             if (paymentEvents.IsNullOrEmpty())
             {
@@ -52,30 +52,24 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                 var sendTasks = eventsGroupedByStream.Select(async kvp =>
                 {
                     var streamName = kvp.Key;
-                    var streamEvents = kvp.Value;
+                    var streamEvents = kvp.Value.ToList();
+                    var streamEventPayloads = streamEvents.Select(envelope => envelope.Item).ToList();
 
-                    var firstEvent = streamEvents.First();
+                    var firstEvent = streamEventPayloads.First();
                     var eventTypeTitle = $"{firstEvent.EventType}_{firstEvent.Payload.Key}";
 
                     try
                     {
-                        var traceParent = firstEvent.Metadata.Get(EventMetadataKeys.TraceParent);
-                        var traceState = firstEvent.Metadata.Get(EventMetadataKeys.TraceState);
-                        var baggage = firstEvent.Metadata.Get(EventMetadataKeys.Baggage);
                         var correlationId = firstEvent.Metadata.Get(EventMetadataKeys.CorrelationId);
                         var messageId = firstEvent.Metadata.Get(EventMetadataKeys.MessageId);
-                        var links = TraceContextPropagation.CreateLinks(
-                            streamEvents.Select(ev => (IReadOnlyDictionary<string, string>)TraceContextPropagation.BuildCarrier(
-                                ev.Metadata.Get(EventMetadataKeys.TraceParent),
-                                ev.Metadata.Get(EventMetadataKeys.TraceState),
-                                ev.Metadata.Get(EventMetadataKeys.Baggage))));
-                        var propagationContext = TraceContextPropagation.Extract(
-                            TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
+                        var (parentContext, links) = TraceContextPropagation.ResolveParentAndLinks(
+                            streamEvents.Select(envelope => envelope.PropagationCarrier));
+                        var propagationContext = TraceContextPropagation.Extract(streamEvents[0].PropagationCarrier);
 
                         using var activity = ActivityPropagation.StartActivity(
                             "eventstore.write",
                             ActivityKind.Producer,
-                            propagationContext.ActivityContext,
+                            parentContext,
                             links);
                         using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
                         var writeStartedAt = Stopwatch.StartNew();
@@ -85,13 +79,15 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                             activity.SetCorrelationId(correlationId);
                             activity.SetTag("messaging.system", "eventstore");
                             activity.SetTag("messaging.stream", streamName);
-                            activity.SetTag("messaging.event_count", streamEvents.Count());
+                            activity.SetTag("messaging.event_count", streamEventPayloads.Count);
                             activity.SetTag("messaging.first_event_type", firstEvent.EventType.ToString());
                             activity.SetTag("messaging.message_id", messageId);
                         }
 
+                        StampTraceMetadata(streamEventPayloads, activity);
+
                         await _eventStoreDbWriteClient.SendBatchAsync(
-                            streamEvents,
+                            streamEventPayloads,
                             streamName,
                             eventTypeTitle,
                             cancellationToken);
@@ -117,10 +113,45 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             }
         }
 
-        private static string GenerateStreamName(PaymentOperationEvent paymentEvent)
+        private static string GenerateStreamName(ActivityEnvelope<PaymentOperationEvent> paymentEvent)
         {
-            var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodPaymentAccountIdentifier();
+            var accountPerMonthIdentifier = paymentEvent.Item.Payload.GetMonthPeriodPaymentAccountIdentifier();
             return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
+        }
+
+        private static void StampTraceMetadata(IEnumerable<PaymentOperationEvent> paymentEvents, Activity activity)
+        {
+            if (activity is null || paymentEvents is null)
+            {
+                return;
+            }
+
+            var propagationCarrier = TraceContextPropagation.Capture(activity);
+
+            foreach (var paymentEvent in paymentEvents)
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceId] = activity.TraceId.ToString();
+                paymentEvent.Metadata[EventMetadataKeys.CausationId] = activity.SpanId.ToString();
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceParent, out var traceParent))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+                }
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceState, out var traceState))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.TraceState] = traceState;
+                }
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.Baggage, out var baggage))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.Baggage] = baggage;
+                }
+                else
+                {
+                    paymentEvent.Metadata.Remove(EventMetadataKeys.Baggage);
+                }
+            }
         }
     }
 }

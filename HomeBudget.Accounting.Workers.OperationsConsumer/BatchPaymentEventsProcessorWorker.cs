@@ -12,6 +12,7 @@ using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer
@@ -19,7 +20,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
     internal class BatchPaymentEventsProcessorWorker : BackgroundService
     {
         private readonly EventStoreDbOptions _options;
-        private readonly Channel<PaymentOperationEvent> _paymentEventsChannel;
+        private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsChannel;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly IPaymentOperationsDeliveryHandler _operationsDeliveryHandler;
         private readonly ILogger<BatchPaymentEventsProcessorWorker> _logger;
@@ -28,7 +29,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
         private const int DelayForChannelReader = 10;
 
         public BatchPaymentEventsProcessorWorker(
-            Channel<PaymentOperationEvent> paymentEventsChannel,
+            Channel<ActivityEnvelope<PaymentOperationEvent>> paymentEventsChannel,
             ILogger<BatchPaymentEventsProcessorWorker> logger,
             IDateTimeProvider dateTimeProvider,
             IOptions<EventStoreDbOptions> eventStoreDbOptions,
@@ -67,10 +68,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
         }
 
-        private async Task<List<PaymentOperationEvent>> CollectBatchAsync(CancellationToken stoppingToken)
+        private async Task<List<ActivityEnvelope<PaymentOperationEvent>>> CollectBatchAsync(CancellationToken stoppingToken)
         {
             var batchStartTime = _dateTimeProvider.GetNowUtc();
-            var eventsBatch = new List<PaymentOperationEvent>();
+            var eventsBatch = new List<ActivityEnvelope<PaymentOperationEvent>>();
 
             while (_dateTimeProvider.GetNowUtc() - batchStartTime < _flushInterval && eventsBatch.Count <= _options.EventProcessingBatchSize)
             {

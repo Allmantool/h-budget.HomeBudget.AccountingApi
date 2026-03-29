@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -11,6 +12,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
@@ -24,109 +26,177 @@ namespace HomeBudget.Components.Operations.Clients
         {
             if (period != null)
             {
-                var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(period.ToFinancialMonthIdentifier(accountId));
+                var collectionName = period.ToFinancialMonthIdentifier(accountId);
 
-                return await targetCollection.Find(_ => true).ToListAsync();
+                return await TraceMongoAsync(
+                    "find",
+                    collectionName,
+                    async () =>
+                    {
+                        var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(collectionName);
+                        return await targetCollection.Find(_ => true).ToListAsync();
+                    },
+                    accountId);
             }
 
-            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-
-            var records = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
-
-            return records;
+            return await TraceMongoAsync(
+                "find_all_periods",
+                "payments_history",
+                async () =>
+                {
+                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
+                    return await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
+                },
+                accountId);
         }
 
         public async Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier)
         {
-            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+            return await TraceMongoAsync(
+                "find_last_for_period",
+                financialPeriodIdentifier,
+                async () =>
+                {
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-            return await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .SortByDescending(f => f.Payload.Record.OperationDay)
-                .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
-                .ThenByDescending(f => f.Payload.Record.Key)
-                .Limit(1)
-                .FirstOrDefaultAsync();
+                    return await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                        .SortByDescending(f => f.Payload.Record.OperationDay)
+                        .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
+                        .ThenByDescending(f => f.Payload.Record.Key)
+                        .Limit(1)
+                        .FirstOrDefaultAsync();
+                });
         }
 
         public async Task<IEnumerable<PaymentHistoryDocument>> GetAllPeriodBalancesForAccountAsync(Guid accountId)
         {
-            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-            var tasks = targetCollections.Select(cl => cl.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .SortByDescending(f => f.Payload.Record.OperationDay)
-                .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
-                .ThenByDescending(f => f.Payload.Record.Key)
-                .Limit(1)
-                .FirstOrDefaultAsync());
+            return await TraceMongoAsync(
+                "find_period_balances",
+                "payments_history",
+                async () =>
+                {
+                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
+                    var tasks = targetCollections.Select(cl => cl.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                        .SortByDescending(f => f.Payload.Record.OperationDay)
+                        .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
+                        .ThenByDescending(f => f.Payload.Record.Key)
+                        .Limit(1)
+                        .FirstOrDefaultAsync());
 
-            return await Task.WhenAll(tasks);
+                    return await Task.WhenAll(tasks);
+                },
+                accountId);
         }
 
         public async Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId)
         {
-            var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-            var payload = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(d => d.Payload.Record.Key == operationId));
+            return await TraceMongoAsync(
+                "find_by_id",
+                "payments_history",
+                async () =>
+                {
+                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
+                    var payload = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(d => d.Payload.Record.Key == operationId));
 
-            return payload.SingleOrDefault();
+                    return payload.SingleOrDefault();
+                },
+                accountId,
+                operationId);
         }
 
         public async Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
         {
-            var document = new PaymentHistoryDocument { Payload = payload };
-            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+            await TraceMongoAsync(
+                "insert_one",
+                financialPeriodIdentifier,
+                async () =>
+                {
+                    var document = new PaymentHistoryDocument { Payload = payload };
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-            await targetCollection.InsertOneAsync(document);
+                    await targetCollection.InsertOneAsync(document);
+                    return true;
+                },
+                payload?.Record.PaymentAccountId,
+                payload?.Record.Key);
         }
 
         public async Task ReplaceOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
         {
-            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+            await TraceMongoAsync(
+                "replace_one",
+                financialPeriodIdentifier,
+                async () =>
+                {
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-            var filter = Builders<PaymentHistoryDocument>
-                .Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
+                    var filter = Builders<PaymentHistoryDocument>
+                        .Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
 
-            var update = Builders<PaymentHistoryDocument>
-                .Update.Set(d => d.Payload, payload);
+                    var update = Builders<PaymentHistoryDocument>
+                        .Update.Set(d => d.Payload, payload);
 
-            await targetCollection.UpdateOneAsync(
-                filter,
-                update,
-                new UpdateOptions { IsUpsert = true });
+                    await targetCollection.UpdateOneAsync(
+                        filter,
+                        update,
+                        new UpdateOptions { IsUpsert = true });
+                    return true;
+                },
+                payload?.Record.PaymentAccountId,
+                payload?.Record.Key);
         }
 
         public async Task BulkWriteAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> payload)
         {
-            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+            var records = payload?.ToList() ?? [];
 
-            var bulkOps = payload.Select(r =>
-                new UpdateOneModel<PaymentHistoryDocument>(
-                    Builders<PaymentHistoryDocument>.Filter
-                        .Eq(d => d.Payload.Record.Key, r.Record.Key),
-                    Builders<PaymentHistoryDocument>.Update
-                        .Set(d => d.Payload, r)
-                    )
+            await TraceMongoAsync(
+                "bulk_write",
+                financialPeriodIdentifier,
+                async () =>
                 {
-                    IsUpsert = true
-                }
-                ).ToList();
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-            if (bulkOps.Count > 0)
-            {
-                foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
-                {
-                    await targetCollection.BulkWriteAsync(
-                    chunk,
-                    new BulkWriteOptions
+                    var bulkOps = records.Select(r =>
+                        new UpdateOneModel<PaymentHistoryDocument>(
+                            Builders<PaymentHistoryDocument>.Filter
+                                .Eq(d => d.Payload.Record.Key, r.Record.Key),
+                            Builders<PaymentHistoryDocument>.Update
+                                .Set(d => d.Payload, r))
+                        {
+                            IsUpsert = true
+                        })
+                        .ToList();
+
+                    if (bulkOps.Count > 0)
                     {
-                        IsOrdered = false
-                    });
-                }
-            }
+                        foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
+                        {
+                            await targetCollection.BulkWriteAsync(
+                                chunk,
+                                new BulkWriteOptions
+                                {
+                                    IsOrdered = false
+                                });
+                        }
+                    }
+
+                    return true;
+                },
+                records.FirstOrDefault()?.Record.PaymentAccountId);
         }
 
         public async Task RemoveAsync(string financialPeriodIdentifier)
         {
-            var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-            await targetCollection.DeleteManyAsync(_ => true);
+            await TraceMongoAsync(
+                "delete_many",
+                financialPeriodIdentifier,
+                async () =>
+                {
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+                    await targetCollection.DeleteManyAsync(_ => true);
+                    return true;
+                });
         }
 
         public async Task RewriteAllAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords)
@@ -161,6 +231,58 @@ namespace HomeBudget.Components.Operations.Clients
             var results = await Task.WhenAll(tasks);
 
             return results.SelectMany(docs => docs).ToList().AsReadOnly();
+        }
+
+        private static async Task<T> TraceMongoAsync<T>(
+            string operation,
+            string collectionName,
+            Func<Task<T>> action,
+            Guid? accountId = null,
+            Guid? operationId = null)
+        {
+            using var activity = ActivityPropagation.StartActivity(
+                $"mongodb.{operation}",
+                ActivityKind.Client);
+            var startedAt = Stopwatch.StartNew();
+
+            if (activity != null)
+            {
+                activity.SetTag(ActivityTags.DbSystem, "mongodb");
+                activity.SetTag("db.operation", operation);
+                activity.SetTag(ActivityTags.MongoCollection, collectionName);
+
+                if (accountId.HasValue && accountId.Value != Guid.Empty)
+                {
+                    activity.SetAccount(accountId.Value);
+                }
+
+                if (operationId.HasValue && operationId.Value != Guid.Empty)
+                {
+                    activity.SetPayment(operationId.Value);
+                }
+            }
+
+            try
+            {
+                var result = await action();
+
+                startedAt.Stop();
+                TelemetryMetrics.MongoCrudDurationMs.Record(
+                    startedAt.Elapsed.TotalMilliseconds,
+                    [new KeyValuePair<string, object>("operation", operation)]);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                startedAt.Stop();
+                TelemetryMetrics.MongoCrudDurationMs.Record(
+                    startedAt.Elapsed.TotalMilliseconds,
+                    [new KeyValuePair<string, object>("operation", operation)]);
+                activity?.RecordException(ex);
+                throw;
+            }
         }
     }
 }

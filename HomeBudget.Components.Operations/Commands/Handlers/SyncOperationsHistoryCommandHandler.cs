@@ -50,7 +50,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             var messageId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.MessageId);
             var propagationContext = TraceContextPropagation.Extract(
                 TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
-            var links = TraceContextPropagation.CreateLinks(
+            var (parentContext, links) = TraceContextPropagation.ResolveParentAndLinks(
                 events.Select(ev => (IReadOnlyDictionary<string, string>)TraceContextPropagation.BuildCarrier(
                     ev.Metadata.Get(EventMetadataKeys.TraceParent),
                     ev.Metadata.Get(EventMetadataKeys.TraceState),
@@ -58,31 +58,29 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
             using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
+            using (LogContext.PushProperty("projection_name", "sync_operations_history"))
+            using (LogContext.PushProperty("aggregate_id", accountId))
             {
                 using var activity = Activity.Current != null
                     ? ActivityPropagation.StartActivity(
-                        "mongodb.sync_operations_history",
+                        "projection.sync_operations_history",
                         ActivityKind.Internal)
-                    : events.Count() > 1
-                        ? ActivityPropagation.StartActivity(
-                            "mongodb.sync_operations_history",
-                            ActivityKind.Internal,
-                            default(ActivityContext),
-                            links)
-                        : ActivityPropagation.StartActivity(
-                            "mongodb.sync_operations_history",
-                            ActivityKind.Internal,
-                            propagationContext);
+                    : ActivityPropagation.StartActivity(
+                        "projection.sync_operations_history",
+                        ActivityKind.Internal,
+                        parentContext,
+                        links);
                 using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
 
                 if (activity != null)
                 {
                     activity.SetCorrelationId(correlationId);
-                    activity.SetTag("messaging.system", "mongodb");
+                    activity.SetTag("messaging.system", "eventstore");
                     activity.SetTag("messaging.event_count", events.Count());
                     activity.SetAccount(accountId);
                     activity.SetTag("messaging.message_id", messageId);
                     activity.SetTag("month.period", monthPeriodIdentifier);
+                    activity.SetTag("projection.name", "sync_operations_history");
                 }
 
                 await BenchmarkService.WithBenchmarkAsync(
@@ -118,7 +116,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 await BenchmarkService.WithBenchmarkAsync(
                     async () =>
                     {
-                        using var updateActivity = ActivityPropagation.StartActivity("mongodb.update_payment_balance", ActivityKind.Internal);
+                        using var updateActivity = ActivityPropagation.StartActivity("mediatr.send.update_payment_balance", ActivityKind.Internal);
                         if (updateActivity != null)
                         {
                             updateActivity.SetCorrelationId(correlationId);
