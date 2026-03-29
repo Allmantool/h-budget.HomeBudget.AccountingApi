@@ -42,6 +42,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                        serviceInstanceId: Environment.MachineName)
                     .AddAttributes(new Dictionary<string, object>
                     {
+                        ["service.namespace"] = "HomeBudget",
                         [OpenTelemetryTags.DeploymentEnvironment] = environment.EnvironmentName
                     }))
                 .WithTracing(traceBuilder =>
@@ -96,6 +97,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                     .AddMeter(MetersTags.Kestrel)
                     .AddMeter(MetersTags.HttpConnections)
                     .AddMeter(MetersTags.HealthChecks)
+                    .AddMeter(TelemetryMetrics.Meter.Name)
                     .SetMaxMetricStreams(OpenTelemetryOptions.MaxMetricStreams)
                     .AddPrometheusExporter()
                 );

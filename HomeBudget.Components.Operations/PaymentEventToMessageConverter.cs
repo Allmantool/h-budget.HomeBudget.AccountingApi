@@ -51,8 +51,20 @@ namespace HomeBudget.Components.Operations
                     KafkaMessageHeaders.Traceparent,
                     paymentEvent.Metadata.Get(EventMetadataKeys.TraceParent))
                 .With(
+                    KafkaMessageHeaders.Tracestate,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.TraceState))
+                .With(
+                    KafkaMessageHeaders.Baggage,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.Baggage))
+                .With(
                     KafkaMessageHeaders.TraceId,
                     paymentEvent.Metadata.Get(EventMetadataKeys.TraceId))
+                .With(
+                    KafkaMessageHeaders.MessageId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.MessageId))
+                .With(
+                    KafkaMessageHeaders.CausationId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.CausationId))
                 .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
                 .With(KafkaMessageHeaders.Version, "2.0")
                 .With(KafkaMessageHeaders.Source, nameof(BasePaymentCommandHandler))

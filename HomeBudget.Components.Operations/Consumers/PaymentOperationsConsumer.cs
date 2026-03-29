@@ -79,14 +79,31 @@ namespace HomeBudget.Components.Operations.Consumers
                             ? Encoding.UTF8.GetString(tpBytes)
                             : null;
 
+                        var traceState = message.Headers.TryGetLastBytes(KafkaMessageHeaders.Tracestate, out var tsBytes)
+                            ? Encoding.UTF8.GetString(tsBytes)
+                            : null;
+
+                        var baggage = message.Headers.TryGetLastBytes(KafkaMessageHeaders.Baggage, out var baggageBytes)
+                            ? Encoding.UTF8.GetString(baggageBytes)
+                            : null;
+
                         var traceId = message.Headers.TryGetLastBytes(KafkaMessageHeaders.TraceId, out var tidBytes)
                             ? Encoding.UTF8.GetString(tidBytes)
+                            : null;
+
+                        var messageId = message.Headers.TryGetLastBytes(KafkaMessageHeaders.MessageId, out var messageIdBytes)
+                            ? Encoding.UTF8.GetString(messageIdBytes)
+                            : null;
+
+                        var causationId = message.Headers.TryGetLastBytes(KafkaMessageHeaders.CausationId, out var causationIdBytes)
+                            ? Encoding.UTF8.GetString(causationIdBytes)
                             : null;
 
                         using var activity = ActivityPropagation.StartActivity(
                             "payment.events.channel.process",
                             ActivityKind.Consumer,
-                            traceParent);
+                            traceParent,
+                            traceState);
 
                         if (activity != null)
                         {
@@ -95,10 +112,9 @@ namespace HomeBudget.Components.Operations.Consumers
                             activity.SetTag(ActivityTags.MessagingOperation, "process");
                             activity.SetTag("messaging.kafka.partition", payload.Partition);
                             activity.SetTag("messaging.kafka.offset", payload.Offset);
-                            activity.SetTag("messaging.message_id", message.Key);
+                            activity.SetTag("messaging.message_id", messageId ?? message.Key);
+                            activity.SetTag("messaging.conversation_id", causationId);
                             activity.SetCorrelationId(correlationId);
-
-                            activity.SetTraceId(traceId);
                         }
 
                         paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = correlationId;
@@ -110,6 +126,26 @@ namespace HomeBudget.Components.Operations.Consumers
                         if (!string.IsNullOrEmpty(traceParent))
                         {
                             paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+                        }
+
+                        if (!string.IsNullOrEmpty(traceState))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.TraceState] = traceState;
+                        }
+
+                        if (!string.IsNullOrEmpty(baggage))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.Baggage] = baggage;
+                        }
+
+                        if (!string.IsNullOrEmpty(messageId))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.MessageId] = messageId;
+                        }
+
+                        if (!string.IsNullOrEmpty(causationId))
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.CausationId] = causationId;
                         }
 
                         var payloadData = paymentEvent.Payload;
@@ -146,6 +182,10 @@ namespace HomeBudget.Components.Operations.Consumers
                         ? Encoding.UTF8.GetString(tpBytes)
                         : null;
 
+                    var traceState = message.Headers.TryGetLastBytes(KafkaMessageHeaders.Tracestate, out var tsBytes)
+                        ? Encoding.UTF8.GetString(tsBytes)
+                        : null;
+
                     message.Headers.Add(
                         KafkaMessageHeaders.ProcessedAt,
                         Encoding.UTF8.GetBytes(dateTimeProvider.GetNowUtc().ToString("O")));
@@ -153,7 +193,8 @@ namespace HomeBudget.Components.Operations.Consumers
                     using var activity = ActivityPropagation.StartActivity(
                         "outbox.status.acknowledged",
                         ActivityKind.Consumer,
-                        traceParent);
+                        traceParent,
+                        traceState);
 
                     logger.PaymentConsumed(message.Key);
 

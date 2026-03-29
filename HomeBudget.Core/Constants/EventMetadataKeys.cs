@@ -13,5 +13,13 @@
         public static readonly string TraceId = "trace-id";
 
         public static readonly string TraceParent = "trace-parent";
+
+        public static readonly string TraceState = "trace-state";
+
+        public static readonly string Baggage = "baggage";
+
+        public static readonly string MessageId = "message-id";
+
+        public static readonly string CausationId = "causation-id";
     }
 }

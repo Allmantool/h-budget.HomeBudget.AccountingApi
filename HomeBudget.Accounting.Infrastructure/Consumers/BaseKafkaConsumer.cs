@@ -179,20 +179,40 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         var correlationId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.CorrelationId, out var lastHeaderBytes)
                             ? Encoding.UTF8.GetString(lastHeaderBytes)
                             : string.Empty;
+                        var messageId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.MessageId, out var messageIdBytes)
+                            ? Encoding.UTF8.GetString(messageIdBytes)
+                            : string.Empty;
+                        var causationId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.CausationId, out var causationIdBytes)
+                            ? Encoding.UTF8.GetString(causationIdBytes)
+                            : string.Empty;
 
                         using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CorrelationId), correlationId))
+                        using (LogContext.PushProperty(nameof(KafkaMessageHeaders.MessageId), messageId))
+                        using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CausationId), causationId))
                         {
-                            // Extract traceparent header (optional)
-                            string traceParent = null;
+                            var propagationCarrier = new Dictionary<string, string>(3);
                             if (consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.Traceparent, out var traceParentBytes))
                             {
-                                traceParent = Encoding.UTF8.GetString(traceParentBytes);
+                                propagationCarrier[TraceContextPropagation.TraceParent] = Encoding.UTF8.GetString(traceParentBytes);
                             }
+
+                            if (consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.Tracestate, out var traceStateBytes))
+                            {
+                                propagationCarrier[TraceContextPropagation.TraceState] = Encoding.UTF8.GetString(traceStateBytes);
+                            }
+
+                            if (consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.Baggage, out var baggageBytes))
+                            {
+                                propagationCarrier[TraceContextPropagation.Baggage] = Encoding.UTF8.GetString(baggageBytes);
+                            }
+
+                            var propagationContext = TraceContextPropagation.Extract(propagationCarrier);
 
                             using var activity = ActivityPropagation.StartActivity(
                                 "kafka.consume",
                                 ActivityKind.Consumer,
-                                traceParent);
+                                propagationContext);
+                            using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
 
                             if (activity != null)
                             {
@@ -201,7 +221,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                                 activity.SetTag(ActivityTags.MessagingOperation, "receive");
                                 activity.SetTag("messaging.kafka.partition", consumeResult.Partition.Value);
                                 activity.SetTag("messaging.kafka.offset", consumeResult.Offset.Value);
-                                activity.SetTag("messaging.message_id", consumedMessage?.Key?.ToString());
+                                activity.SetTag("messaging.message_id", string.IsNullOrWhiteSpace(messageId) ? consumedMessage?.Key?.ToString() : messageId);
+                                activity.SetTag("messaging.conversation_id", causationId);
 
                                 activity.SetCorrelationId(correlationId);
                             }

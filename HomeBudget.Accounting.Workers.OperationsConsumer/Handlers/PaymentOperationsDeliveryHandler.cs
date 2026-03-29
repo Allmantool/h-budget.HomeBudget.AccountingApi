@@ -60,26 +60,34 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                     try
                     {
                         var traceParent = firstEvent.Metadata.Get(EventMetadataKeys.TraceParent);
-                        var traceId = firstEvent.Metadata.Get(EventMetadataKeys.TraceId);
+                        var traceState = firstEvent.Metadata.Get(EventMetadataKeys.TraceState);
+                        var baggage = firstEvent.Metadata.Get(EventMetadataKeys.Baggage);
                         var correlationId = firstEvent.Metadata.Get(EventMetadataKeys.CorrelationId);
+                        var messageId = firstEvent.Metadata.Get(EventMetadataKeys.MessageId);
+                        var links = TraceContextPropagation.CreateLinks(
+                            streamEvents.Select(ev => (IReadOnlyDictionary<string, string>)TraceContextPropagation.BuildCarrier(
+                                ev.Metadata.Get(EventMetadataKeys.TraceParent),
+                                ev.Metadata.Get(EventMetadataKeys.TraceState),
+                                ev.Metadata.Get(EventMetadataKeys.Baggage))));
+                        var propagationContext = TraceContextPropagation.Extract(
+                            TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
 
                         using var activity = ActivityPropagation.StartActivity(
                             "eventstore.write",
                             ActivityKind.Producer,
-                            traceParent);
+                            propagationContext.ActivityContext,
+                            links);
+                        using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
+                        var writeStartedAt = Stopwatch.StartNew();
 
                         if (activity != null)
                         {
                             activity.SetCorrelationId(correlationId);
-                            if (!string.IsNullOrWhiteSpace(traceId))
-                            {
-                                activity.SetTraceId(traceId);
-                            }
-
                             activity.SetTag("messaging.system", "eventstore");
                             activity.SetTag("messaging.stream", streamName);
                             activity.SetTag("messaging.event_count", streamEvents.Count());
                             activity.SetTag("messaging.first_event_type", firstEvent.EventType.ToString());
+                            activity.SetTag("messaging.message_id", messageId);
                         }
 
                         await _eventStoreDbWriteClient.SendBatchAsync(
@@ -88,6 +96,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                             eventTypeTitle,
                             cancellationToken);
 
+                        writeStartedAt.Stop();
+                        TelemetryMetrics.EventStoreWriteDurationMs.Record(
+                            writeStartedAt.Elapsed.TotalMilliseconds,
+                            [new("event_type", firstEvent.EventType.ToString())]);
                         activity?.SetStatus(ActivityStatusCode.Ok);
                         activity?.AddEvent(ActivityEvents.EventStoreSend);
                     }
