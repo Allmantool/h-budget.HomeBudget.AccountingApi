@@ -40,14 +40,40 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<decimal>.Succeeded(0);
             }
 
-            var operationHistory = await BuildHistoryAsync(validAndMostUpToDateOperations);
+            if (validAndMostUpToDateOperations.Count == 1)
+            {
+                var paymentOperation = validAndMostUpToDateOperations.Single().Payload;
 
-            await paymentsHistoryDocumentsClient.RewriteAllAsync(financialPeriodIdentifier, operationHistory);
+                var categoryDocumentsResult = await categoryDocumentsClient.GetByIdAsync(paymentOperation.CategoryId);
+                var categoryDocument = categoryDocumentsResult.Payload;
 
-            return Result<decimal>.Succeeded(operationHistory.LastOrDefault()?.Balance ?? 0);
+                var categoryMap = categoryDocument == null
+                    ? new Dictionary<Guid, Category>()
+                    : new Dictionary<Guid, Category>
+                    {
+                        { categoryDocument.Payload.Key, categoryDocument.Payload }
+                    };
+
+                var record = new PaymentOperationHistoryRecord
+                {
+                    Record = paymentOperation,
+                    Balance = CalculateIncrement(paymentOperation, categoryMap)
+                };
+
+                await paymentsHistoryDocumentsClient.ReplaceOneAsync(financialPeriodIdentifier, record);
+                return Result<decimal>.Succeeded(record.Balance);
+            }
+
+            await InsertManyAsync(financialPeriodIdentifier, validAndMostUpToDateOperations);
+
+            var mostUpToDateHistoryDocument = await paymentsHistoryDocumentsClient.GetLastForPeriodAsync(financialPeriodIdentifier);
+            var mostUpToDateHistoryRecord = mostUpToDateHistoryDocument?.Payload;
+
+            return Result<decimal>.Succeeded(mostUpToDateHistoryRecord?.Balance ?? 0);
         }
 
-        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> BuildHistoryAsync(
+        private async Task InsertManyAsync(
+            string financialPeriodIdentifier,
             IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
         {
             var categoryIds = validAndMostUpToDateOperations
@@ -74,7 +100,7 @@ namespace HomeBudget.Components.Operations.Services
                 });
             }
 
-            return operationsHistory;
+            await paymentsHistoryDocumentsClient.BulkWriteAsync(financialPeriodIdentifier, operationsHistory);
         }
 
         private static decimal CalculateIncrement(FinancialTransaction operation, Dictionary<Guid, Category> categoryMap)

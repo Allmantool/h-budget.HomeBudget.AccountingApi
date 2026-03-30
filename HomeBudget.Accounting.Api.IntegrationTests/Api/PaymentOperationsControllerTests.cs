@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
-using MongoDB.Driver;
 using NUnit.Framework;
 using RestSharp;
 
@@ -19,9 +18,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
-using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.Api
@@ -240,83 +237,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public async Task DeleteById_WhenDeletingSecondThenThirdOperation_ShouldKeepHistoryProjectionInSync()
-        {
-            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
-            var categoryId = (await SaveCategoryAsync(
-                CategoryTypes.Income,
-                nameof(DeleteById_WhenDeletingSecondThenThirdOperation_ShouldKeepHistoryProjectionInSync))).Payload;
-
-            var operationDates = new[]
-            {
-                new DateOnly(2024, 1, 5),
-                new DateOnly(2024, 1, 6),
-                new DateOnly(2024, 1, 7)
-            };
-
-            foreach (var (operationDate, index) in operationDates.Select((value, idx) => (value, idx)))
-            {
-                var createRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
-                    .AddJsonBody(new CreateOperationRequest
-                    {
-                        Amount = 10 + index,
-                        Comment = $"projection-delete-{index}",
-                        CategoryId = categoryId,
-                        ContractorId = Guid.NewGuid().ToString(),
-                        OperationDate = operationDate
-                    });
-
-                var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(
-                    createRequest,
-                    executionDelayAfterInMs: 1000);
-
-                createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
-                createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
-            }
-
-            var historyBeforeDelete = await WaitForHistoryRecordsAsync(
-                paymentAccountId,
-                records => records.Count == 3);
-
-            var orderedOperationIds = historyBeforeDelete
-                .OrderBy(record => record.Record.OperationDay)
-                .ThenBy(record => record.Record.Key)
-                .Select(record => record.Record.Key)
-                .ToArray();
-
-            await DeleteOperationAsync(paymentAccountId, orderedOperationIds[1]);
-
-            var historyAfterSecondDelete = await WaitForHistoryRecordsAsync(
-                paymentAccountId,
-                records =>
-                    records.Count == 2 &&
-                    records.All(record => record.Record.Key != orderedOperationIds[1]));
-
-            historyAfterSecondDelete
-                .OrderBy(record => record.Record.OperationDay)
-                .ThenBy(record => record.Record.Key)
-                .Select(record => record.Record.Key)
-                .Should()
-                .Equal(orderedOperationIds[0], orderedOperationIds[2]);
-
-            var projectedKeysAfterSecondDelete = await GetProjectedHistoryKeysAsync(paymentAccountId, operationDates[0]);
-            projectedKeysAfterSecondDelete.Should().Equal(orderedOperationIds[0], orderedOperationIds[2]);
-
-            await DeleteOperationAsync(paymentAccountId, orderedOperationIds[2]);
-
-            var historyAfterThirdDelete = await WaitForHistoryRecordsAsync(
-                paymentAccountId,
-                records =>
-                    records.Count == 1 &&
-                    records.Single().Record.Key == orderedOperationIds[0]);
-
-            historyAfterThirdDelete.Single().Record.Key.Should().Be(orderedOperationIds[0]);
-
-            var projectedKeysAfterThirdDelete = await GetProjectedHistoryKeysAsync(paymentAccountId, operationDates[0]);
-            projectedKeysAfterThirdDelete.Should().Equal(orderedOperationIds[0]);
-        }
-
-        [Test]
         public async Task Update_WithInvalid_ThenFail()
         {
             const string operationId = "invalid-operation-ref";
@@ -509,49 +429,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return getResponse.Data.Payload;
         }
 
-        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryRecordsAsync(
-            Guid paymentAccountId,
-            Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
-            CancellationToken cancellationToken = default)
-        {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecords = await GetHistoryRecordsAsync(paymentAccountId);
-
-                    if (condition(lastRecords))
-                    {
-                        return lastRecords;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = string.Join(
-                " | ",
-                lastRecords
-                    .OrderBy(r => r.Record.OperationDay)
-                    .ThenBy(r => r.Record.Key)
-                    .Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
-
-            Assert.Fail(
-                $"Payment history for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecords;
-        }
-
         private async Task<PaymentAccount> GetPaymentsAccountAsync(Guid paymentAccountId)
         {
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
@@ -614,36 +491,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             }
 
             return response.Data.Payload;
-        }
-
-        private async Task DeleteOperationAsync(Guid paymentAccountId, Guid operationId)
-        {
-            var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{operationId}", Method.Delete);
-            var deleteResponse = await _restClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(
-                deleteOperationRequest,
-                executionDelayAfterInMs: 1000);
-
-            deleteResponse.IsSuccessful.Should().BeTrue(DescribeResponse(deleteResponse));
-            deleteResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(deleteResponse));
-        }
-
-        private async Task<IReadOnlyCollection<Guid>> GetProjectedHistoryKeysAsync(Guid paymentAccountId, DateOnly operationDay)
-        {
-            var dbConnection = TestContainers.MongoDbContainer.GetConnectionString();
-            var collectionName = operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
-
-            using var client = new MongoClient(dbConnection);
-
-            var database = client.GetDatabase("ledger_test");
-            var collection = database.GetCollection<PaymentHistoryDocument>(collectionName);
-
-            var documents = await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .SortBy(document => document.Payload.Record.OperationDay)
-                .ThenBy(document => document.Payload.Record.OperationUnixTime)
-                .ThenBy(document => document.Payload.Record.Key)
-                .ToListAsync();
-
-            return documents.Select(document => document.Payload.Record.Key).ToArray();
         }
 
         private static string DescribeResponse<T>(RestResponse<Result<T>> response)

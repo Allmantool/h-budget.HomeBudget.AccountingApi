@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -184,49 +183,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
             result.Payload.Should().Be(0);
         }
 
-        [Test]
-        public async Task SyncHistoryAsync_WhenDeletingOneOfThreeOperations_RewritesHistoryWithRemainingRecordsOnly()
+        private static PaymentOperationsHistoryService BuildServiceUnderTest()
         {
-            var paymentAccountId = Guid.Parse("70a4fb0b-80db-4911-a554-e5883f33867a");
-            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
-            var firstOperationId = Guid.Parse("ac0ba251-65b1-4ef7-b558-b9250ca4f7d8");
-            var secondOperationId = Guid.Parse("bb8a3ed6-2aa4-4b4c-8571-55c2ba0def7e");
-            var thirdOperationId = Guid.Parse("0a6eb127-b238-4381-a0bb-f652e8d0d57e");
-
-            var events = new List<PaymentOperationEvent>
-            {
-                CreateEvent(PaymentEventTypes.Added, paymentAccountId, firstOperationId, categoryId, 10m, new DateOnly(2024, 1, 5)),
-                CreateEvent(PaymentEventTypes.Added, paymentAccountId, secondOperationId, categoryId, 20m, new DateOnly(2024, 1, 6)),
-                CreateEvent(PaymentEventTypes.Added, paymentAccountId, thirdOperationId, categoryId, 30m, new DateOnly(2024, 1, 7)),
-                CreateEvent(PaymentEventTypes.Removed, paymentAccountId, secondOperationId, categoryId, 20m, new DateOnly(2024, 1, 6)),
-            };
-
             var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
-            var sut = BuildServiceUnderTest(paymentsHistoryClientMock);
-            var periodIdentifier = new DateOnly(2024, 1, 5).ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
-
-            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
-
-            result.Payload.Should().Be(40m);
-
-            paymentsHistoryClientMock.Verify(
-                client => client.RewriteAllAsync(
-                    periodIdentifier,
-                    It.Is<IEnumerable<PaymentOperationHistoryRecord>>(records =>
-                        records.Select(record => record.Record.Key).SequenceEqual(new[] { firstOperationId, thirdOperationId }) &&
-                        records.Select(record => record.Balance).SequenceEqual(new[] { 10m, 40m }))),
-                Times.Once);
-            paymentsHistoryClientMock.Verify(
-                client => client.BulkWriteAsync(It.IsAny<string>(), It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>()),
-                Times.Never);
-            paymentsHistoryClientMock.Verify(
-                client => client.ReplaceOneAsync(It.IsAny<string>(), It.IsAny<PaymentOperationHistoryRecord>()),
-                Times.Never);
-        }
-
-        private static PaymentOperationsHistoryService BuildServiceUnderTest(Mock<IPaymentsHistoryDocumentsClient> paymentsHistoryClientMock = null)
-        {
-            paymentsHistoryClientMock ??= new Mock<IPaymentsHistoryDocumentsClient>();
             var paymentAccountDocumentClientMock = new Mock<IPaymentAccountDocumentClient>();
 
             paymentAccountDocumentClientMock
@@ -266,28 +225,6 @@ namespace HomeBudget.Components.Operations.Tests.Services
             return new PaymentOperationsHistoryService(
                 paymentsHistoryClientMock.Object,
                 categoriesClient.Object);
-        }
-
-        private static PaymentOperationEvent CreateEvent(
-            PaymentEventTypes eventType,
-            Guid paymentAccountId,
-            Guid operationId,
-            Guid categoryId,
-            decimal amount,
-            DateOnly operationDay)
-        {
-            return new PaymentOperationEvent
-            {
-                EventType = eventType,
-                Payload = new FinancialTransaction
-                {
-                    PaymentAccountId = paymentAccountId,
-                    Key = operationId,
-                    CategoryId = categoryId,
-                    Amount = amount,
-                    OperationDay = operationDay
-                }
-            };
         }
     }
 }
