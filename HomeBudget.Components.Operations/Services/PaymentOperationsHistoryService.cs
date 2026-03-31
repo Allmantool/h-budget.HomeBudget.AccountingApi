@@ -3,138 +3,87 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Categories.Clients.Interfaces;
+using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
+using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Core.Exstensions;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Services
 {
-    internal class PaymentOperationsHistoryService(
+    internal sealed class PaymentOperationsHistoryService(
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ICategoryDocumentsClient categoryDocumentsClient)
-    : IPaymentOperationsHistoryService
+        : IPaymentOperationsHistoryService
     {
+        private readonly IPaymentsHistoryDocumentsClient _paymentsHistoryDocumentsClient =
+            paymentsHistoryDocumentsClient ?? throw new ArgumentNullException(nameof(paymentsHistoryDocumentsClient));
+
+        private readonly ICategoryDocumentsClient _categoryDocumentsClient =
+            categoryDocumentsClient ?? throw new ArgumentNullException(nameof(categoryDocumentsClient));
+
         public async Task<Result<decimal>> SyncHistoryAsync(
             string financialPeriodIdentifier,
             IEnumerable<PaymentOperationEvent> eventsForAccount)
         {
-            if (eventsForAccount.IsNullOrEmpty())
+            if (string.IsNullOrWhiteSpace(financialPeriodIdentifier))
             {
-                return Result<decimal>.Succeeded(default);
+                throw new ArgumentException(
+                    "Financial period identifier cannot be null or whitespace.",
+                    nameof(financialPeriodIdentifier));
             }
 
-            var validAndMostUpToDateOperations = GetValidAndMostUpToDateOperations(eventsForAccount)
-                .OrderBy(ev => ev.Payload.OperationDay)
-                .ThenBy(ev => ev.Payload.OperationUnixTime)
-                .ThenBy(ev => ev.Payload.Key)
+            ArgumentNullException.ThrowIfNull(eventsForAccount);
+
+            var inputEvents = eventsForAccount.ToList();
+            if (inputEvents.Count == 0)
+            {
+                return Result<decimal>.Succeeded(0m);
+            }
+
+            var latestActiveEvents = inputEvents
+                .GetValidAndMostUpToDateOperations()
+                .Where(static x => x?.Payload != null)
                 .ToList();
 
-            if (validAndMostUpToDateOperations.IsNullOrEmpty())
+            if (latestActiveEvents.Count == 0)
             {
-                await paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
-                return Result<decimal>.Succeeded(0);
+                await _paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
+                return Result<decimal>.Succeeded(0m);
             }
 
-            if (validAndMostUpToDateOperations.Count == 1)
-            {
-                var paymentOperation = validAndMostUpToDateOperations.Single().Payload;
+            var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
+            var historyRecords = latestActiveEvents.BuildHistoryRecords(categoryMap);
 
-                var categoryDocumentsResult = await categoryDocumentsClient.GetByIdAsync(paymentOperation.CategoryId);
-                var categoryDocument = categoryDocumentsResult.Payload;
+            await _paymentsHistoryDocumentsClient.BulkWriteAsync(financialPeriodIdentifier, historyRecords);
 
-                var categoryMap = categoryDocument == null
-                    ? new Dictionary<Guid, Category>()
-                    : new Dictionary<Guid, Category>
-                    {
-                        { categoryDocument.Payload.Key, categoryDocument.Payload }
-                    };
-
-                var record = new PaymentOperationHistoryRecord
-                {
-                    Record = paymentOperation,
-                    Balance = CalculateIncrement(paymentOperation, categoryMap)
-                };
-
-                await paymentsHistoryDocumentsClient.ReplaceOneAsync(financialPeriodIdentifier, record);
-                return Result<decimal>.Succeeded(record.Balance);
-            }
-
-            await InsertManyAsync(financialPeriodIdentifier, validAndMostUpToDateOperations);
-
-            var mostUpToDateHistoryDocument = await paymentsHistoryDocumentsClient.GetLastForPeriodAsync(financialPeriodIdentifier);
-            var mostUpToDateHistoryRecord = mostUpToDateHistoryDocument?.Payload;
-
-            return Result<decimal>.Succeeded(mostUpToDateHistoryRecord?.Balance ?? 0);
+            return Result<decimal>.Succeeded(historyRecords[^1].Balance);
         }
 
-        private async Task InsertManyAsync(
-            string financialPeriodIdentifier,
-            IEnumerable<PaymentOperationEvent> validAndMostUpToDateOperations)
+        private async Task<IReadOnlyDictionary<Guid, Category>> LoadCategoryMapAsync(
+            IReadOnlyCollection<PaymentOperationEvent> operationEvents)
         {
-            var categoryIds = validAndMostUpToDateOperations
-                .Select(op => op.Payload.CategoryId)
-                .Where(id => id != Guid.Empty)
+            var categoryIds = operationEvents
+                .Select(static x => x.Payload.CategoryId)
+                .Where(static x => x != Guid.Empty)
                 .Distinct()
-                .ToList();
+                .ToArray();
 
-            var categoryDocumentsResult = await categoryDocumentsClient.GetByIdsAsync(categoryIds);
-            var categoryMap = categoryDocumentsResult.Payload.ToDictionary(doc => doc.Payload.Key, doc => doc.Payload);
-
-            var operationsHistory = new List<PaymentOperationHistoryRecord>();
-            decimal previousBalance = 0;
-
-            foreach (var operationEvent in validAndMostUpToDateOperations.Select(r => r.Payload))
+            if (categoryIds.Length == 0)
             {
-                var increment = CalculateIncrement(operationEvent, categoryMap);
-                previousBalance += increment;
-
-                operationsHistory.Add(new PaymentOperationHistoryRecord
-                {
-                    Record = operationEvent,
-                    Balance = previousBalance
-                });
+                return new Dictionary<Guid, Category>();
             }
 
-            await paymentsHistoryDocumentsClient.BulkWriteAsync(financialPeriodIdentifier, operationsHistory);
-        }
+            var categoryDocumentsResult = await _categoryDocumentsClient.GetByIdsAsync(categoryIds);
+            var categoryDocuments = categoryDocumentsResult.Payload ?? Array.Empty<CategoryDocument>();
 
-        private static decimal CalculateIncrement(FinancialTransaction operation, Dictionary<Guid, Category> categoryMap)
-        {
-            if (operation.CategoryId == Guid.Empty)
-            {
-                return operation.Amount;
-            }
-
-            if (!categoryMap.TryGetValue(operation.CategoryId, out var category))
-            {
-                category = new Category(CategoryTypes.Expense, ["with empty category"]);
-            }
-
-            return category.CategoryType == CategoryTypes.Income
-                ? Math.Abs(operation.Amount)
-                : -Math.Abs(operation.Amount);
-        }
-
-        private static IReadOnlyCollection<PaymentOperationEvent> GetValidAndMostUpToDateOperations(
-            IEnumerable<PaymentOperationEvent> eventsForAccount)
-        {
-            var existedOperationEventGroups = eventsForAccount
-                .GroupBy(ev => ev.Payload.Key)
-                .Where(gr => gr.All(ev => ev.EventType != PaymentEventTypes.Removed))
-                .Where(gr => gr.Any(ev => ev.EventType is PaymentEventTypes.Added or PaymentEventTypes.Updated));
-
-            return existedOperationEventGroups
-                .Select(gr => gr
-                    .OrderBy(ev => ev.Payload.OperationDay)
-                    .ThenBy(ev => ev.Payload.OperationUnixTime)
-                    .ThenBy(ev => ev.Payload.Key)
-                    .Last())
-                .ToList();
+            return categoryDocuments
+                .Where(static x => x?.Payload != null)
+                .GroupBy(static x => x.Payload.Key)
+                .ToDictionary(static x => x.Key, static x => x.Last().Payload);
         }
     }
 }
