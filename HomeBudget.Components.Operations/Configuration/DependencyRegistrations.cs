@@ -33,6 +33,7 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IOutboxPaymentStatusService, OutboxPaymentStatusService>()
+                .AddScoped<IPaymentMessageInboxService, PaymentMessageInboxService>()
                 .AddScoped<PaymentOutboxPublisher>()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
@@ -46,6 +47,8 @@ namespace HomeBudget.Components.Operations.Configuration
             return services
                 .Configure<PaymentOutboxPublisherOptions>(
                     configuration.GetSection(PaymentOutboxPublisherOptions.SectionName))
+                .Configure<PaymentInboxOptions>(
+                    configuration.GetSection(PaymentInboxOptions.SectionName))
                 .AddHostedService<PaymentOutboxPublisherWorker>();
         }
 

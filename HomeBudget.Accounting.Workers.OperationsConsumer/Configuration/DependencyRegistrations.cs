@@ -19,6 +19,7 @@ using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Accounts.Configuration;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Options;
 using HomeBudget.Components.Operations.PIpelines;
 using HomeBudget.Core.Options;
 
@@ -43,6 +44,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 .RegisterCategoriesDependencies()
                 .RegisterCommandHandlers()
                 .Configure<KafkaOptions>(configuration.GetSection(ConfigurationSectionKeys.KafkaOptions))
+                .Configure<PaymentInboxOptions>(configuration.GetSection(PaymentInboxOptions.SectionName))
                 .AddSingleton<IKafkaConsumersFactory, KafkaConsumersFactory>()
                 .AddSingleton<IConsumerService, KafkaConsumerService>()
                 .AddSingleton<IPaymentOperationsDeliveryHandler, PaymentOperationsDeliveryHandler>()

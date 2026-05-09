@@ -13,6 +13,9 @@ public static class TelemetryMetrics
     public static readonly Counter<long> OutboxStatusTransitions = Meter.CreateCounter<long>(
         "homebudget.outbox.status.transitions");
 
+    public static readonly Counter<long> PaymentInboxStatusTransitions = Meter.CreateCounter<long>(
+        "homebudget.payment_inbox.status.transitions");
+
     public static readonly Histogram<double> EventStoreWriteDurationMs = Meter.CreateHistogram<double>(
         "homebudget.eventstore.write.duration",
         "ms");

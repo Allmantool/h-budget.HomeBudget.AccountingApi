@@ -24,5 +24,23 @@ namespace HomeBudget.Components.Operations.Logs
             Level = LogLevel.Error,
             Message = "{Consumer} failed to consume with error: {Exception}")]
         public static partial void ConsumerFailed(this ILogger logger, string consumer, string exception, Exception ex);
+
+        [LoggerMessage(
+            EventId = 2004,
+            Level = LogLevel.Information,
+            Message = "Duplicate payment operation message skipped. MessageId={MessageId}, Status={Status}")]
+        public static partial void DuplicateMessageSkipped(this ILogger logger, string messageId, string status);
+
+        [LoggerMessage(
+            EventId = 2005,
+            Level = LogLevel.Warning,
+            Message = "Payment operation message failed transiently and will be retried. MessageId={MessageId}, RetryCount={RetryCount}, Error={Error}")]
+        public static partial void TransientMessageFailure(this ILogger logger, string messageId, int retryCount, string error, Exception ex);
+
+        [LoggerMessage(
+            EventId = 2006,
+            Level = LogLevel.Error,
+            Message = "Payment operation message reached poison/DLQ state. MessageId={MessageId}, RetryCount={RetryCount}, Error={Error}")]
+        public static partial void PoisonMessageReachedDeadLetter(this ILogger logger, string messageId, int retryCount, string error, Exception ex);
     }
 }

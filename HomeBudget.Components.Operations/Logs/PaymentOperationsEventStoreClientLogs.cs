@@ -21,13 +21,13 @@ namespace HomeBudget.Components.Operations.Logs
         [LoggerMessage(
             EventId = 1002,
             Level = LogLevel.Error,
-            Message = "All retries exhausted for {EventType}. OperationKey={OperationKey}. Sending to DLQ.")]
+            Message = "All retries exhausted for {EventType}. OperationKey={OperationKey}.")]
         public static partial void RetriesExhausted(this ILogger logger, string eventType, string operationKey, Exception exception);
 
         [LoggerMessage(
             EventId = 1009,
             Level = LogLevel.Error,
-            Message = "Payment event batch processor crashed. Send to dead queue: {Message}")]
-        public static partial void SendEventToDeadQueue(this ILogger logger, string message, Exception exception);
+            Message = "Payment event batch append failed: {Message}")]
+        public static partial void AppendFailed(this ILogger logger, string message, Exception exception);
     }
 }
