@@ -114,18 +114,25 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<Guid>.Failure($"Invalid '{nameof(paymentAccountId)}' has been provided");
             }
 
-            var paymentAccountForUpdate = new PaymentAccount
+            var documentResult = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
+
+            if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                Agent = request.Agent,
-                Balance = request.Balance,
-                Currency = request.Currency,
-                Description = request.Description,
-                Type = BaseEnumeration<AccountTypes, int>.FromValue(request.AccountType)
-            };
+                return Result<Guid>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
+            }
+
+            var paymentAccountForUpdate = documentResult.Payload.Payload;
+            paymentAccountForUpdate.UpdateMetadata(
+                request.Agent,
+                request.Currency,
+                request.Description,
+                BaseEnumeration<AccountTypes, int>.FromValue(request.AccountType));
 
             var updateResult = await paymentAccountDocumentClient.UpdateAsync(paymentAccountId, paymentAccountForUpdate);
 
-            return Result<Guid>.Succeeded(updateResult.Payload);
+            return updateResult.IsSucceeded
+                ? Result<Guid>.Succeeded(updateResult.Payload)
+                : Result<Guid>.Failure(updateResult.StatusMessage);
         }
     }
 }

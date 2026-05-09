@@ -74,6 +74,11 @@ namespace HomeBudget.Components.Accounts.Clients
 
             var documentResult = await GetByIdAsync(requestPaymentAccountGuid);
 
+            if (!documentResult.IsSucceeded || documentResult.Payload == null)
+            {
+                return Result<Guid>.Failure($"The payment account with '{requestPaymentAccountGuid}' hasn't been found");
+            }
+
             var replacement = new PaymentAccountDocument
             {
                 Id = documentResult.Payload.Id,
