@@ -27,6 +27,8 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         private bool _disposed;
 
+        protected EventStoreClient Client => _client;
+
         protected BaseEventStoreWriteClient(EventStoreClient client, EventStoreDbOptions options, ILogger logger)
         {
             _client = client;
@@ -125,6 +127,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
         }
 
         private static EventData CreateEventData(T @event, string eventType)
+            => CreateEventData(@event, eventType, Uuid.NewUuid());
+
+        protected static EventData CreateEventData(T @event, string eventType, Uuid eventId)
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(@event);
             var metadataBytes = @event is BaseEvent baseEvent && baseEvent.Metadata?.Count > 0
@@ -132,8 +137,8 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 : null;
 
             return metadataBytes is null
-                ? new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory())
-                : new EventData(Uuid.NewUuid(), eventType ?? typeof(T).Name, bytes.AsMemory(), metadataBytes.AsMemory());
+                ? new EventData(eventId, eventType ?? typeof(T).Name, bytes.AsMemory())
+                : new EventData(eventId, eventType ?? typeof(T).Name, bytes.AsMemory(), metadataBytes.AsMemory());
         }
 
         public void Dispose()

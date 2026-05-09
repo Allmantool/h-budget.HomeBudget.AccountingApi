@@ -1,3 +1,6 @@
+USE [HomeBudget.Accounting];
+GO
+
 IF COL_LENGTH('dbo.OutboxAccountPayments', 'OperationId') IS NULL
 BEGIN
     ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
@@ -10,12 +13,14 @@ BEGIN
     ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
         ADD CreatedUtc DATETIME2(7) NULL;
 
-    UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
-       SET CreatedUtc = CreatedAt
-     WHERE CreatedUtc IS NULL;
+    EXEC(N'
+        UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
+           SET CreatedUtc = CreatedAt
+         WHERE CreatedUtc IS NULL;');
 
-    ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
-        ALTER COLUMN CreatedUtc DATETIME2(7) NOT NULL;
+    EXEC(N'
+        ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
+            ALTER COLUMN CreatedUtc DATETIME2(7) NOT NULL;');
 END
 GO
 
@@ -24,12 +29,14 @@ BEGIN
     ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
         ADD UpdatedUtc DATETIME2(7) NULL;
 
-    UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
-       SET UpdatedUtc = UpdatedAt
-     WHERE UpdatedUtc IS NULL;
+    EXEC(N'
+        UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
+           SET UpdatedUtc = UpdatedAt
+         WHERE UpdatedUtc IS NULL;');
 
-    ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
-        ALTER COLUMN UpdatedUtc DATETIME2(7) NOT NULL;
+    EXEC(N'
+        ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
+            ALTER COLUMN UpdatedUtc DATETIME2(7) NOT NULL;');
 END
 GO
 
@@ -38,10 +45,11 @@ BEGIN
     ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
         ADD PublishedUtc DATETIME2(7) NULL;
 
-    UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
-       SET PublishedUtc = PublishedAt
-     WHERE PublishedUtc IS NULL
-       AND PublishedAt IS NOT NULL;
+    EXEC(N'
+        UPDATE [HomeBudget.Accounting].dbo.OutboxAccountPayments
+           SET PublishedUtc = PublishedAt
+         WHERE PublishedUtc IS NULL
+           AND PublishedAt IS NOT NULL;');
 END
 GO
 

@@ -9,6 +9,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
+using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Commands;
@@ -45,7 +46,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = request.CorrelationId;
             paymentEvent.Metadata[EventMetadataKeys.MessageId] = messageId;
+            paymentEvent.Metadata[EventMetadataKeys.CommandId] = messageId;
             paymentEvent.Metadata[EventMetadataKeys.CausationId] = causationId ?? string.Empty;
+            paymentEvent.Metadata[EventMetadataKeys.SourceSystem] = PaymentOperationEventIdentity.DefaultSourceSystem;
 
             if (activity != null)
             {

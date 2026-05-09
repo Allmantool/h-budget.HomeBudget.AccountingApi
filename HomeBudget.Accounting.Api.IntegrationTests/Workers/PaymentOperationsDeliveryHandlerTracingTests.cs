@@ -36,54 +36,74 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Workers
 
             ActivitySource.AddActivityListener(listener);
 
-            using var firstConsume = activitySource.StartActivity("first.consume", ActivityKind.Consumer);
-            var firstEnvelope = ActivityEnvelope<PaymentOperationEvent>.Capture(CreatePaymentEvent());
+            var originalActivity = Activity.Current;
 
-            using var secondConsume = activitySource.StartActivity("second.consume", ActivityKind.Consumer);
-            var secondEnvelope = ActivityEnvelope<PaymentOperationEvent>.Capture(CreatePaymentEvent());
+            try
+            {
+                Activity.Current = null;
 
-            var writeClient = new Mock<IEventStoreDbWriteClient<PaymentOperationEvent>>();
-            writeClient
-                .Setup(client => client.SendBatchAsync(
-                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<CancellationToken>()))
-                .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((events, _, _, _) =>
-                {
-                    Activity.Current.Should().NotBeNull();
-                    Activity.Current!.ParentSpanId.Should().Be(firstConsume!.SpanId);
-                    Activity.Current.Links.Select(link => link.Context.SpanId).Should().Contain(secondConsume!.SpanId);
+                using var firstConsume = activitySource.StartActivity("first.consume", ActivityKind.Consumer);
+                firstConsume.Should().NotBeNull();
+                var firstEnvelope = ActivityEnvelope<PaymentOperationEvent>.Capture(CreatePaymentEvent());
+                firstConsume!.Stop();
 
-                    foreach (var paymentEvent in events)
+                Activity.Current = null;
+
+                using var secondConsume = activitySource.StartActivity("second.consume", ActivityKind.Consumer);
+                secondConsume.Should().NotBeNull();
+                var secondEnvelope = ActivityEnvelope<PaymentOperationEvent>.Capture(CreatePaymentEvent());
+                secondConsume!.Stop();
+
+                Activity.Current = null;
+
+                var writeClient = new Mock<IEventStoreDbWriteClient<PaymentOperationEvent>>();
+                writeClient
+                    .Setup(client => client.SendBatchAsync(
+                        It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()))
+                    .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((events, _, _, _) =>
                     {
-                        paymentEvent.Metadata[EventMetadataKeys.TraceParent].Should().Be(Activity.Current.Id);
-                        paymentEvent.Metadata[EventMetadataKeys.TraceId].Should().Be(Activity.Current.TraceId.ToString());
-                        paymentEvent.Metadata[EventMetadataKeys.CausationId].Should().Be(Activity.Current.SpanId.ToString());
-                    }
-                })
-                .ReturnsAsync(Mock.Of<IWriteResult>());
+                        var writeActivity = Activity.Current;
+                        writeActivity.Should().NotBeNull();
+                        writeActivity!.ParentSpanId.Should().Be(firstConsume.SpanId);
+                        writeActivity.Links.Select(link => link.Context.SpanId).Should().Contain(secondConsume.SpanId);
 
-            var sut = new PaymentOperationsDeliveryHandler(
-                Mock.Of<ILogger<PaymentOperationsDeliveryHandler>>(),
-                Options.Create(new EventStoreDbOptions()),
-                writeClient.Object);
+                        foreach (var paymentEvent in events)
+                        {
+                            paymentEvent.Metadata[EventMetadataKeys.TraceParent].Should().Be(writeActivity.Id);
+                            paymentEvent.Metadata[EventMetadataKeys.TraceId].Should().Be(writeActivity.TraceId.ToString());
+                            paymentEvent.Metadata[EventMetadataKeys.CausationId].Should().Be(writeActivity.SpanId.ToString());
+                        }
+                    })
+                    .ReturnsAsync(Mock.Of<IWriteResult>());
 
-            await sut.HandleAsync(
-                new[]
-                {
-                    firstEnvelope,
-                    secondEnvelope
-                },
-                CancellationToken.None);
+                var sut = new PaymentOperationsDeliveryHandler(
+                    Mock.Of<ILogger<PaymentOperationsDeliveryHandler>>(),
+                    Options.Create(new EventStoreDbOptions()),
+                    writeClient.Object);
 
-            writeClient.Verify(
-                client => client.SendBatchAsync(
-                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
-                    It.IsAny<string>(),
-                    It.IsAny<string>(),
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
+                await sut.HandleAsync(
+                    new[]
+                    {
+                        firstEnvelope,
+                        secondEnvelope
+                    },
+                    CancellationToken.None);
+
+                writeClient.Verify(
+                    client => client.SendBatchAsync(
+                        It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()),
+                    Times.Once);
+            }
+            finally
+            {
+                Activity.Current = originalActivity;
+            }
         }
 
         private static PaymentOperationEvent CreatePaymentEvent()

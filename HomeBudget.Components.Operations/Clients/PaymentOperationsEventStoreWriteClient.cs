@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,10 +13,12 @@ using Polly;
 using Polly.Retry;
 
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core;
+using HomeBudget.Core.Constants;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
@@ -26,6 +29,8 @@ namespace HomeBudget.Components.Operations.Clients
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly ILogger<PaymentOperationsEventStoreWriteClient> _logger;
         private readonly EventStoreDbOptions _opts;
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> StreamLocks = new();
+        private static readonly ConcurrentDictionary<string, PaymentStreamCache> StreamCaches = new();
 
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _requestRateLimiter;
@@ -48,18 +53,30 @@ namespace HomeBudget.Components.Operations.Clients
             string eventType = null,
             CancellationToken ctx = default)
         {
+            ArgumentNullException.ThrowIfNull(eventsForSending);
+
+            var events = eventsForSending.ToList();
+            if (events.Count == 0)
+            {
+                throw new ArgumentException("Batch is empty", nameof(eventsForSending));
+            }
+
             try
             {
                 await _requestRateLimiter.WaitAsync(ctx);
 
-                return await _retryPolicy.ExecuteAsync(
-                    async retryCtx => await base.SendBatchAsync(eventsForSending, streamName, eventType, ctx),
-                    ctx);
+                IWriteResult result = null;
+                foreach (var paymentEvent in events)
+                {
+                    result = await SendIdempotentAsync(paymentEvent, streamName, eventType, ctx);
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
                 PaymentOperationsEventStoreWriteClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
-                await SendToDeadLetterQueueAsync(eventsForSending, ex);
+                await SendToDeadLetterQueueAsync(events, ex);
                 throw;
             }
             finally
@@ -76,35 +93,9 @@ namespace HomeBudget.Components.Operations.Clients
         {
             ArgumentNullException.ThrowIfNull(eventForSending);
 
-            var ctx = new Context
-            {
-                [nameof(PaymentOperationEvent.EventType)] = eventType,
-                [nameof(PaymentOperationEvent.Payload.Key)] = eventForSending.Payload?.Key
-            };
-
             try
             {
-                return await _retryPolicy.ExecuteAsync(
-                    async retryCtx =>
-                    {
-                        eventForSending.Metadata[EventDbEventMetadataKeys.CorrelationId] = retryCtx.CorrelationId.ToString();
-                        eventForSending.Metadata[EventDbEventMetadataKeys.RetryCount] = retryCtx.Count.ToString(CultureInfo.InvariantCulture);
-
-                        eventForSending.EnvelopId = retryCtx.CorrelationId;
-
-                        var opKey = eventForSending.Payload?.Key.ToString();
-                        PaymentOperationsEventStoreWriteClientLogs.SendingEvent(_logger, eventType, opKey, retryCtx.CorrelationId);
-
-                        var result = await base.SendAsync(
-                            eventForSending,
-                            streamName ?? string.Empty,
-                            eventType ?? string.Empty,
-                            token);
-
-                        PaymentOperationsEventStoreWriteClientLogs.EventSent(_logger, eventType, opKey, retryCtx.CorrelationId);
-                        return result;
-                    },
-                    ctx);
+                return await SendIdempotentAsync(eventForSending, streamName, eventType, token);
             }
             catch (Exception ex)
             {
@@ -112,6 +103,168 @@ namespace HomeBudget.Components.Operations.Clients
                 await SendToDeadLetterQueueAsync(eventForSending, ex);
                 throw;
             }
+        }
+
+        private async Task<IWriteResult> SendIdempotentAsync(
+            PaymentOperationEvent eventForSending,
+            string streamName,
+            string eventType,
+            CancellationToken token)
+        {
+            ArgumentNullException.ThrowIfNull(eventForSending);
+
+            PaymentOperationEventIdentity.EnsureMetadata(eventForSending);
+
+            var writeStreamName = streamName ?? nameof(PaymentOperationEvent);
+            var writeEventType = eventType ?? eventForSending.EventType.ToString();
+            var eventId = PaymentOperationEventIdentity.GetDeterministicEventId(eventForSending, writeEventType);
+            var streamLock = StreamLocks.GetOrAdd(writeStreamName, _ => new SemaphoreSlim(1, 1));
+            var streamCache = StreamCaches.GetOrAdd(writeStreamName, _ => new PaymentStreamCache());
+
+            await streamLock.WaitAsync(token);
+            try
+            {
+                return await _retryPolicy.ExecuteAsync(
+                    async retryCtx =>
+                    {
+                        eventForSending.Metadata[EventDbEventMetadataKeys.RetryCount] = retryCtx.Count.ToString(CultureInfo.InvariantCulture);
+
+                        var correlationId = eventForSending.Metadata.Get(EventMetadataKeys.CorrelationId);
+                        if (Guid.TryParse(correlationId, out var envelopeId))
+                        {
+                            eventForSending.EnvelopId = envelopeId;
+                        }
+
+                        var opKey = eventForSending.Payload?.Key.ToString();
+                        PaymentOperationsEventStoreWriteClientLogs.SendingEvent(_logger, writeEventType, opKey, retryCtx.CorrelationId);
+
+                        var result = await AppendWithExpectedRevisionAsync(
+                            eventForSending,
+                            writeStreamName,
+                            writeEventType,
+                            eventId,
+                            streamCache,
+                            token);
+
+                        PaymentOperationsEventStoreWriteClientLogs.EventSent(_logger, writeEventType, opKey, retryCtx.CorrelationId);
+                        return result;
+                    },
+                    new Context
+                    {
+                        [nameof(PaymentOperationEvent.EventType)] = writeEventType,
+                        [nameof(PaymentOperationEvent.Payload.Key)] = eventForSending.Payload?.Key
+                    });
+            }
+            finally
+            {
+                streamLock.Release();
+            }
+        }
+
+        private async Task<IWriteResult> AppendWithExpectedRevisionAsync(
+            PaymentOperationEvent eventForSending,
+            string streamName,
+            string eventType,
+            Uuid eventId,
+            PaymentStreamCache streamCache,
+            CancellationToken token)
+        {
+            while (true)
+            {
+                var streamState = await ReadStreamStateAsync(streamName, eventId, streamCache, token);
+                if (streamState.DuplicateResult != null)
+                {
+                    return streamState.DuplicateResult;
+                }
+
+                var eventData = CreateEventData(eventForSending, eventType, eventId);
+
+                try
+                {
+                    var writeResult = streamState.ExpectedRevision.HasValue
+                        ? await Client.AppendToStreamAsync(
+                            streamName,
+                            streamState.ExpectedRevision.Value,
+                            [eventData],
+                            cancellationToken: token)
+                        : await Client.AppendToStreamAsync(
+                            streamName,
+                            StreamState.NoStream,
+                            [eventData],
+                            cancellationToken: token);
+
+                    streamCache.EventIds.Add(eventId);
+                    streamCache.LatestRevision = writeResult.NextExpectedStreamRevision;
+                    streamCache.LatestPosition = writeResult.LogPosition;
+                    streamCache.IsInitialized = true;
+
+                    return writeResult;
+                }
+                catch (WrongExpectedVersionException)
+                {
+                    streamCache.IsInitialized = false;
+                    var latestState = await ReadStreamStateAsync(streamName, eventId, streamCache, token);
+                    if (latestState.DuplicateResult != null)
+                    {
+                        return latestState.DuplicateResult;
+                    }
+
+                    continue;
+                }
+            }
+        }
+
+        private async Task<PaymentStreamState> ReadStreamStateAsync(
+            string streamName,
+            Uuid eventId,
+            PaymentStreamCache streamCache,
+            CancellationToken token)
+        {
+            if (streamCache.IsInitialized)
+            {
+                return streamCache.EventIds.Contains(eventId)
+                    ? PaymentStreamState.Duplicate(
+                        new IdempotentWriteResult(streamCache.LatestRevision ?? StreamRevision.None, streamCache.LatestPosition))
+                    : new PaymentStreamState(streamCache.LatestRevision, null);
+            }
+
+            var readResult = Client.ReadStreamAsync(
+                Direction.Forwards,
+                streamName,
+                StreamPosition.Start,
+                cancellationToken: token);
+
+            if (await readResult.ReadState == ReadState.StreamNotFound)
+            {
+                streamCache.IsInitialized = true;
+                return PaymentStreamState.Empty;
+            }
+
+            StreamRevision? latestRevision = null;
+            var latestPosition = Position.Start;
+            streamCache.EventIds.Clear();
+
+            await foreach (var resolvedEvent in readResult.WithCancellation(token))
+            {
+                latestRevision = StreamRevision.FromStreamPosition(resolvedEvent.Event.EventNumber);
+                latestPosition = resolvedEvent.Event.Position;
+                streamCache.EventIds.Add(resolvedEvent.Event.EventId);
+                if (resolvedEvent.Event.EventId == eventId)
+                {
+                    streamCache.LatestRevision = latestRevision;
+                    streamCache.LatestPosition = latestPosition;
+                    streamCache.IsInitialized = true;
+
+                    return PaymentStreamState.Duplicate(
+                        new IdempotentWriteResult(latestRevision.Value, latestPosition));
+                }
+            }
+
+            streamCache.LatestRevision = latestRevision;
+            streamCache.LatestPosition = latestPosition;
+            streamCache.IsInitialized = true;
+
+            return new PaymentStreamState(latestRevision, null);
         }
 
         public override async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)

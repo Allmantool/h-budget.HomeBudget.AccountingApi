@@ -26,7 +26,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                  )
                 .WithCreateParameterModifier(config =>
                 {
-                    config.HostConfig.Memory = BaseTestContainerOptions.Memory1Gb;
+                    config.HostConfig.Memory = BaseTestContainerOptions.Memory1Gb * 2;
                     config.StopTimeout = TimeSpan.FromMinutes(BaseTestContainerOptions.StopTimeoutInMinutes);
                 })
                 .Build();

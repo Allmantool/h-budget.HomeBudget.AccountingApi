@@ -1,6 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
@@ -24,6 +29,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 {
     internal sealed class TestContainersService : IAsyncDisposable
     {
+        private const string HomeBudgetDatabaseName = "HomeBudget";
+        private const string AccountingDatabaseName = "HomeBudget.Accounting";
+
         private static readonly SemaphoreSlim _lock = new(1, 1);
         private static TestContainersService _instance;
         private bool _isDisposed;
@@ -38,6 +46,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         public INetwork KafkaNetwork { get; private set; }
         public MongoDbContainer MongoDbContainer { get; private set; }
         public MsSqlContainer MsSqlDbContainer { get; private set; }
+        public string AccountingDbConnectionString => BuildAccountingDbConnectionString(MsSqlDbContainer.GetConnectionString());
 
         protected TestContainersService()
         {
@@ -55,9 +64,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 if (_instance is null)
                 {
                     _instance = new TestContainersService();
-                    await _instance.UpAndRunningContainersAsync();
 
-                    _instance.ApplyDbMigrations();
+                    try
+                    {
+                        await _instance.UpAndRunningContainersAsync();
+                        _instance.ApplyDbMigrations();
+                    }
+                    catch
+                    {
+                        await _instance.DisposeAsync();
+                        _instance = null;
+                        GetInstance = null;
+                        throw;
+                    }
                 }
 
                 GetInstance = _instance;
@@ -127,15 +146,241 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         private void ApplyDbMigrations()
         {
-            using var cnx = new SqlConnection(MsSqlDbContainer.GetConnectionString());
+            var migrationsFolder = ResolveMigrationsFolder();
+            var migrationFiles = Directory.GetFiles(migrationsFolder, "*.sql")
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            EnsureExpectedMigrationsDiscovered(migrationsFolder, migrationFiles);
+            EnsureIntegrationDatabasesExist();
+
+            using var cnx = new SqlConnection(AccountingDbConnectionString);
             var evolve = new Evolve(cnx)
             {
-                Locations = ["db/migrations"],
+                Locations = [migrationsFolder],
                 EnableClusterMode = false,
                 TransactionMode = TransactionKind.CommitEach
             };
 
             evolve.Migrate();
+            ValidateOutboxTableExists(migrationsFolder, migrationFiles);
+        }
+
+        private void EnsureIntegrationDatabasesExist()
+        {
+            using var cnx = new SqlConnection(BuildMasterConnectionString(MsSqlDbContainer.GetConnectionString()));
+            cnx.Open();
+
+            ExecuteNonQuery(
+                cnx,
+                $@"
+                IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{HomeBudgetDatabaseName}')
+                BEGIN
+                    CREATE DATABASE [{HomeBudgetDatabaseName}];
+                END;
+
+                IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{AccountingDatabaseName}')
+                BEGIN
+                    CREATE DATABASE [{AccountingDatabaseName}];
+                END;");
+        }
+
+        private void ValidateOutboxTableExists(string migrationsFolder, IReadOnlyCollection<string> migrationFiles)
+        {
+            using var cnx = new SqlConnection(AccountingDbConnectionString);
+            cnx.Open();
+
+            var objectId = ExecuteScalar(cnx, "SELECT OBJECT_ID(N'dbo.OutboxAccountPayments', N'U');");
+
+            if (objectId is not null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(BuildOutboxValidationFailureMessage(cnx, migrationsFolder, migrationFiles));
+        }
+
+        private string BuildOutboxValidationFailureMessage(
+            SqlConnection cnx,
+            string migrationsFolder,
+            IReadOnlyCollection<string> migrationFiles)
+        {
+            var message = new StringBuilder();
+            message.AppendLine("Integration SQL migrations completed, but dbo.OutboxAccountPayments is missing.");
+            message.AppendLine($"Current database: {ExecuteScalar(cnx, "SELECT DB_NAME();")}");
+            message.AppendLine($"Connection string: {MaskPassword(AccountingDbConnectionString)}");
+            message.AppendLine($"Migration folder: {migrationsFolder}");
+            message.AppendLine("Migration files discovered:");
+            message.AppendLine(string.Join(Environment.NewLine, migrationFiles.Select(file => $"  - {Path.GetFileName(file)}")));
+            message.AppendLine("Migration history:");
+            message.AppendLine(ReadMigrationHistory(cnx));
+            message.AppendLine("dbo tables:");
+            message.AppendLine(string.Join(
+                Environment.NewLine,
+                QueryStrings(cnx, "SELECT name FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo') ORDER BY name;")
+                    .Select(table => $"  - {table}")));
+
+            return message.ToString();
+        }
+
+        private static string ResolveMigrationsFolder()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "db", "migrations"),
+                Path.Combine(Directory.GetCurrentDirectory(), "db", "migrations"),
+                Path.Combine(
+                    FindRepositoryRoot(AppContext.BaseDirectory) ?? string.Empty,
+                    "HomeBudget.Accounting.Api.IntegrationTests",
+                    "db",
+                    "migrations")
+            };
+
+            var migrationsFolder = candidates
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(path => Directory.Exists(path) && Directory.EnumerateFiles(path, "*.sql").Any());
+
+            if (migrationsFolder is null)
+            {
+                throw new DirectoryNotFoundException(
+                    $"Could not find integration SQL migrations. Checked: {string.Join(", ", candidates)}");
+            }
+
+            return migrationsFolder;
+        }
+
+        private static string FindRepositoryRoot(string startPath)
+        {
+            var directory = new DirectoryInfo(startPath);
+
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "HomeBudgetAccountingApi.sln")))
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
+
+            return null;
+        }
+
+        private static void EnsureExpectedMigrationsDiscovered(string migrationsFolder, IReadOnlyCollection<string> migrationFiles)
+        {
+            var missingMigrations = Enumerable.Range(0, 6)
+                .Select(version => $"V{version}__")
+                .Where(prefix => migrationFiles.All(file =>
+                    !Path.GetFileName(file).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+
+            if (missingMigrations.Length == 0)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"The integration SQL migration folder '{migrationsFolder}' is missing: {string.Join(", ", missingMigrations)}");
+        }
+
+        private static string BuildAccountingDbConnectionString(string connectionString)
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString)
+            {
+                InitialCatalog = AccountingDatabaseName
+            };
+
+            return builder.ConnectionString;
+        }
+
+        private static string BuildMasterConnectionString(string connectionString)
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString)
+            {
+                InitialCatalog = "master"
+            };
+
+            return builder.ConnectionString;
+        }
+
+        private static string MaskPassword(string connectionString)
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString);
+
+            if (!string.IsNullOrEmpty(builder.Password))
+            {
+                builder.Password = "***";
+            }
+
+            return builder.ConnectionString;
+        }
+
+        private static string ReadMigrationHistory(SqlConnection cnx)
+        {
+            var historyTables = QueryStrings(
+                cnx,
+                @"
+                SELECT QUOTENAME(SCHEMA_NAME(schema_id)) + N'.' + QUOTENAME(name)
+                FROM sys.tables
+                WHERE name IN (N'changelog', N'flyway_schema_history', N'schema_version')
+                   OR name LIKE N'%changelog%'
+                   OR name LIKE N'%schema%history%'
+                ORDER BY name;");
+
+            if (historyTables.Count == 0)
+            {
+                return "  <no migration history table found>";
+            }
+
+            var history = new StringBuilder();
+
+            foreach (var historyTable in historyTables)
+            {
+                var json = ExecuteScalar(
+                    cnx,
+                    $"SELECT (SELECT TOP (50) * FROM {historyTable} ORDER BY 1 FOR JSON PATH);");
+
+                history.AppendLine($"  {historyTable}: {json ?? "[]"}");
+            }
+
+            return history.ToString();
+        }
+
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
+        private static IReadOnlyCollection<string> QueryStrings(SqlConnection cnx, string sql)
+        {
+            using var command = cnx.CreateCommand();
+            command.CommandText = sql;
+
+            using var reader = command.ExecuteReader();
+            var results = new List<string>();
+
+            while (reader.Read())
+            {
+                results.Add(reader.IsDBNull(0) ? "<null>" : reader.GetValue(0).ToString());
+            }
+
+            return results;
+        }
+
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
+        private static object ExecuteScalar(SqlConnection cnx, string sql)
+        {
+            using var command = cnx.CreateCommand();
+            command.CommandText = sql;
+
+            var result = command.ExecuteScalar();
+
+            return result == DBNull.Value ? null : result;
+        }
+
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
+        private static void ExecuteNonQuery(SqlConnection cnx, string sql)
+        {
+            using var command = cnx.CreateCommand();
+            command.CommandText = sql;
+            command.ExecuteNonQuery();
         }
 
         private async Task<bool> UpAndRunningContainersAsync()

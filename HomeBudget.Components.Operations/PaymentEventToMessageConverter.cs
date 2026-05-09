@@ -6,7 +6,6 @@ using Confluent.Kafka;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Factories;
-using HomeBudget.Components.Operations.Commands.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
@@ -65,9 +64,14 @@ namespace HomeBudget.Components.Operations
                 .With(
                     KafkaMessageHeaders.CausationId,
                     paymentEvent.Metadata.Get(EventMetadataKeys.CausationId))
+                .With(
+                    KafkaMessageHeaders.ImportBatchId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.ImportBatchId))
+                .With(
+                    KafkaMessageHeaders.Source,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.SourceSystem))
                 .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
                 .With(KafkaMessageHeaders.Version, "2.0")
-                .With(KafkaMessageHeaders.Source, nameof(BasePaymentCommandHandler))
                 .With(
                     KafkaMessageHeaders.EnvelopId,
                     paymentEvent.EnvelopId != Guid.Empty

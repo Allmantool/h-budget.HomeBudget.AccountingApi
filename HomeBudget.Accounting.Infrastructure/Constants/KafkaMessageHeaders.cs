@@ -11,6 +11,7 @@
         public static readonly string CorrelationId = "correlation-id";
         public static readonly string MessageId = "message-id";
         public static readonly string CausationId = "causation-id";
+        public static readonly string ImportBatchId = "import-batch-id";
 
         // public static readonly string CorrelationId = "correlationId";
         public static readonly string Traceparent = "traceparent";

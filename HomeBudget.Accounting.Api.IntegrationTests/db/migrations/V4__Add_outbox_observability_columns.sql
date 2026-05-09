@@ -1,3 +1,6 @@
+USE [HomeBudget.Accounting];
+GO
+
 IF COL_LENGTH('dbo.OutboxAccountPayments', 'CorrelationId') IS NULL
 BEGIN
     ALTER TABLE [HomeBudget.Accounting].dbo.OutboxAccountPayments
