@@ -10,6 +10,8 @@
         public static readonly OutboxStatus Failed = new(4, nameof(Failed));
         public static readonly OutboxStatus DeadLettered = new(5, nameof(DeadLettered));
 
+        public static OutboxStatus DeadLetter => DeadLettered;
+
         public static implicit operator OutboxStatus(byte statusId) => FromValue(statusId);
 
         public static OutboxStatus ToOutboxStatus()

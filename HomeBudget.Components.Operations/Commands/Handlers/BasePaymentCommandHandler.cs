@@ -5,30 +5,22 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
-using Microsoft.Extensions.Logging;
-
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
-using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
-using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Commands;
 using HomeBudget.Core.Constants;
-using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal abstract class BasePaymentCommandHandler(
-        ILogger logger,
         IMapper mapper,
         IDateTimeProvider dateTimeProvider,
-        IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
         IOutboxPaymentStatusService outboxPaymentStatusService)
     {
         protected async Task<Result<Guid>> HandleAsync<T>(
@@ -36,7 +28,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             CancellationToken cancellationToken)
             where T : ICorrelatedCommand
         {
-            using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Kafka.Produce, ActivityKind.Producer);
+            using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Database.OutboxInsert, ActivityKind.Internal);
 
             var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
             if (paymentEvent.EnvelopId == Guid.Empty)
@@ -78,18 +70,17 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 activity.SetPayment(paymentEvent.Payload.Key);
                 activity.SetTag(ActivityTags.MessagingSystem, "kafka");
                 activity.SetTag(ActivityTags.KafkaTopic, BaseTopics.AccountingPayments);
-                activity.SetTag(ActivityTags.MessagingOperation, "publish");
+                activity.SetTag(ActivityTags.MessagingOperation, "enqueue");
                 activity.SetTag("messaging.message_id", messageId);
                 activity.SetTag("messaging.conversation_id", causationId);
                 activity.SetTag("outbox.partition_key", paymentEvent.Payload.GetPaymentAccountIdentifier());
             }
 
-            var paymentMessageResult = PaymentEventToMessageConverter.Convert(paymentEvent, createdAt);
-
             var dbEntity = new OutboxAccountPaymentsEntity
             {
                 EventType = paymentEvent.EventType.ToString(),
                 AggregateId = paymentAccountId.ToString(),
+                OperationId = paymentEvent.Payload.Key.ToString(),
                 PartitionKey = paymentEvent.Payload.GetPaymentAccountIdentifier(),
                 CorrelationId = request.CorrelationId,
                 MessageId = messageId,
@@ -98,7 +89,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 TraceState = paymentEvent.Metadata.Get(EventMetadataKeys.TraceState),
                 Payload = JsonSerializer.Serialize(paymentEvent),
                 CreatedAt = createdAt,
-                UpdatedAt = createdAt
+                UpdatedAt = createdAt,
+                CreatedUtc = createdAt,
+                UpdatedUtc = createdAt
             };
 
             using (var outboxActivity = ActivityPropagation.StartActivity("outbox.write", ActivityKind.Internal))
@@ -114,7 +107,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     outboxActivity.SetTag("messaging.message_id", messageId);
                 }
 
-                outboxPaymentStatusService.WriteRecord(dbEntity);
+                await outboxPaymentStatusService.WriteRecordAsync(dbEntity);
                 outboxStopwatch.Stop();
                 TelemetryMetrics.OutboxWriteDurationMs.Record(
                     outboxStopwatch.Elapsed.TotalMilliseconds,
@@ -122,30 +115,6 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 outboxActivity?.SetStatus(ActivityStatusCode.Ok);
                 outboxActivity?.AddEvent(new("outbox.persisted"));
             }
-
-            await kafkaHandler.ExecuteAndWaitAsync(async producer =>
-            {
-                var message = paymentMessageResult.Payload;
-
-                try
-                {
-                    await producer.ProduceAsync(
-                        BaseTopics.AccountingPayments,
-                        message,
-                        cancellationToken);
-
-                    activity?.AddEvent(ActivityEvents.KafkaPublished);
-
-                    logger.ProduceMessageSuccessfully(BaseTopics.AccountingPayments, message.Key);
-                }
-                catch (Exception ex)
-                {
-                    activity?.RecordException(ex);
-
-                    var reason = ex.InnerException?.Message ?? ex.Message;
-                    logger.ProduceFailed(BaseTopics.AccountingPayments, message.Key, reason, ex);
-                }
-            });
 
             activity?.SetStatus(ActivityStatusCode.Ok);
 

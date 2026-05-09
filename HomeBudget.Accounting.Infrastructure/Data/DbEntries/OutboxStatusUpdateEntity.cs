@@ -8,6 +8,6 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public DateTime UpdatedAt { get; init; }
 
-        public string PartitionKey { get; init; }
+        public string MessageId { get; init; }
     }
 }

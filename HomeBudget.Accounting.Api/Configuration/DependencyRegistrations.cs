@@ -33,6 +33,7 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterPaymentAccountsDependencies()
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(webHostEnvironment.EnvironmentName)
+                .RegisterPaymentOutboxPublisher(configuration)
                 .RegisterCategoriesDependencies()
                 .RegisterInfrastructureDependencies(configuration)
                 .RegisterCommandHandlers()
