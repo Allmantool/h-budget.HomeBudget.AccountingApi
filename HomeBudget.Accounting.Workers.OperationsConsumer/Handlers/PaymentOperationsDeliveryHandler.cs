@@ -102,6 +102,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                     catch (Exception ex)
                     {
                         _logger.FailedToSendEventToStream(ex, streamName, ex.Message);
+                        throw;
                     }
                 });
 
@@ -110,6 +111,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             catch (Exception ex)
             {
                 _logger.FailedToProccessEvent(ex, nameof(PaymentOperationsDeliveryHandler), ex.Message);
+                throw;
             }
         }
 

@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Threading.Channels;
-
 using EventStore.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +18,6 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Options;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Configuration
@@ -30,7 +27,6 @@ namespace HomeBudget.Components.Operations.Configuration
         public static IServiceCollection RegisterOperationsDependencies(this IServiceCollection services, string webHostEnvironment)
         {
             return services
-                .AddSingleton(Channel.CreateUnbounded<ActivityEnvelope<PaymentOperationEvent>>())
                 .AddScoped<IFinancialTransactionFactory, FinancialTransactionFactory>()
                 .AddScoped<ICrossAccountsTransferBuilder, CrossAccountsTransferBuilder>()
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()

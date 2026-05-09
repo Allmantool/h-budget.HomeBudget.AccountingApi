@@ -59,7 +59,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
 
         private static IServiceCollection RegisterBackgroundServices(this IServiceCollection services)
         {
-            return services.AddHostedService<BatchPaymentEventsProcessorWorker>();
+            return services;
         }
 
         private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
