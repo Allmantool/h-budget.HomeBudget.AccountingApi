@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -28,6 +29,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
+        private static readonly TimeSpan HistoryProjectionTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan HistoryPollInterval = TimeSpan.FromMilliseconds(500);
 
         private readonly CrossAccountsTransferWebApp _sut = new();
         private RestClient _restClient;
@@ -63,8 +66,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 createRequest,
                 executionDelayAfterInMs: 20000);
 
-            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
-            var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
+            var senderHistoryResponsePayload = await WaitForHistoryAsync(senderAccountId, records => records.Count == 1);
+            var recipientHistoryResponsePayload = await WaitForHistoryAsync(recipientAccountId, records => records.Count == 1);
 
             Assert.Multiple(() =>
             {
@@ -101,6 +104,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var transferOperationResponse = await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 3000);
 
+            await WaitForHistoryAsync(senderAccountId, records => records.Count == 1);
+            await WaitForHistoryAsync(recipientAccountId, records => records.Count == 1);
+
             var removeTransferRequestBody = new RemoveTransferRequest
             {
                 PaymentAccountId = senderAccountId,
@@ -112,9 +118,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest, executionDelayBeforeInMs: 3000, executionDelayAfterInMs: 2500);
 
-            var senderHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(senderAccountId);
-
-            var recipientHistoryResponsePayload = await GetHistoryByPaymentAccountIdAsync(recipientAccountId);
+            var senderHistoryResponsePayload = await WaitForHistoryAsync(senderAccountId, records => records.Count == 0);
+            var recipientHistoryResponsePayload = await WaitForHistoryAsync(recipientAccountId, records => records.Count == 0);
 
             Assert.Multiple(() =>
             {
@@ -178,6 +183,46 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayBeforeInMs: 2000);
 
             return recipientHistoryResponse.Data.Payload;
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryAsync(
+            Guid accountId,
+            Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
+            CancellationToken cancellationToken = default)
+        {
+            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
+            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
+            Exception lastException = null;
+
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    lastRecords = await GetHistoryByPaymentAccountIdAsync(accountId);
+
+                    if (condition(lastRecords))
+                    {
+                        return lastRecords;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+
+                await Task.Delay(HistoryPollInterval, cancellationToken);
+            }
+
+            var snapshot = string.Join(
+                " | ",
+                lastRecords.Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
+
+            Assert.Fail(
+                $"Payment history for transfer account '{accountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
+
+            return lastRecords;
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync(decimal initialBalance, AccountTypes accountType, CurrencyTypes currencyType)

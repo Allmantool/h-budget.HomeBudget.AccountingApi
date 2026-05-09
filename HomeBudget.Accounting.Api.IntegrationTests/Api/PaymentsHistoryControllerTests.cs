@@ -70,8 +70,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const int createRequestAmount = 3;
             const decimal initialBalance = 11.2m;
-            const decimal expectedBalance = 47.2M;
-
             var paymentAccountOperationResult = await SavePaymentAccountAsync(initialBalance);
 
             var paymentAccountId = paymentAccountOperationResult.Payload;
@@ -95,17 +93,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 await _restClient.ExecuteWithDelayAsync(postCreateRequest, 1000);
             }
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
-
-            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var historyRecords = await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records =>
+                    records.Count == createRequestAmount &&
+                    records
+                        .OrderBy(r => r.Record.OperationDay)
+                        .Select(r => r.Balance)
+                        .SequenceEqual([22.2m, 34.2m, 47.2m]));
 
             var historyRecordBalance = historyRecords.OrderBy(r => r.Record.OperationDay).Select(r => r.Balance);
 
             Assert.Multiple(() =>
             {
                 Assert.That(() => historyRecords.Count, Is.EqualTo(createRequestAmount));
-
-                balanceAfter.Should().Be(expectedBalance);
                 historyRecordBalance.Should().BeEquivalentTo([22.2m, 34.2m, 47.2m]);
             });
         }
@@ -168,7 +169,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 await _restClient.ExecuteWithDelayAsync(postCreateRequest, 5000);
             }
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
+            var historyRecords = await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records =>
+                    records.Count == createRequestAmount &&
+                    records
+                        .Select(r => r.Balance)
+                        .OrderBy(balance => balance)
+                        .SequenceEqual([19.2m, 28.2m, 38.2m]));
 
             historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([19.2m, 28.2m, 38.2m]);
         }
@@ -206,7 +214,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 9120,
                 OperationDate = new DateOnly(2027, 1, 17),
                 CategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-3s-0"),
-                ContractorId = "238d0940-9d30-4dd2-b52c-c623d732daf4",
+                ContractorId = string.Empty,
                 Comment = "0 - Update operation"
             };
 
@@ -277,26 +285,39 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 executionDelayAfterInMs: 5000);
 
             var newOperationId = Guid.Parse(addResponse.Data.Payload.PaymentOperationId);
+            await WaitForHistoryRecordAsync(paymentAccountId, newOperationId);
 
             var updateRequest = new UpdateOperationRequest
             {
                 Amount = 11,
                 OperationDate = new DateOnly(2027, 1, 17),
                 CategoryId = await SaveCategoryAsync(CategoryTypes.Expense, "add-test-2"),
-                ContractorId = "66e81106-9214-41a4-8297-82d6761f1d40",
+                ContractorId = string.Empty,
                 Comment = "updated state"
             };
 
-            var updateCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{newOperationId}", Method.Patch)
+            var updateOperationRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}/{newOperationId}", Method.Patch)
                 .AddJsonBody(updateRequest);
 
-            await _restClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(
-                updateCreateRequest,
-                executionDelayAfterInMs: 5000);
+            var updateResponse = await _restClient.ExecuteWithDelayAsync<Result<UpdateOperationResponse>>(
+                updateOperationRequest);
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
+            updateResponse.Data.StatusMessage.Should().BeNullOrEmpty();
+            updateResponse.Data.IsSucceeded.Should().BeTrue();
 
-            var targetPaymentHistory = historyRecords.Single(r => r.Record.Key.CompareTo(newOperationId) == 0);
+            var targetPaymentHistory = (await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records =>
+                {
+                    var updatedRecord = records.SingleOrDefault(r => r.Record.Key == newOperationId);
+
+                    return updatedRecord is not null &&
+                           updatedRecord.Record.Amount == updateRequest.Amount &&
+                           updatedRecord.Record.OperationDay == updateRequest.OperationDate &&
+                           updatedRecord.Record.Comment == updateRequest.Comment &&
+                           updatedRecord.Balance == 0.2m;
+                }))
+                .Single(r => r.Record.Key == newOperationId);
 
             targetPaymentHistory.Balance.Should().Be(0.2m);
         }

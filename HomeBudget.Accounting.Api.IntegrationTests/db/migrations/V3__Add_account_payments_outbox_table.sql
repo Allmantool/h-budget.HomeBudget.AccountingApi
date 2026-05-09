@@ -1,3 +1,6 @@
+USE [HomeBudget.Accounting];
+GO
+
 IF NOT EXISTS (
     SELECT 1
     FROM sys.tables

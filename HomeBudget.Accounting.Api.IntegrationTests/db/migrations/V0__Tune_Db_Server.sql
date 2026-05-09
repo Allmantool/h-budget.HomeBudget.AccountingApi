@@ -1,11 +1,12 @@
+-- evolve-tx-off
 USE master;
 GO
 
 -- Resize tempdb primary files
 ALTER DATABASE tempdb
-    MODIFY FILE (NAME = 'tempdev', SIZE = 8GB);
+    MODIFY FILE (NAME = 'tempdev', SIZE = 256MB, FILEGROWTH = 64MB);
 ALTER DATABASE tempdb
-    MODIFY FILE (NAME = 'templog', SIZE = 4GB);
+    MODIFY FILE (NAME = 'templog', SIZE = 128MB, FILEGROWTH = 64MB);
 
 -- Add multiple tempdb data files for parallelism
 DECLARE @i INT = 2;
@@ -23,8 +24,8 @@ BEGIN
                 'ALTER DATABASE tempdb ADD FILE (',
                 'NAME = ''tempdev', @i, ''', ',
                 'FILENAME = ''/var/opt/mssql/tempdb/tempdev', @i, '.ndf'', ',
-                'SIZE = 2GB, ',
-                'FILEGROWTH = 512MB)'
+                'SIZE = 128MB, ',
+                'FILEGROWTH = 64MB)'
             );
 
         EXEC (@sql);
