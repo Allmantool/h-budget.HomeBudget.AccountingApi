@@ -173,15 +173,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             ExecuteNonQuery(
                 cnx,
                 $@"
-IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{HomeBudgetDatabaseName}')
-BEGIN
-    CREATE DATABASE [{HomeBudgetDatabaseName}];
-END;
+                IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{HomeBudgetDatabaseName}')
+                BEGIN
+                    CREATE DATABASE [{HomeBudgetDatabaseName}];
+                END;
 
-IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{AccountingDatabaseName}')
-BEGIN
-    CREATE DATABASE [{AccountingDatabaseName}];
-END;");
+                IF NOT EXISTS(SELECT * FROM sys.databases WITH (NOLOCK) WHERE name = N'{AccountingDatabaseName}')
+                BEGIN
+                    CREATE DATABASE [{AccountingDatabaseName}];
+                END;");
         }
 
         private void ValidateOutboxTableExists(string migrationsFolder, IReadOnlyCollection<string> migrationFiles)
@@ -320,12 +320,12 @@ END;");
             var historyTables = QueryStrings(
                 cnx,
                 @"
-SELECT QUOTENAME(SCHEMA_NAME(schema_id)) + N'.' + QUOTENAME(name)
-FROM sys.tables
-WHERE name IN (N'changelog', N'flyway_schema_history', N'schema_version')
-   OR name LIKE N'%changelog%'
-   OR name LIKE N'%schema%history%'
-ORDER BY name;");
+                SELECT QUOTENAME(SCHEMA_NAME(schema_id)) + N'.' + QUOTENAME(name)
+                FROM sys.tables
+                WHERE name IN (N'changelog', N'flyway_schema_history', N'schema_version')
+                   OR name LIKE N'%changelog%'
+                   OR name LIKE N'%schema%history%'
+                ORDER BY name;");
 
             if (historyTables.Count == 0)
             {
