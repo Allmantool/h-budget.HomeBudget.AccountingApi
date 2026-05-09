@@ -267,36 +267,6 @@ namespace HomeBudget.Components.Operations.Clients
             return new PaymentStreamState(latestRevision, null);
         }
 
-        private sealed class PaymentStreamCache
-        {
-            public HashSet<Uuid> EventIds { get; } = [];
-
-            public bool IsInitialized { get; set; }
-
-            public StreamRevision? LatestRevision { get; set; }
-
-            public Position LatestPosition { get; set; } = Position.Start;
-        }
-
-        private sealed class PaymentStreamState
-        {
-            public PaymentStreamState(
-                StreamRevision? expectedRevision,
-                IWriteResult duplicateResult)
-            {
-                ExpectedRevision = expectedRevision;
-                DuplicateResult = duplicateResult;
-            }
-
-            public StreamRevision? ExpectedRevision { get; }
-
-            public IWriteResult DuplicateResult { get; }
-
-            public static PaymentStreamState Empty { get; } = new(null, null);
-
-            public static PaymentStreamState Duplicate(IWriteResult result) => new(result.NextExpectedStreamRevision, result);
-        }
-
         public override async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
         {
             ArgumentNullException.ThrowIfNull(eventForSending);
