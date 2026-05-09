@@ -11,6 +11,9 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
+using HomeBudget.Accounting.Api.Models.Category;
+using HomeBudget.Accounting.Api.Models.Operations.Requests;
+using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
@@ -226,6 +229,112 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             result.IsSucceeded.Should().BeTrue();
         }
 
+        [Test]
+        public async Task Update_WithValid_PreservesImmutableAccountState()
+        {
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var accountBeforeUpdate = await GetPaymentAccountAsync(paymentAccountId);
+
+            var requestBody = new UpdatePaymentAccountRequest
+            {
+                Balance = 150,
+                AccountType = AccountTypes.Loan.Key,
+                Agent = "Vtb Updated",
+                Currency = "BYN Updated",
+                Description = "Updated description"
+            };
+
+            var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
+                .AddJsonBody(requestBody);
+
+            var response = await _restClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
+            var accountAfterUpdate = await GetPaymentAccountAsync(paymentAccountId);
+
+            Assert.Multiple(() =>
+            {
+                response.Data.IsSucceeded.Should().BeTrue(DescribeResponse(response));
+                accountAfterUpdate.Key.Should().Be(paymentAccountId);
+                accountAfterUpdate.InitialBalance.Should().Be(accountBeforeUpdate.InitialBalance);
+                accountAfterUpdate.Balance.Should().Be(accountBeforeUpdate.Balance);
+                accountAfterUpdate.Agent.Should().Be(requestBody.Agent);
+                accountAfterUpdate.Currency.Should().Be(requestBody.Currency);
+                accountAfterUpdate.Description.Should().Be(requestBody.Description);
+                accountAfterUpdate.AccountType.Should().Be(requestBody.AccountType);
+            });
+        }
+
+        [Test]
+        public async Task CreateNewOperation_AfterPaymentAccountUpdate_ReferencesSameAccount()
+        {
+            var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(CreateNewOperation_AfterPaymentAccountUpdate_ReferencesSameAccount))).Payload;
+
+            var updateRequestBody = new UpdatePaymentAccountRequest
+            {
+                Balance = 150,
+                AccountType = AccountTypes.Loan.Key,
+                Agent = "Vtb Updated",
+                Currency = "BYN Updated",
+                Description = "Updated description"
+            };
+
+            var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
+                .AddJsonBody(updateRequestBody);
+
+            var updateResponse = await _restClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
+
+            var createOperationRequestBody = new CreateOperationRequest
+            {
+                Amount = 100,
+                Comment = "New operation after account update",
+                CategoryId = categoryId,
+                ContractorId = Guid.NewGuid().ToString(),
+                OperationDate = new DateOnly(2026, 1, 3)
+            };
+
+            var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
+                .AddJsonBody(createOperationRequestBody);
+
+            var createOperationResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(
+                postCreateRequest,
+                executionDelayAfterInMs: 1000);
+
+            Assert.Multiple(() =>
+            {
+                updateResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(updateResponse));
+                createOperationResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createOperationResponse));
+                createOperationResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createOperationResponse));
+                createOperationResponse.Data.Payload.PaymentAccountId.Should().Be(paymentAccountId.ToString());
+            });
+        }
+
+        [Test]
+        public async Task Update_WithMissingPaymentAccount_ThenFail()
+        {
+            var missingPaymentAccountId = Guid.NewGuid();
+
+            var requestBody = new UpdatePaymentAccountRequest
+            {
+                Balance = 100,
+                AccountType = AccountTypes.Cash.Key,
+                Agent = "Vtb",
+                Currency = "BYN",
+                Description = "Some description"
+            };
+
+            var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{missingPaymentAccountId}", Method.Patch)
+                .AddJsonBody(requestBody);
+
+            var response = await _restClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
+
+            Assert.Multiple(() =>
+            {
+                response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+                response.Data.IsSucceeded.Should().BeFalse(DescribeResponse(response));
+                response.Data.StatusMessage.Should().Contain(missingPaymentAccountId.ToString(), DescribeResponse(response));
+            });
+        }
+
         private async Task<Result<Guid>> SavePaymentAccountAsync()
         {
             var requestSaveBody = new CreatePaymentAccountRequest
@@ -244,6 +353,46 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteAsync<Result<Guid>>(saveCategoryRequest);
 
             return paymentsHistoryResponse.Data;
+        }
+
+        private async Task<Result<string>> SaveCategoryAsync(CategoryTypes categoryType, string category)
+        {
+            var requestSaveBody = new CreateCategoryRequest
+            {
+                CategoryType = categoryType.Key,
+                NameNodes =
+                [
+                    nameof(categoryType),
+                    category
+                ]
+            };
+
+            var saveCategoryRequest = new RestRequest($"{Endpoints.Categories}", Method.Post)
+                .AddJsonBody(requestSaveBody);
+
+            var paymentsHistoryResponse = await _restClient
+                .ExecuteWithDelayAsync<Result<string>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
+
+            return paymentsHistoryResponse.Data;
+        }
+
+        private async Task<PaymentAccountResponse> GetPaymentAccountAsync(Guid paymentAccountId)
+        {
+            var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
+
+            var response = await _restClient.ExecuteAsync<Result<PaymentAccountResponse>>(getPaymentAccountByIdRequest);
+
+            return response.Data.Payload;
+        }
+
+        private static string DescribeResponse<T>(RestResponse<Result<T>> response)
+        {
+            if (response == null)
+            {
+                return "Response was null.";
+            }
+
+            return $"HTTP {(int)response.StatusCode} {response.StatusCode}, transport-success={response.IsSuccessful}, rest-error='{response.ErrorMessage}', domain-success={response.Data?.IsSucceeded}, status='{response.Data?.StatusMessage}', content='{response.Content}'";
         }
     }
 }
