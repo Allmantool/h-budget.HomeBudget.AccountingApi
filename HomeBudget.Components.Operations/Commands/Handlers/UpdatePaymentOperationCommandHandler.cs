@@ -4,32 +4,25 @@ using System.Threading.Tasks;
 
 using AutoMapper;
 using MediatR;
-using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Domain.Extensions;
-using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Handlers
 {
     internal class UpdatePaymentOperationCommandHandler(
-        ILogger<UpdatePaymentOperationCommandHandler> logger,
         IMapper mapper,
         ISender sender,
         IDateTimeProvider dateTimeProvider,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IExectutionStrategyHandler<IKafkaProducer<string, string>> kafkaHandler,
         IOutboxPaymentStatusService outboxPaymentStatusService)
         : BasePaymentCommandHandler(
-            logger,
             mapper,
             dateTimeProvider,
-            kafkaHandler,
             outboxPaymentStatusService),
         IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {

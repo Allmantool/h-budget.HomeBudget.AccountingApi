@@ -10,6 +10,8 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public string AggregateId { get; init; }
 
+        public string OperationId { get; init; }
+
         public string EventType { get; init; }
 
         public string Payload { get; init; }
@@ -30,20 +32,31 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public DateTime UpdatedAt { get; init; }
 
-        public DateTime? PublishedAt { get; private set; }
+        public DateTime CreatedUtc { get; init; }
 
-        public DateTime? ProcessedAt { get; private set; }
+        public DateTime UpdatedUtc { get; init; }
 
-        public int RetryCount { get; private set; }
+        public DateTime? PublishedAt { get; set; }
 
-        public byte Status { get; private set; } = OutboxStatus.Pending.Key;
+        public DateTime? PublishedUtc { get; set; }
 
-        public string LastError { get; private set; }
+        public DateTime? ProcessedAt { get; set; }
+
+        public string LockedBy { get; init; }
+
+        public DateTime? LockedUntilUtc { get; init; }
+
+        public int RetryCount { get; set; }
+
+        public byte Status { get; set; } = OutboxStatus.Pending.Key;
+
+        public string LastError { get; set; }
 
         public void MarkPublished()
         {
             Status = OutboxStatus.Published.Key;
             PublishedAt = DateTime.UtcNow;
+            PublishedUtc = PublishedAt;
         }
 
         public void MarkAcknowledged()

@@ -2,6 +2,7 @@
 using System.Threading.Channels;
 
 using EventStore.Client;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -10,17 +11,15 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Consumers;
-using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
 using HomeBudget.Components.Operations.Builders;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Consumers;
 using HomeBudget.Components.Operations.Factories;
-using HomeBudget.Components.Operations.Handlers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Options;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
-using HomeBudget.Core.Handlers;
 using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
@@ -38,11 +37,20 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IOutboxPaymentStatusService, OutboxPaymentStatusService>()
-                .AddScoped<IExectutionStrategyHandler<IKafkaProducer<string, string>>, FireAndForgetKafkaProducerHandler>()
-                .AddScoped<IExectutionStrategyHandler<IBaseWriteRepository>, FireAndForgetSqlCdcHandler>()
+                .AddScoped<PaymentOutboxPublisher>()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)
                 .RegisterMongoDbClient(webHostEnvironment);
+        }
+
+        public static IServiceCollection RegisterPaymentOutboxPublisher(
+            this IServiceCollection services,
+            IConfiguration configuration)
+        {
+            return services
+                .Configure<PaymentOutboxPublisherOptions>(
+                    configuration.GetSection(PaymentOutboxPublisherOptions.SectionName))
+                .AddHostedService<PaymentOutboxPublisherWorker>();
         }
 
         private static IServiceCollection RegisterOperationsClients(this IServiceCollection services)
