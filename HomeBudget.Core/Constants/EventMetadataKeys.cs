@@ -20,6 +20,12 @@
 
         public static readonly string MessageId = "message-id";
 
+        public static readonly string CommandId = "command-id";
+
         public static readonly string CausationId = "causation-id";
+
+        public static readonly string ImportBatchId = "import-batch-id";
+
+        public static readonly string SourceSystem = "source-system";
     }
 }

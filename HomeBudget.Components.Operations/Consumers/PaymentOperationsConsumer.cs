@@ -140,6 +140,14 @@ namespace HomeBudget.Components.Operations.Consumers
                         ? Encoding.UTF8.GetString(causationIdBytes)
                         : null;
 
+                    var importBatchId = message.Headers.TryGetLastBytes(KafkaMessageHeaders.ImportBatchId, out var importBatchIdBytes)
+                        ? Encoding.UTF8.GetString(importBatchIdBytes)
+                        : null;
+
+                    var sourceSystem = message.Headers.TryGetLastBytes(KafkaMessageHeaders.Source, out var sourceSystemBytes)
+                        ? Encoding.UTF8.GetString(sourceSystemBytes)
+                        : null;
+
                     using var activity = ActivityPropagation.StartActivity(
                         "payment.events.eventstore.process",
                         ActivityKind.Consumer,
@@ -189,6 +197,16 @@ namespace HomeBudget.Components.Operations.Consumers
                         paymentEvent.Metadata[EventMetadataKeys.CausationId] = causationId;
                     }
 
+                    if (!string.IsNullOrEmpty(importBatchId))
+                    {
+                        paymentEvent.Metadata[EventMetadataKeys.ImportBatchId] = importBatchId;
+                    }
+
+                    if (!string.IsNullOrEmpty(sourceSystem))
+                    {
+                        paymentEvent.Metadata[EventMetadataKeys.SourceSystem] = sourceSystem;
+                    }
+
                     activity?.AddEvent(ActivityEvents.KafkaConsumed);
 
                     StampTraceMetadata(paymentEvent, activity);
@@ -230,6 +248,8 @@ namespace HomeBudget.Components.Operations.Consumers
             CopyHeaderToMetadata(message.Headers, KafkaMessageHeaders.Baggage, deadLetterEvent, EventMetadataKeys.Baggage);
             CopyHeaderToMetadata(message.Headers, KafkaMessageHeaders.MessageId, deadLetterEvent, EventMetadataKeys.MessageId);
             CopyHeaderToMetadata(message.Headers, KafkaMessageHeaders.CausationId, deadLetterEvent, EventMetadataKeys.CausationId);
+            CopyHeaderToMetadata(message.Headers, KafkaMessageHeaders.ImportBatchId, deadLetterEvent, EventMetadataKeys.ImportBatchId);
+            CopyHeaderToMetadata(message.Headers, KafkaMessageHeaders.Source, deadLetterEvent, EventMetadataKeys.SourceSystem);
 
             deadLetterEvent.Metadata[EventMetadataKeys.FromMessage] = message.Key ?? string.Empty;
             deadLetterEvent.Metadata["kafka-topic"] = payload.Topic ?? string.Empty;
