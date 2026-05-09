@@ -288,7 +288,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "New operation after account update",
                 CategoryId = categoryId,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2026, 1, 3)
             };
 

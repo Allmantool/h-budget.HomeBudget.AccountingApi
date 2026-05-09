@@ -85,7 +85,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = categoryId,
-                    ContractorId = Guid.NewGuid().ToString(),
+                    ContractorId = string.Empty,
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
 
@@ -125,7 +125,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 8,
                 Comment = "New operation - expense",
                 CategoryId = expenseCategoryId,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2023, 12, 15)
             };
 
@@ -158,7 +158,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 7 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-loop-{i}"),
-                    ContractorId = Guid.NewGuid().ToString(),
+                    ContractorId = string.Empty,
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i)
                 };
 
@@ -188,7 +188,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 7,
                     Comment = $"{i} - New operation",
                     CategoryId = await SaveCategoryAsync(CategoryTypes.Income, $"add-test-3s-{i}"),
-                    ContractorId = Guid.NewGuid().ToString(),
+                    ContractorId = string.Empty,
                     OperationDate = new DateOnly(2023, 12, 15).AddDays(i * (i % 2 == 0 ? -3 : 3))
                 };
 
@@ -265,7 +265,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 7,
                 Comment = "New operation - x",
                 CategoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-2"),
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2023, 12, 15)
             };
 
@@ -309,7 +309,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var requestBody = new CreateOperationRequest
             {
                 CategoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-1"),
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
                 Amount = 35.64m

@@ -59,7 +59,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2027, 1, 3)
             };
 
@@ -99,7 +99,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     Amount = 10 + i,
                     Comment = $"New operation - {i}",
                     CategoryId = (await SaveCategoryAsync(CategoryTypes.Income, $"{nameof(CreateOperationRequest)}-{i}")).Payload,
-                    ContractorId = Guid.NewGuid().ToString(),
+                    ContractorId = string.Empty,
                     OperationDate = new DateOnly(2023, 12, 15)
                 };
 
@@ -133,7 +133,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
@@ -158,7 +158,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 25.24m,
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
             };
@@ -198,7 +198,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 Amount = 25.24m,
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 Comment = "Some test",
                 OperationDate = new DateOnly(2024, 1, 6),
             };
@@ -249,7 +249,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "Some description",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString()
+                ContractorId = string.Empty
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
@@ -274,7 +274,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "Some description",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString()
+                ContractorId = string.Empty
             };
 
             var missingOperationId = Guid.NewGuid();
@@ -304,7 +304,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 12.34m,
                 Comment = "seed-operation",
                 CategoryId = createCategoryId.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2024, 1, 6)
             };
 
@@ -328,7 +328,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 100,
                 Comment = "Some update description",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString()
+                ContractorId = string.Empty
             };
 
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
@@ -377,7 +377,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 12.0m,
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2024, 1, 6),
             };
 
@@ -398,7 +398,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Amount = 17.22m,
                 Comment = "Some update description",
                 CategoryId = categoryIdResult.Payload,
-                ContractorId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
                 OperationDate = new DateOnly(2025, 2, 7)
             };
 

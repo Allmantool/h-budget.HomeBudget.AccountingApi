@@ -16,6 +16,8 @@
     <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
     <ProjectReference Include="..\HomeBudget.Accounting.Notifications\HomeBudget.Accounting.Notifications.csproj" />
     <ProjectReference Include="..\HomeBudget.Components.Accounts\HomeBudget.Components.Accounts.csproj" />
+    <ProjectReference Include="..\HomeBudget.Components.Categories\HomeBudget.Components.Categories.csproj" />
+    <ProjectReference Include="..\HomeBudget.Components.Contractors\HomeBudget.Components.Contractors.csproj" />
   </ItemGroup>
 
   <ItemGroup>
