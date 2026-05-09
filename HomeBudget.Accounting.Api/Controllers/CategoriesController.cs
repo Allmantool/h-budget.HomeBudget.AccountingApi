@@ -68,14 +68,11 @@ namespace HomeBudget.Accounting.Api.Controllers
                 BaseEnumeration<CategoryTypes, int>.FromValue(request.CategoryType),
                 request.NameNodes);
 
-            if (await categoryDocumentsClient.CheckIfExistsAsync(newCategory.CategoryKey))
-            {
-                return Result<Guid>.Failure($"The category with '{newCategory.CategoryKey}' key already exists");
-            }
-
             var saveResult = await categoryDocumentsClient.InsertOneAsync(newCategory);
 
-            return Result<Guid>.Succeeded(saveResult.Payload);
+            return saveResult.IsSucceeded
+                ? Result<Guid>.Succeeded(saveResult.Payload)
+                : Result<Guid>.Failure(saveResult.StatusMessage);
         }
     }
 }

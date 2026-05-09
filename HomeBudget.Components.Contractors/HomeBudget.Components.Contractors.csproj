@@ -9,4 +9,10 @@
     <ProjectReference Include="..\HomeBudget.Accounting.Infrastructure\HomeBudget.Accounting.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>HomeBudget.Accounting.Api.IntegrationTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

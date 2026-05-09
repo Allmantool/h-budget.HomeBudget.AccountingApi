@@ -19,6 +19,9 @@ namespace HomeBudget.Components.Contractors.Clients
         BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.HandBooks),
         IContractorDocumentsClient
     {
+        private const string PayloadKeyIndexName = "ux_contractors_payload_key";
+        private const string ContractorKeyIndexName = "ux_contractors_payload_contractor_key";
+
         public async Task<Result<IReadOnlyCollection<ContractorDocument>>> GetAsync()
         {
             var targetCollection = await GetContractorsCollectionAsync();
@@ -50,34 +53,48 @@ namespace HomeBudget.Components.Contractors.Clients
 
         public async Task<Result<Guid>> InsertOneAsync(Contractor payload)
         {
-            var document = new ContractorDocument
-            {
-                Payload = payload
-            };
-
             var targetCollection = await GetContractorsCollectionAsync();
+            var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, payload.ContractorKey);
+            var now = DateTime.UtcNow;
+            var update = Builders<ContractorDocument>.Update
+                .SetOnInsert(d => d.Payload, payload)
+                .SetOnInsert(d => d.CreatedUtc, now)
+                .SetOnInsert(d => d.UpdatedUtc, now);
 
-            await targetCollection.InsertOneAsync(document);
+            try
+            {
+                var writeResult = await targetCollection.UpdateOneAsync(
+                    filter,
+                    update,
+                    new UpdateOptions { IsUpsert = true });
 
-            return Result<Guid>.Succeeded(document.Payload.Key);
+                if (writeResult.UpsertedId != null)
+                {
+                    return Result<Guid>.Succeeded(payload.Key);
+                }
+
+                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+
+                return Result<Guid>.Succeeded(existing.Payload.Key);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+                if (existing != null)
+                {
+                    return Result<Guid>.Succeeded(existing.Payload.Key);
+                }
+
+                return Result<Guid>.Failure($"The contractor with '{payload.ContractorKey}' key already exists");
+            }
         }
 
         private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<ContractorDocument>(LedgerDbCollections.Contractors);
 
-            var collectionIndexes = await collection.Indexes.ListAsync();
-
-            if (await collectionIndexes.AnyAsync())
-            {
-                return collection;
-            }
-
-            var indexKeysDefinition = Builders<ContractorDocument>.IndexKeys
-                .Ascending(c => c.Payload.Key)
-                .Ascending(c => c.Payload.ContractorKey);
-
-            await collection.Indexes.CreateOneAsync(new CreateIndexModel<ContractorDocument>(indexKeysDefinition));
+            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
+            await EnsureUniqueIndexAsync(collection, "Payload.ContractorKey", ContractorKeyIndexName);
 
             return collection;
         }

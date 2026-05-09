@@ -106,19 +106,7 @@ namespace HomeBudget.Components.Operations.Clients
 
         public async Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
         {
-            await TraceMongoAsync(
-                "insert_one",
-                financialPeriodIdentifier,
-                async () =>
-                {
-                    var document = new PaymentHistoryDocument { Payload = payload };
-                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-
-                    await targetCollection.InsertOneAsync(document);
-                    return true;
-                },
-                payload?.Record.PaymentAccountId,
-                payload?.Record.Key);
+            await ReplaceOneAsync(financialPeriodIdentifier, payload);
         }
 
         public async Task ReplaceOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload)
@@ -134,7 +122,10 @@ namespace HomeBudget.Components.Operations.Clients
                         .Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
 
                     var update = Builders<PaymentHistoryDocument>
-                        .Update.Set(d => d.Payload, payload);
+                        .Update
+                        .Set(d => d.Payload, payload)
+                        .Set(d => d.UpdatedUtc, DateTime.UtcNow)
+                        .SetOnInsert(d => d.CreatedUtc, DateTime.UtcNow);
 
                     await targetCollection.UpdateOneAsync(
                         filter,
@@ -162,7 +153,9 @@ namespace HomeBudget.Components.Operations.Clients
                             Builders<PaymentHistoryDocument>.Filter
                                 .Eq(d => d.Payload.Record.Key, r.Record.Key),
                             Builders<PaymentHistoryDocument>.Update
-                                .Set(d => d.Payload, r))
+                                .Set(d => d.Payload, r)
+                                .Set(d => d.UpdatedUtc, DateTime.UtcNow)
+                                .SetOnInsert(d => d.CreatedUtc, DateTime.UtcNow))
                         {
                             IsUpsert = true
                         })
@@ -217,8 +210,7 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionForPeriodAsync(string financialPeriodIdentifier)
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(financialPeriodIdentifier);
-            var indexKeysDefinition = Builders<PaymentHistoryDocument>.IndexKeys.Ascending(p => p.Payload.Record.Key);
-            await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(indexKeysDefinition));
+            await EnsureUniqueIndexAsync(collection, "Payload.Record.Key", "ux_payments_history_record_key");
 
             return collection;
         }

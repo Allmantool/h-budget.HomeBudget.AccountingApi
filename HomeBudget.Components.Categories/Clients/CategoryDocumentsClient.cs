@@ -20,6 +20,9 @@ namespace HomeBudget.Components.Categories.Clients
         : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.HandBooks),
         ICategoryDocumentsClient
     {
+        private const string PayloadKeyIndexName = "ux_categories_payload_key";
+        private const string CategoryKeyIndexName = "ux_categories_payload_category_key";
+
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync()
         {
             var targetCollection = await GetCategoriesCollectionAsync();
@@ -40,16 +43,40 @@ namespace HomeBudget.Components.Categories.Clients
 
         public async Task<Result<Guid>> InsertOneAsync(Category payload)
         {
-            var document = new CategoryDocument
-            {
-                Payload = payload
-            };
-
             var targetCollection = await GetCategoriesCollectionAsync();
+            var filter = Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, payload.CategoryKey);
+            var now = DateTime.UtcNow;
+            var update = Builders<CategoryDocument>.Update
+                .SetOnInsert(d => d.Payload, payload)
+                .SetOnInsert(d => d.CreatedUtc, now)
+                .SetOnInsert(d => d.UpdatedUtc, now);
 
-            await targetCollection.InsertOneAsync(document);
+            try
+            {
+                var writeResult = await targetCollection.UpdateOneAsync(
+                    filter,
+                    update,
+                    new UpdateOptions { IsUpsert = true });
 
-            return Result<Guid>.Succeeded(document.Payload.Key);
+                if (writeResult.UpsertedId != null)
+                {
+                    return Result<Guid>.Succeeded(payload.Key);
+                }
+
+                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+
+                return Result<Guid>.Succeeded(existing.Payload.Key);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+                if (existing != null)
+                {
+                    return Result<Guid>.Succeeded(existing.Payload.Key);
+                }
+
+                return Result<Guid>.Failure($"The category with '{payload.CategoryKey}' key already exists");
+            }
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
@@ -78,18 +105,8 @@ namespace HomeBudget.Components.Categories.Clients
         {
             var collection = MongoDatabase.GetCollection<CategoryDocument>(LedgerDbCollections.Categories);
 
-            var collectionIndexes = await collection.Indexes.ListAsync();
-
-            if (await collectionIndexes.AnyAsync())
-            {
-                return collection;
-            }
-
-            var indexKeysDefinition = Builders<CategoryDocument>.IndexKeys
-                .Ascending(c => c.Payload.Key)
-                .Ascending(c => c.Payload.CategoryKey);
-
-            await collection.Indexes.CreateOneAsync(new CreateIndexModel<CategoryDocument>(indexKeysDefinition));
+            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
+            await EnsureUniqueIndexAsync(collection, "Payload.CategoryKey", CategoryKeyIndexName);
 
             return collection;
         }
