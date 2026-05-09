@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
@@ -346,6 +347,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             return history.ToString();
         }
 
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
         private static IReadOnlyCollection<string> QueryStrings(SqlConnection cnx, string sql)
         {
             using var command = cnx.CreateCommand();
@@ -362,6 +364,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             return results;
         }
 
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
         private static object ExecuteScalar(SqlConnection cnx, string sql)
         {
             using var command = cnx.CreateCommand();
@@ -372,6 +375,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             return result == DBNull.Value ? null : result;
         }
 
+        [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Queries executed here are internal literals or derived from safe migration metadata, not user input.")]
         private static void ExecuteNonQuery(SqlConnection cnx, string sql)
         {
             using var command = cnx.CreateCommand();
