@@ -36,10 +36,18 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
         protected BaseKafkaConsumer(
             KafkaOptions kafkaOptions,
             ILogger<BaseKafkaConsumer<TKey, TValue>> logger)
+            : this(kafkaOptions, logger, null)
+        {
+        }
+
+        protected BaseKafkaConsumer(
+            KafkaOptions kafkaOptions,
+            ILogger<BaseKafkaConsumer<TKey, TValue>> logger,
+            IConsumer<TKey, TValue> consumer)
         {
             if (kafkaOptions?.ConsumerSettings == null)
             {
-                throw new ArgumentNullException(nameof(KafkaOptions.ConsumerSettings));
+                throw new ArgumentNullException(nameof(kafkaOptions));
             }
 
             _consumerSettings = kafkaOptions.ConsumerSettings;
@@ -67,7 +75,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
 
             _logger = logger;
 
-            _consumer = new ConsumerBuilder<TKey, TValue>(consumerConfig)
+            _consumer = consumer ?? new ConsumerBuilder<TKey, TValue>(consumerConfig)
                 .SetErrorHandler((ctx, error) =>
                 {
                     BaseKafkaConsumerLogs.KafkaError(_logger, error.Reason, ctx?.Name, ctx?.MemberId);
@@ -257,15 +265,16 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             _logger.ConsumeError(ex.Error.Reason, ex);
                         }
                     }
-                    catch (OperationCanceledException ex)
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
                         _logger.ConsumerLoopCanceled();
 
-                        // break;
+                        break;
                     }
                     catch (Exception ex)
                     {
                         _logger.UnhandledErrorInLoop(ex.Message, ex);
+                        throw;
                     }
                 }
             }

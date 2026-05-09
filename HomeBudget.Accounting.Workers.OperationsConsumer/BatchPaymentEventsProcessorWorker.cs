@@ -59,6 +59,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                     catch (Exception ex)
                     {
                         _logger.OperationDeliveryError(nameof(BatchPaymentEventsProcessorWorker), ex.Message, ex);
+                        throw;
                     }
                     finally
                     {

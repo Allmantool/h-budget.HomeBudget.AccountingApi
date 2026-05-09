@@ -82,9 +82,10 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             return appendResult;
         }
 
-        public async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
+        public virtual async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
         {
             ArgumentNullException.ThrowIfNull(eventForSending);
+            ArgumentNullException.ThrowIfNull(exception);
 
             eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception.Message;
 
@@ -95,29 +96,32 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 StreamState.Any,
                 [data],
                 cancellationToken: CancellationToken.None);
-            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object?>("event_type", eventForSending.GetType().Name)]);
+            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object>("event_type", eventForSending.GetType().Name)]);
         }
 
-        public async Task SendToDeadLetterQueueAsync(
+        public virtual async Task SendToDeadLetterQueueAsync(
             IEnumerable<BaseEvent> eventsForSending,
             Exception exception)
         {
+            ArgumentNullException.ThrowIfNull(eventsForSending);
+            ArgumentNullException.ThrowIfNull(exception);
+
             Parallel.ForEach(eventsForSending, eventForSending =>
             {
-                eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception?.Message;
+                eventForSending.Metadata[EventMetadataKeys.ExceptionDetails] = exception.Message;
             });
 
             var data = eventsForSending
                 .AsParallel()
                 .Select(ev => CreateEventData((T)(object)ev, EventDbEventTypes.DeadLetter));
 
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutInSeconds));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutInSeconds));
             await _client.AppendToStreamAsync(
                 EventDbEventStreams.DeadLetter,
                 StreamState.Any,
                 data,
                 cancellationToken: cts.Token);
-            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object?>("event_type", typeof(T).Name)]);
+            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object>("event_type", typeof(T).Name)]);
         }
 
         private static EventData CreateEventData(T @event, string eventType)

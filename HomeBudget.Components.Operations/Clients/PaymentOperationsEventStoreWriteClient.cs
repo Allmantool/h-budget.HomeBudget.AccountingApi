@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +15,7 @@ using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Core;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
@@ -85,7 +88,7 @@ namespace HomeBudget.Components.Operations.Clients
                     async retryCtx =>
                     {
                         eventForSending.Metadata[EventDbEventMetadataKeys.CorrelationId] = retryCtx.CorrelationId.ToString();
-                        eventForSending.Metadata[EventDbEventMetadataKeys.RetryCount] = retryCtx.Count.ToString();
+                        eventForSending.Metadata[EventDbEventMetadataKeys.RetryCount] = retryCtx.Count.ToString(CultureInfo.InvariantCulture);
 
                         eventForSending.EnvelopId = retryCtx.CorrelationId;
 
@@ -109,6 +112,39 @@ namespace HomeBudget.Components.Operations.Clients
                 await SendToDeadLetterQueueAsync(eventForSending, ex);
                 throw;
             }
+        }
+
+        public override async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(eventForSending);
+
+            var ctx = new Context
+            {
+                [nameof(PaymentOperationEvent.EventType)] = EventDbEventTypes.DeadLetter,
+                [nameof(PaymentOperationEvent.Payload.Key)] = eventForSending.EnvelopId
+            };
+
+            await _retryPolicy.ExecuteAsync(
+                async _ => await base.SendToDeadLetterQueueAsync(eventForSending, exception),
+                ctx);
+        }
+
+        public override async Task SendToDeadLetterQueueAsync(
+            IEnumerable<BaseEvent> eventsForSending,
+            Exception exception)
+        {
+            ArgumentNullException.ThrowIfNull(eventsForSending);
+
+            var events = eventsForSending.ToList();
+            var ctx = new Context
+            {
+                [nameof(PaymentOperationEvent.EventType)] = EventDbEventTypes.DeadLetter,
+                [nameof(PaymentOperationEvent.Payload.Key)] = events.FirstOrDefault()?.EnvelopId
+            };
+
+            await _retryPolicy.ExecuteAsync(
+                async _ => await base.SendToDeadLetterQueueAsync(events, exception),
+                ctx);
         }
 
         public void Dispose()
