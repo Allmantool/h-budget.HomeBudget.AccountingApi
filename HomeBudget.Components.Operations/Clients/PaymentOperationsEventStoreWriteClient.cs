@@ -75,8 +75,7 @@ namespace HomeBudget.Components.Operations.Clients
             }
             catch (Exception ex)
             {
-                PaymentOperationsEventStoreWriteClientLogs.SendEventToDeadQueue(_logger, ex.Message, ex);
-                await SendToDeadLetterQueueAsync(events, ex);
+                PaymentOperationsEventStoreWriteClientLogs.AppendFailed(_logger, ex.Message, ex);
                 throw;
             }
             finally
@@ -100,7 +99,6 @@ namespace HomeBudget.Components.Operations.Clients
             catch (Exception ex)
             {
                 PaymentOperationsEventStoreWriteClientLogs.RetriesExhausted(_logger, eventType, eventForSending.Payload?.Key.ToString(), ex);
-                await SendToDeadLetterQueueAsync(eventForSending, ex);
                 throw;
             }
         }

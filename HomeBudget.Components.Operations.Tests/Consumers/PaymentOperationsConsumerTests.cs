@@ -16,9 +16,13 @@ using NUnit.Framework;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Consumers;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Options;
+using HomeBudget.Components.Operations.Services;
+using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Models;
@@ -33,6 +37,18 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
         public async Task ConsumeAsync_WhenEventStoreAppendFails_ThenDoesNotCommitKafkaOffset()
         {
             var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.Inbox
+                .Setup(x => x.MarkFailedAsync(
+                    "message-42",
+                    "eventstore down",
+                    It.IsAny<int>(),
+                    It.IsAny<DateTime>()))
+                .ReturnsAsync(new PaymentInboxFailureResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Failed,
+                    RetryCount = 1
+                });
             dependencies.EventStore
                 .Setup(x => x.SendBatchAsync(
                     It.IsAny<IEnumerable<PaymentOperationEvent>>(),
@@ -76,6 +92,12 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
             deadLetterEvent.Metadata[EventMetadataKeys.CorrelationId].Should().Be("correlation-42");
             deadLetterEvent.Metadata[EventMetadataKeys.TraceParent].Should().Be("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00");
             deadLetterEvent.Metadata["raw-message"].Should().Be("{ not-json }");
+            dependencies.Inbox.Verify(
+                x => x.MarkPoisonAsync(
+                    "message-42",
+                    It.IsAny<string>(),
+                    It.IsAny<DateTime>()),
+                Times.Once);
             dependencies.EventStore.Verify(
                 x => x.SendBatchAsync(
                     It.IsAny<IEnumerable<PaymentOperationEvent>>(),
@@ -90,6 +112,18 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
         public async Task ConsumeAsync_WhenProcessingThrows_ThenSurfacesExceptionToConsumerLoop()
         {
             var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.Inbox
+                .Setup(x => x.MarkFailedAsync(
+                    "message-42",
+                    "append failed",
+                    It.IsAny<int>(),
+                    It.IsAny<DateTime>()))
+                .ReturnsAsync(new PaymentInboxFailureResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Failed,
+                    RetryCount = 1
+                });
             dependencies.EventStore
                 .Setup(x => x.SendBatchAsync(
                     It.IsAny<IEnumerable<PaymentOperationEvent>>(),
@@ -130,6 +164,9 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
+            dependencies.Inbox.Verify(
+                x => x.MarkProcessedAsync("message-42", It.IsAny<DateTime>()),
+                Times.Once);
         }
 
         [Test]
@@ -137,6 +174,18 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
         {
             var consumeResult = BuildConsumeResult(BuildPaymentEventJson());
             var firstRun = BuildDependencies(consumeResult);
+            firstRun.Inbox
+                .Setup(x => x.MarkFailedAsync(
+                    "message-42",
+                    "first append failed",
+                    It.IsAny<int>(),
+                    It.IsAny<DateTime>()))
+                .ReturnsAsync(new PaymentInboxFailureResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Failed,
+                    RetryCount = 1
+                });
             firstRun.EventStore
                 .Setup(x => x.SendBatchAsync(
                     It.IsAny<IEnumerable<PaymentOperationEvent>>(),
@@ -166,6 +215,118 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
             await restartedConsumer.ConsumeAsync(secondRunCancellation.Token);
 
             secondRun.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
+            secondRun.Inbox.Verify(
+                x => x.MarkProcessedAsync("message-42", It.IsAny<DateTime>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenMessageIdAlreadyProcessed_ThenSkipsEventStoreAndCommitsKafkaOffset()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.Inbox
+                .Setup(x => x.StartProcessingAsync(It.IsAny<PaymentInboxMessageEntity>()))
+                .Callback(() => cancellation.Cancel())
+                .ReturnsAsync(new PaymentInboxStartResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Processed,
+                    RetryCount = 0,
+                    ShouldProcess = false
+                });
+            var sut = dependencies.BuildConsumer();
+
+            await sut.ConsumeAsync(cancellation.Token);
+
+            dependencies.EventStore.Verify(
+                x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
+            dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenRetryLimitIsReached_ThenWritesDeadLetterAndCommitsKafkaOffset()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("eventstore down"));
+            dependencies.Inbox
+                .Setup(x => x.MarkFailedAsync(
+                    "message-42",
+                    "eventstore down",
+                    It.IsAny<int>(),
+                    It.IsAny<DateTime>()))
+                .ReturnsAsync(new PaymentInboxFailureResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Poison,
+                    RetryCount = 5
+                });
+            dependencies.EventStore
+                .Setup(x => x.SendToDeadLetterQueueAsync(
+                    It.IsAny<BaseEvent>(),
+                    It.IsAny<Exception>()))
+                .Callback(() => cancellation.Cancel())
+                .Returns(Task.CompletedTask);
+            var sut = dependencies.BuildConsumer();
+
+            await sut.ConsumeAsync(cancellation.Token);
+
+            dependencies.EventStore.Verify(
+                x => x.SendToDeadLetterQueueAsync(
+                    It.IsAny<BaseEvent>(),
+                    It.IsAny<InvalidOperationException>()),
+                Times.Once);
+            dependencies.Inbox.Verify(
+                x => x.MarkProcessedAsync(It.IsAny<string>(), It.IsAny<DateTime>()),
+                Times.Never);
+            dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenReplayRequestedMessageSucceeds_ThenMarksMessageProcessed()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.Inbox
+                .Setup(x => x.StartProcessingAsync(It.IsAny<PaymentInboxMessageEntity>()))
+                .ReturnsAsync(new PaymentInboxStartResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Processing,
+                    RetryCount = 0,
+                    ShouldProcess = true
+                });
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            dependencies.Inbox
+                .Setup(x => x.MarkProcessedAsync("message-42", It.IsAny<DateTime>()))
+                .Callback(() => cancellation.Cancel())
+                .Returns(Task.CompletedTask);
+            var sut = dependencies.BuildConsumer();
+
+            await sut.ConsumeAsync(cancellation.Token);
+
+            dependencies.Inbox.Verify(
+                x => x.MarkProcessedAsync("message-42", It.IsAny<DateTime>()),
+                Times.Once);
+            dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
         }
 
         private static ConsumerDependencies BuildDependencies(ConsumeResult<string, string> consumeResult)
@@ -176,12 +337,28 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                 .Returns(consumeResult);
 
             var eventStore = new Mock<IEventStoreDbWriteClient<PaymentOperationEvent>>();
+            var inbox = new Mock<IPaymentMessageInboxService>();
+            inbox
+                .Setup(x => x.StartProcessingAsync(It.IsAny<PaymentInboxMessageEntity>()))
+                .ReturnsAsync(new PaymentInboxStartResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Processing,
+                    RetryCount = 0,
+                    ShouldProcess = true
+                });
+            inbox
+                .Setup(x => x.MarkProcessedAsync(It.IsAny<string>(), It.IsAny<DateTime>()))
+                .Returns(Task.CompletedTask);
+            inbox
+                .Setup(x => x.MarkPoisonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .Returns(Task.CompletedTask);
             var dateTimeProvider = new Mock<IDateTimeProvider>();
             dateTimeProvider
                 .Setup(x => x.GetNowUtc())
                 .Returns(new DateTime(2026, 05, 09, 12, 00, 00, DateTimeKind.Utc));
 
-            return new ConsumerDependencies(kafkaConsumer, eventStore, dateTimeProvider);
+            return new ConsumerDependencies(kafkaConsumer, eventStore, inbox, dateTimeProvider);
         }
 
         private static ConsumeResult<string, string> BuildConsumeResult(string value)
@@ -232,11 +409,14 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
         private sealed class ConsumerDependencies(
             Mock<IConsumer<string, string>> kafkaConsumer,
             Mock<IEventStoreDbWriteClient<PaymentOperationEvent>> eventStore,
+            Mock<IPaymentMessageInboxService> inbox,
             Mock<IDateTimeProvider> dateTimeProvider)
         {
             public Mock<IConsumer<string, string>> KafkaConsumer { get; } = kafkaConsumer;
 
             public Mock<IEventStoreDbWriteClient<PaymentOperationEvent>> EventStore { get; } = eventStore;
+
+            public Mock<IPaymentMessageInboxService> Inbox { get; } = inbox;
 
             public PaymentOperationsConsumer BuildConsumer()
             {
@@ -255,6 +435,11 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                     dateTimeProvider.Object,
                     EventStore.Object,
                     options,
+                    Microsoft.Extensions.Options.Options.Create(new PaymentInboxOptions
+                    {
+                        MaxRetryAttempts = 5
+                    }),
+                    Inbox.Object,
                     KafkaConsumer.Object);
             }
         }
