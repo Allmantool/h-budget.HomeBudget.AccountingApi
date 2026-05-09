@@ -9,6 +9,8 @@ using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
+using HomeBudget.Components.Categories.Clients.Interfaces;
+using HomeBudget.Components.Contractors.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
@@ -19,6 +21,8 @@ namespace HomeBudget.Components.Operations.Services
 {
     internal class PaymentOperationsService(
         IPaymentAccountDocumentClient paymentAccountDocumentClient,
+        ICategoryDocumentsClient categoryDocumentsClient,
+        IContractorDocumentsClient contractorDocumentsClient,
         IPaymentsHistoryDocumentsClient paymentsHistoryDocumentsClient,
         ISender mediator,
         IFinancialTransactionFactory financialTransactionFactory)
@@ -31,6 +35,12 @@ namespace HomeBudget.Components.Operations.Services
             if (!isPaymentAccountExist)
             {
                 return Result<Guid>.Failure($"The payment account '{nameof(paymentAccountId)}' hasn't been found");
+            }
+
+            var referencesValidationResult = await ValidatePaymentReferencesAsync(payload.CategoryId, payload.ContractorId);
+            if (!referencesValidationResult.IsSucceeded)
+            {
+                return Result<Guid>.Failure(referencesValidationResult.StatusMessage);
             }
 
             var operationForAddResult = financialTransactionFactory.CreatePayment(
@@ -108,6 +118,23 @@ namespace HomeBudget.Components.Operations.Services
 
             var currentOperaiton = currentOperationStateDocument.Payload;
             var paymentRecord = currentOperaiton.Record;
+            var referencesValidationResult = await ValidatePaymentReferencesAsync(payload.CategoryId, payload.ContractorId);
+            if (!referencesValidationResult.IsSucceeded)
+            {
+                return Result<Guid>.Failure(referencesValidationResult.StatusMessage);
+            }
+
+            var categoryIdResult = ResolveReferenceForUpdate(payload.CategoryId, paymentRecord.CategoryId, nameof(payload.CategoryId));
+            if (!categoryIdResult.IsSucceeded)
+            {
+                return Result<Guid>.Failure(categoryIdResult.StatusMessage);
+            }
+
+            var contractorIdResult = ResolveReferenceForUpdate(payload.ContractorId, paymentRecord.ContractorId, nameof(payload.ContractorId));
+            if (!contractorIdResult.IsSucceeded)
+            {
+                return Result<Guid>.Failure(contractorIdResult.StatusMessage);
+            }
 
             var operationForUpdate = new FinancialTransaction
             {
@@ -115,8 +142,8 @@ namespace HomeBudget.Components.Operations.Services
                 Key = operationId,
                 Amount = payload.Amount,
                 Comment = payload.Comment,
-                CategoryId = string.IsNullOrWhiteSpace(payload.CategoryId) ? paymentRecord.CategoryId : Guid.Parse(payload.CategoryId),
-                ContractorId = string.IsNullOrWhiteSpace(payload.ContractorId) ? paymentRecord.ContractorId : Guid.Parse(payload.ContractorId),
+                CategoryId = categoryIdResult.Payload,
+                ContractorId = contractorIdResult.Payload,
                 OperationDay = payload.OperationDate,
                 TransactionType = TransactionTypes.Payment
             };
@@ -129,6 +156,65 @@ namespace HomeBudget.Components.Operations.Services
             var isPaymentAccountExist = await paymentAccountDocumentClient.GetByIdAsync(paymentAccountId);
 
             return isPaymentAccountExist.IsSucceeded && isPaymentAccountExist.Payload != null;
+        }
+
+        private async Task<Result<bool>> ValidatePaymentReferencesAsync(string categoryId, string contractorId)
+        {
+            var categoryIdResult = ParseOptionalReferenceId(categoryId, nameof(categoryId));
+            if (!categoryIdResult.IsSucceeded)
+            {
+                return Result<bool>.Failure(categoryIdResult.StatusMessage);
+            }
+
+            var categoryGuid = categoryIdResult.Payload;
+            if (categoryGuid != Guid.Empty)
+            {
+                var categoryResult = await categoryDocumentsClient.GetByIdAsync(categoryGuid);
+                if (!categoryResult.IsSucceeded || categoryResult.Payload == null)
+                {
+                    return Result<bool>.Failure($"The category '{categoryGuid}' hasn't been found");
+                }
+            }
+
+            var contractorIdResult = ParseOptionalReferenceId(contractorId, nameof(contractorId));
+            if (!contractorIdResult.IsSucceeded)
+            {
+                return Result<bool>.Failure(contractorIdResult.StatusMessage);
+            }
+
+            var contractorGuid = contractorIdResult.Payload;
+            if (contractorGuid != Guid.Empty)
+            {
+                var contractorResult = await contractorDocumentsClient.GetByIdAsync(contractorGuid);
+                if (!contractorResult.IsSucceeded || contractorResult.Payload == null)
+                {
+                    return Result<bool>.Failure($"The contractor '{contractorGuid}' hasn't been found");
+                }
+            }
+
+            return Result<bool>.Succeeded(true);
+        }
+
+        private static Result<Guid> ResolveReferenceForUpdate(string referenceId, Guid fallbackReferenceId, string referenceName)
+        {
+            if (string.IsNullOrWhiteSpace(referenceId))
+            {
+                return Result<Guid>.Succeeded(fallbackReferenceId);
+            }
+
+            return ParseOptionalReferenceId(referenceId, referenceName);
+        }
+
+        private static Result<Guid> ParseOptionalReferenceId(string referenceId, string referenceName)
+        {
+            if (string.IsNullOrWhiteSpace(referenceId))
+            {
+                return Result<Guid>.Succeeded(Guid.Empty);
+            }
+
+            return Guid.TryParse(referenceId, out var parsedReferenceId)
+                ? Result<Guid>.Succeeded(parsedReferenceId)
+                : Result<Guid>.Failure($"Invalid payment reference '{referenceName}' has been provided: '{referenceId}'");
         }
     }
 }

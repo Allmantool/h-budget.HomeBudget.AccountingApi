@@ -18,12 +18,17 @@ namespace HomeBudget.Components.Operations.Factories
             string contractorId,
             DateOnly operationDay)
         {
-            /*
-            if (!Guid.TryParse(categoryId, out var categoryGuid) || !Guid.TryParse(contractorId, out var contractorGuid))
+            var categoryIdResult = ParseOptionalReferenceId(categoryId, nameof(categoryId));
+            if (!categoryIdResult.IsSucceeded)
             {
-                return Result<FinancialTransaction>.Failure($"Pls. re-check 'categoryId': {categoryId} or 'contractorId': {contractorId}");
+                return Result<FinancialTransaction>.Failure(categoryIdResult.StatusMessage);
             }
-            */
+
+            var contractorIdResult = ParseOptionalReferenceId(contractorId, nameof(contractorId));
+            if (!contractorIdResult.IsSucceeded)
+            {
+                return Result<FinancialTransaction>.Failure(contractorIdResult.StatusMessage);
+            }
 
             var payload = new FinancialTransaction
             {
@@ -33,8 +38,8 @@ namespace HomeBudget.Components.Operations.Factories
                 Amount = amount,
                 Comment = comment,
                 PaymentAccountId = paymentAccountId,
-                CategoryId = Guid.TryParse(categoryId, out var categoryGuid) ? categoryGuid : Guid.NewGuid(),
-                ContractorId = Guid.TryParse(contractorId, out var contractorGuid) ? contractorGuid : Guid.NewGuid(),
+                CategoryId = categoryIdResult.Payload,
+                ContractorId = contractorIdResult.Payload,
                 TransactionType = TransactionTypes.Payment
             };
 
@@ -55,6 +60,18 @@ namespace HomeBudget.Components.Operations.Factories
             };
 
             return Result<FinancialTransaction>.Succeeded(payload);
+        }
+
+        private static Result<Guid> ParseOptionalReferenceId(string referenceId, string referenceName)
+        {
+            if (string.IsNullOrWhiteSpace(referenceId))
+            {
+                return Result<Guid>.Succeeded(Guid.Empty);
+            }
+
+            return Guid.TryParse(referenceId, out var parsedReferenceId)
+                ? Result<Guid>.Succeeded(parsedReferenceId)
+                : Result<Guid>.Failure($"Invalid payment reference '{referenceName}' has been provided: '{referenceId}'");
         }
     }
 }
