@@ -43,3 +43,6 @@ EXEC sys.sp_configure 'cost threshold for parallelism', 50;
 EXEC sys.sp_configure 'max degree of parallelism', 4;
 RECONFIGURE;
 GO
+
+USE [HomeBudget.Accounting];
+GO
