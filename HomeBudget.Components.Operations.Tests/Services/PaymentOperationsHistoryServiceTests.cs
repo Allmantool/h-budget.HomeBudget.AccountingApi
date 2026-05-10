@@ -367,7 +367,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                             Amount = 8m,
                             OperationDay = operationDay
                         }
-                    }
+                    },
                 ]);
 
             result.Payload.Should().Be(-8m);
