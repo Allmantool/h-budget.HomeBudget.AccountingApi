@@ -273,9 +273,21 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
             catch (Exception ex)
             {
-                _logger.SyncFailed(accountId, paymentAccountStream, ex);
+                _logger.SyncFailed(MaskAccountId(accountId), paymentAccountStream, ex);
                 throw;
             }
+        }
+
+        private static string MaskAccountId(Guid accountId)
+        {
+            var value = accountId.ToString("N");
+            if (string.IsNullOrEmpty(value))
+            {
+                return "***";
+            }
+
+            var suffixLength = Math.Min(8, value.Length);
+            return $"***{value[^suffixLength..]}";
         }
 
         private async Task SendSyncOperationsHistoryAsync(
