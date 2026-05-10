@@ -174,7 +174,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
             catch (Exception ex)
             {
-                _logger.SyncFailed(accountId, paymentAccountStream, ex);
+                _logger.SyncFailed(accountId.ToString(), paymentAccountStream, ex);
                 throw;
             }
         }
@@ -187,7 +187,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            _logger.DispatchingSync(paymentAccountId, events.Count());
+            _logger.DispatchingSync(paymentAccountId.ToString(), events.Count());
             await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
         }
     }

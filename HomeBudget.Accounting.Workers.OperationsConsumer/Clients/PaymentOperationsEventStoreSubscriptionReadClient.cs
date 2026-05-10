@@ -299,7 +299,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            _logger.DispatchingSync(paymentAccountId, events.Count());
+            _logger.DispatchingSync(paymentAccountId.ToString(), events.Count());
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
             using (var activity = ActivityPropagation.StartActivity("mediatr.send.sync_operations_history", ActivityKind.Internal))

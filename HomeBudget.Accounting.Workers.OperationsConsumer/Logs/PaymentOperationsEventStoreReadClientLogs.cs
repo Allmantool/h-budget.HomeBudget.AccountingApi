@@ -10,13 +10,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Logs
             EventId = 1007,
             Level = LogLevel.Information,
             Message = "Dispatching SyncOperationsHistoryCommand: AccountId={AccountId}, Events={Count}")]
-        public static partial void DispatchingSync(this ILogger logger, Guid accountId, int count);
+        public static partial void DispatchingSync(this ILogger logger, string accountId, int count);
 
         [LoggerMessage(
             EventId = 1006,
             Level = LogLevel.Error,
             Message = "SyncOperationsHistoryCommand failed for AccountId={AccountId}, stream={Stream}.")]
-        public static partial void SyncFailed(this ILogger logger, Guid accountId, string stream, Exception exception);
+        public static partial void SyncFailed(this ILogger logger, string accountId, string stream, Exception exception);
 
         [LoggerMessage(
             EventId = 1005,
