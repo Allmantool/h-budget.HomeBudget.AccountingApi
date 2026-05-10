@@ -284,23 +284,40 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             }
 
             using var command = connection.CreateCommand();
-            command.CommandText = $@"
-                SELECT OperationId, EventType, Status, RetryCount, LastError, PublishedUtc, LockedUntilUtc
-                FROM dbo.OutboxAccountPayments
-                WHERE OperationId IN ({string.Join(", ", operationIds.Select((_, i) => $"@operationId{i}"))})
-                ORDER BY CreatedUtc;";
+
+            var parameterNames = new List<string>();
 
             for (var i = 0; i < operationIds.Count; i++)
             {
-                command.Parameters.AddWithValue($"@operationId{i}", operationIds.ElementAt(i));
+                var parameterName = $"@operationId{i}";
+                parameterNames.Add(parameterName);
+
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = parameterName;
+                parameter.Value = operationIds.ElementAt(i);
+
+                command.Parameters.Add(parameter);
             }
+
+            #pragma warning disable CA2100 // SQL text uses generated parameter names only; all values are parameterized
+            command.CommandText =
+                "SELECT OperationId, EventType, Status, RetryCount, LastError, PublishedUtc, LockedUntilUtc " +
+                "FROM dbo.OutboxAccountPayments " +
+                $"WHERE OperationId IN ({string.Join(", ", parameterNames)}) " +
+                "ORDER BY CreatedUtc;";
 
             using var reader = command.ExecuteReader();
             var rows = new List<string>();
             while (reader.Read())
             {
-                rows.Add(
-                    $"{reader["OperationId"]}:{reader["EventType"]}:status={reader["Status"]}:retry={reader["RetryCount"]}:published={FormatDbValue(reader["PublishedUtc"])}:lockedUntil={FormatDbValue(reader["LockedUntilUtc"])}:error={FormatDbValue(reader["LastError"])}");
+                rows.Add($"" +
+                    $"{reader["OperationId"]}:" +
+                    $"{reader["EventType"]}:" +
+                    $"status={reader["Status"]}" +
+                    $":retry={reader["RetryCount"]}" +
+                    $":published={FormatDbValue(reader["PublishedUtc"])}" +
+                    $":lockedUntil={FormatDbValue(reader["LockedUntilUtc"])}" +
+                    $":error={FormatDbValue(reader["LastError"])}");
             }
 
             return rows.Count == 0 ? "<none>" : string.Join(" | ", rows);
