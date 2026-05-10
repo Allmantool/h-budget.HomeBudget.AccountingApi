@@ -20,6 +20,10 @@ namespace HomeBudget.Components.Operations.Clients
     internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
     : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory), IPaymentsHistoryDocumentsClient
     {
+        private const string ProjectionAuditCollectionName = "_projection_audit";
+        private const string ProjectionRunIdIndexName = "ix_payments_history_projection_run_id";
+        private const string ProjectionAuditRunIdIndexName = "ux_projection_audit_run_id";
+
         public MongoDbOptions DbOptions { get; } = dbOptions?.Value;
 
         public async Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null)
@@ -192,10 +196,105 @@ namespace HomeBudget.Components.Operations.Clients
                 });
         }
 
-        public async Task RewriteAllAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords)
+        public async Task RewriteAllAsync(
+            string financialPeriodIdentifier,
+            IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords,
+            Guid projectionRunId)
         {
-            await RemoveAsync(financialPeriodIdentifier);
-            await BulkWriteAsync(financialPeriodIdentifier, operationHistoryRecords);
+            var records = (operationHistoryRecords ?? [])
+                .Where(static x => x?.Record != null)
+                .GroupBy(static x => x.Record.Key)
+                .Select(static x => x
+                    .OrderBy(static r => r.Record.OperationDay)
+                    .ThenBy(static r => r.Record.OperationUnixTime)
+                    .ThenBy(static r => r.Record.Key)
+                    .Last())
+                .ToList();
+
+            await TraceMongoAsync(
+                "projection_replace",
+                financialPeriodIdentifier,
+                async () =>
+                {
+                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+                    var now = DateTime.UtcNow;
+
+                    if (records.Count > 0)
+                    {
+                        var bulkOps = records.Select(r =>
+                            new UpdateOneModel<PaymentHistoryDocument>(
+                                Builders<PaymentHistoryDocument>.Filter
+                                    .Eq(d => d.Payload.Record.Key, r.Record.Key),
+                                Builders<PaymentHistoryDocument>.Update
+                                    .Set(d => d.Payload, r)
+                                    .Set(d => d.ProjectionRunId, projectionRunId)
+                                    .Set(d => d.UpdatedUtc, now)
+                                    .SetOnInsert(d => d.CreatedUtc, now))
+                            {
+                                IsUpsert = true
+                            })
+                            .ToList();
+
+                        foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
+                        {
+                            await targetCollection.BulkWriteAsync(
+                                chunk,
+                                new BulkWriteOptions
+                                {
+                                    IsOrdered = true
+                                });
+                        }
+                    }
+
+                    await targetCollection.DeleteManyAsync(
+                        Builders<PaymentHistoryDocument>.Filter.Ne(d => d.ProjectionRunId, projectionRunId));
+
+                    return true;
+                },
+                records.FirstOrDefault()?.Record.PaymentAccountId);
+        }
+
+        public async Task BeginProjectionRunAsync(ProjectionAuditRecord auditRecord)
+        {
+            ArgumentNullException.ThrowIfNull(auditRecord);
+
+            await TraceMongoAsync(
+                "projection_audit_begin",
+                ProjectionAuditCollectionName,
+                async () =>
+                {
+                    var collection = await GetProjectionAuditCollectionAsync();
+                    await collection.InsertOneAsync(new ProjectionAuditDocument
+                    {
+                        Payload = auditRecord
+                    });
+
+                    return true;
+                });
+        }
+
+        public async Task CompleteProjectionRunAsync(Guid projectionRunId, string status, string error = null)
+        {
+            await TraceMongoAsync(
+                "projection_audit_complete",
+                ProjectionAuditCollectionName,
+                async () =>
+                {
+                    var collection = await GetProjectionAuditCollectionAsync();
+                    var now = DateTime.UtcNow;
+                    var filter = Builders<ProjectionAuditDocument>.Filter
+                        .Eq(d => d.Payload.ProjectionRunId, projectionRunId);
+                    var update = Builders<ProjectionAuditDocument>.Update
+                        .Set(d => d.Payload.Status, status)
+                        .Set(d => d.Payload.Error, error)
+                        .Set(d => d.Payload.UpdatedUtc, now)
+                        .Set(d => d.Payload.CompletedUtc, now)
+                        .Set(d => d.UpdatedUtc, now);
+
+                    await collection.UpdateOneAsync(filter, update);
+
+                    return true;
+                });
         }
 
         private async Task<IEnumerable<IMongoCollection<PaymentHistoryDocument>>> GetPaymentAccountCollectionsAsync(Guid accountId)
@@ -211,6 +310,15 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(financialPeriodIdentifier);
             await EnsureUniqueIndexAsync(collection, "Payload.Record.Key", "ux_payments_history_record_key");
+            await EnsureNonUniqueIndexAsync(collection, "ProjectionRunId", ProjectionRunIdIndexName);
+
+            return collection;
+        }
+
+        private async Task<IMongoCollection<ProjectionAuditDocument>> GetProjectionAuditCollectionAsync()
+        {
+            var collection = MongoDatabase.GetCollection<ProjectionAuditDocument>(ProjectionAuditCollectionName);
+            await EnsureUniqueIndexAsync(collection, "Payload.ProjectionRunId", ProjectionAuditRunIdIndexName);
 
             return collection;
         }

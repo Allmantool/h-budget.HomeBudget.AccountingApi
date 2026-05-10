@@ -17,6 +17,8 @@ namespace HomeBudget.Components.Operations.Extensions
                 .GroupBy(ev => ev.Payload.Key)
                 .Select(gr => gr
                     .OrderBy(ev => ev.Payload.OperationUnixTime)
+                    .ThenBy(ev => ev.SequenceNumber)
+                    .ThenBy(ev => ev.EnvelopId)
                     .Last())
                 .Where(ev => ev.EventType != PaymentEventTypes.Removed)
                 .ToList();

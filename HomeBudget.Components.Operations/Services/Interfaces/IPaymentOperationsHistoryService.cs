@@ -8,6 +8,9 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
 {
     public interface IPaymentOperationsHistoryService
     {
-        Task<Result<decimal>> SyncHistoryAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationEvent> eventsForAccount);
+        Task<Result<decimal>> SyncHistoryAsync(
+            string financialPeriodIdentifier,
+            IEnumerable<PaymentOperationEvent> eventsForAccount,
+            ProjectionCheckpoint checkpoint = null);
     }
 }

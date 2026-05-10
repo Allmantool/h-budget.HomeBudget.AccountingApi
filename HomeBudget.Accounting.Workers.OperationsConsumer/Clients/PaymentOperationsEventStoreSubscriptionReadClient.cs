@@ -96,6 +96,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
+        protected override Task OnEventAppearedAsync(
+            PaymentOperationEvent eventData,
+            EventStoreSubscriptionContext context)
+        {
+            return HandlePaymentOperationEventAsync(
+                ProjectionBatchContext.Create(ActivityEnvelope<PaymentOperationEvent>.Capture(eventData)),
+                context,
+                _cts.Token);
+        }
+
         private async Task ProcessEventBatchAsync()
         {
             var delayMs = Math.Max(0, _opts.EventBatchingDelayInMs);
@@ -131,7 +141,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 {
                     try
                     {
-                        await HandlePaymentOperationEventAsync(latestEvent, _cts.Token);
+                        await HandlePaymentOperationEventAsync(latestEvent, null, _cts.Token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -149,7 +159,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
-        private async Task HandlePaymentOperationEventAsync(ProjectionBatchContext projectionBatch, CancellationToken ct)
+        private async Task HandlePaymentOperationEventAsync(
+            ProjectionBatchContext projectionBatch,
+            EventStoreSubscriptionContext subscriptionContext,
+            CancellationToken ct)
         {
             var transaction = projectionBatch.LatestEvent.Payload;
             var accountId = transaction.PaymentAccountId;
@@ -236,7 +249,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                         projectionDelay,
                         [new("projection_name", "sync_operations_history")]);
                     activity?.SetTag("projection.delay_ms", projectionDelay);
-                    await SendSyncOperationsHistoryAsync(accountId, events, ct);
+                    await SendSyncOperationsHistoryAsync(
+                        accountId,
+                        events,
+                        new ProjectionCheckpoint
+                        {
+                            StreamId = subscriptionContext?.StreamId ?? paymentAccountStream,
+                            Revision = subscriptionContext?.Revision,
+                            Position = subscriptionContext?.Position
+                        },
+                        ct);
 
                     syncStopwatch.Stop();
                     TelemetryMetrics.ProjectionSyncDurationMs.Record(
@@ -260,6 +282,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         private async Task SendSyncOperationsHistoryAsync(
             Guid paymentAccountId,
             IEnumerable<PaymentOperationEvent> events,
+            ProjectionCheckpoint checkpoint,
             CancellationToken ct)
         {
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
@@ -281,7 +304,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     activity.SetAccount(paymentAccountId);
                 }
 
-                await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
+                await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events, checkpoint), ct);
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
         }

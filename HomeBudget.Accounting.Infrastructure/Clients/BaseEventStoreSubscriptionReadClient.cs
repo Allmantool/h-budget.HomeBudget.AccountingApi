@@ -113,6 +113,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                             }
 
                             MergeMetadata(resolvedEvent.Metadata.Span, eventData);
+                            ApplyEventStorePosition(resolvedEvent, eventData);
 
                             var correlationId = eventData.Metadata.Get(EventMetadataKeys.CorrelationId);
                             var traceParent = eventData.Metadata.Get(EventMetadataKeys.TraceParent);
@@ -161,7 +162,14 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 // Call the handler
                                 if (handler is null)
                                 {
-                                    await OnEventAppearedAsync(eventData);
+                                    await OnEventAppearedAsync(
+                                        eventData,
+                                        new EventStoreSubscriptionContext
+                                        {
+                                            StreamId = resolvedEvent.EventStreamId,
+                                            Revision = resolvedEvent.EventNumber.ToString(),
+                                            Position = resolvedEvent.Position.ToString()
+                                        });
                                 }
                                 else
                                 {
@@ -223,6 +231,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
 
+        protected virtual Task OnEventAppearedAsync(T eventData, EventStoreSubscriptionContext context)
+            => OnEventAppearedAsync(eventData);
+
         private static void MergeMetadata(ReadOnlySpan<byte> metadataBytes, T target)
         {
             if (metadataBytes.IsEmpty || target is not BaseEvent baseEvent)
@@ -239,6 +250,19 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             foreach (var item in metadata)
             {
                 baseEvent.Metadata[item.Key] = item.Value;
+            }
+        }
+
+        private static void ApplyEventStorePosition(EventRecord resolvedEvent, T target)
+        {
+            if (target is not BaseEvent baseEvent)
+            {
+                return;
+            }
+
+            if (long.TryParse(resolvedEvent.EventNumber.ToString(), out var sequenceNumber))
+            {
+                baseEvent.SequenceNumber = sequenceNumber;
             }
         }
 

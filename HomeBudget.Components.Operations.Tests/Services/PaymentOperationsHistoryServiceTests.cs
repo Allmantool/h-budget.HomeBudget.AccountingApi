@@ -239,8 +239,17 @@ namespace HomeBudget.Components.Operations.Tests.Services
             paymentsHistoryClientMock
                 .Setup(c => c.RewriteAllAsync(
                     It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>()))
-                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>>((_, records) => rewrittenRecords = records.ToList())
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
+                    It.IsAny<Guid>()))
+                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>, Guid>((_, records, _) => rewrittenRecords = records.ToList())
+                .Returns(Task.CompletedTask);
+
+            paymentsHistoryClientMock
+                .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
+                .Returns(Task.CompletedTask);
+
+            paymentsHistoryClientMock
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             var sut = new PaymentOperationsHistoryService(
@@ -257,6 +266,77 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 rewrittenRecords.Single().Record.Key.Should().Be(activeOperationId);
                 paymentsHistoryClientMock.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
             });
+        }
+
+        [Test]
+        public async Task SyncHistory_WhenDuplicateOperationKey_ThenWritesSingleDeterministicLatestRecord()
+        {
+            var paymentAccountId = Guid.Parse("55c6f3fc-0db4-4012-9218-1764c558974d");
+            var operationId = Guid.Parse("5b808c27-25d2-4a85-a0cb-947388fa1667");
+            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
+            var operationDay = new DateOnly(2024, 3, 12);
+            var olderEnvelope = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            var newerEnvelope = Guid.Parse("00000000-0000-0000-0000-000000000002");
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+
+            var events = new List<PaymentOperationEvent>
+            {
+                new()
+                {
+                    EventType = PaymentEventTypes.Updated,
+                    EnvelopId = newerEnvelope,
+                    SequenceNumber = 2,
+                    Payload = new FinancialTransaction
+                    {
+                        PaymentAccountId = paymentAccountId,
+                        Key = operationId,
+                        CategoryId = categoryId,
+                        Amount = 19m,
+                        OperationDay = operationDay
+                    }
+                },
+                new()
+                {
+                    EventType = PaymentEventTypes.Updated,
+                    EnvelopId = olderEnvelope,
+                    SequenceNumber = 1,
+                    Payload = new FinancialTransaction
+                    {
+                        PaymentAccountId = paymentAccountId,
+                        Key = operationId,
+                        CategoryId = categoryId,
+                        Amount = 10m,
+                        OperationDay = operationDay
+                    }
+                }
+            };
+
+            var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
+            paymentsHistoryClientMock
+                .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
+                .Returns(Task.CompletedTask);
+            paymentsHistoryClientMock
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+            paymentsHistoryClientMock
+                .Setup(c => c.RewriteAllAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
+                    It.IsAny<Guid>()))
+                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>, Guid>((_, records, _) => rewrittenRecords = records.ToList())
+                .Returns(Task.CompletedTask);
+
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                BuildCategoriesClientMock(categoryId).Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                events);
+
+            result.Payload.Should().Be(19m);
+            rewrittenRecords.Should().ContainSingle();
+            rewrittenRecords.Single().Record.Amount.Should().Be(19m);
         }
 
         private static PaymentOperationsHistoryService BuildServiceUnderTest()
@@ -279,11 +359,20 @@ namespace HomeBudget.Components.Operations.Tests.Services
             paymentsHistoryClientMock
                 .Setup(c => c.RewriteAllAsync(
                     It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>()))
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
+                    It.IsAny<Guid>()))
                 .Returns(Task.CompletedTask);
 
             paymentsHistoryClientMock
                 .Setup(c => c.RemoveAsync(It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            paymentsHistoryClientMock
+                .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
+                .Returns(Task.CompletedTask);
+
+            paymentsHistoryClientMock
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             return new PaymentOperationsHistoryService(

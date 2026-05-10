@@ -84,7 +84,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 }
 
                 await BenchmarkService.WithBenchmarkAsync(
-                    async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events),
+                    async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events, request.Checkpoint),
                     $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events in scope of account '{accountId}'",
                     logger,
                     new { monthPeriodIdentifier });
