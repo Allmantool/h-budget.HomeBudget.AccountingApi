@@ -21,7 +21,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 {
     internal static class PaymentProjectionWaiter
     {
-        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromMilliseconds(500);
 
         public static async Task<PaymentOperationHistoryRecordResponse> WaitForHistoryRecordAsync(

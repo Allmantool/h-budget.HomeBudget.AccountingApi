@@ -114,9 +114,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             await WorkerHost.StartAsync();
         }
 
-        public Task StopAsync()
+        public async Task StopAsync()
         {
-            return WorkerHost != null ? WorkerHost.StopAsync() : Task.CompletedTask;
+            if (WorkerHost is null)
+            {
+                return;
+            }
+
+            await WorkerHost.StopAsync();
+            WorkerHost.Dispose();
+            WorkerHost = null;
         }
     }
 }
