@@ -14,6 +14,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.History;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Core.Models;
 
@@ -64,6 +65,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     conditionDescription ?? "record is visible in payment history",
                     lastSnapshot,
                     lastException,
+                    paymentAccountId,
                     [operationId]));
 
             return lastRecord;
@@ -109,6 +111,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     conditionDescription,
                     lastSnapshot,
                     lastException,
+                    paymentAccountId,
                     knownOperationIds));
 
             return lastRecords;
@@ -169,6 +172,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     conditionDescription,
                     lastSnapshot,
                     lastException,
+                    paymentAccountId,
                     knownOperationIds));
 
             return lastAccount;
@@ -221,25 +225,29 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             string conditionDescription,
             ApiSnapshot lastSnapshot,
             Exception lastException,
+            Guid paymentAccountId,
             IEnumerable<Guid> knownOperationIds)
         {
             var operationIds = knownOperationIds?.Select(id => id.ToString()).ToArray() ?? [];
+            var currentPeriodCollection = DateOnly.FromDateTime(DateTime.UtcNow)
+                .ToFinancialPeriod()
+                .ToFinancialMonthIdentifier(paymentAccountId);
 
             return
                 $"{subject} did not reach the expected state within {DefaultTimeout.TotalSeconds} seconds. " +
                 $"Expected: {conditionDescription}. " +
                 $"Known operation IDs: {(operationIds.Length == 0 ? "<none>" : string.Join(", ", operationIds))}. " +
-                $"Mongo collections: history database collection prefix '<accountId>_yyyy_MM', ledger collection 'payment_accounts'. " +
+                $"Mongo collections: history collection format '<accountId>-yyyy-M-d-yyyy-M-d'; current-period example '{currentPeriodCollection}'; ledger collection 'payment_accounts'. " +
                 $"Last HTTP status: {lastSnapshot?.HttpStatus ?? "<none>"}. " +
                 $"Last domain success: {lastSnapshot?.DomainSuccess?.ToString() ?? "<none>"}. " +
                 $"Last domain status: {lastSnapshot?.DomainStatus ?? "<none>"}. " +
                 $"Last snapshot: {lastSnapshot?.PayloadSnapshot ?? "<none>"}. " +
                 $"Last response content: {lastSnapshot?.Content ?? "<none>"}. " +
                 $"Last exception: {lastException?.Message ?? "<none>"} " +
-                BuildInfrastructureDiagnostics(operationIds);
+                BuildInfrastructureDiagnostics(paymentAccountId, operationIds);
         }
 
-        private static string BuildInfrastructureDiagnostics(IReadOnlyCollection<string> operationIds)
+        private static string BuildInfrastructureDiagnostics(Guid paymentAccountId, IReadOnlyCollection<string> operationIds)
         {
             var testContainers = TestContainersService.GetInstance;
             if (testContainers is null || !testContainers.IsReadyForUse)
@@ -250,7 +258,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var diagnostics = new StringBuilder("Infrastructure diagnostics:");
             AppendSqlDiagnostics(diagnostics, testContainers, operationIds);
             AppendEventStoreDiagnostics(diagnostics, testContainers, operationIds);
-            AppendMongoDiagnostics(diagnostics, testContainers, operationIds);
+            AppendMongoDiagnostics(diagnostics, testContainers, paymentAccountId, operationIds);
 
             return diagnostics.ToString();
         }
@@ -397,6 +405,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private static void AppendMongoDiagnostics(
             StringBuilder diagnostics,
             TestContainersService testContainers,
+            Guid paymentAccountId,
             IReadOnlyCollection<string> operationIds)
         {
             try
@@ -411,6 +420,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
                 diagnostics.Append("; Mongo history collections=");
                 diagnostics.Append(collectionNames.Count == 0 ? "<none>" : string.Join(", ", collectionNames));
+
+                var accountCollectionNames = collectionNames
+                    .Where(name => name.StartsWith(paymentAccountId.ToString(), StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                diagnostics.Append("; Mongo history collections for account=");
+                diagnostics.Append(accountCollectionNames.Length == 0 ? "<none>" : string.Join(", ", accountCollectionNames));
+
+                var auditRows = QueryProjectionAuditRows(historyDb, paymentAccountId);
+                diagnostics.Append("; Mongo projection audit=");
+                diagnostics.Append(auditRows.Count == 0 ? "<none>" : string.Join(" | ", auditRows));
 
                 if (operationFilterValues.Length == 0)
                 {
@@ -436,6 +455,52 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 diagnostics.Append($" Mongo diagnostics failed: {ex.Message};");
             }
+        }
+
+        private static IReadOnlyCollection<string> QueryProjectionAuditRows(IMongoDatabase historyDb, Guid paymentAccountId)
+        {
+            const string projectionAuditCollection = "_projection_audit";
+            var streamPrefix = $"payment-account-{paymentAccountId}";
+            var collectionNames = historyDb.ListCollectionNames().ToList();
+            if (!collectionNames.Contains(projectionAuditCollection))
+            {
+                return [];
+            }
+
+            var collection = historyDb.GetCollection<BsonDocument>(projectionAuditCollection);
+            var filter = Builders<BsonDocument>.Filter.Or(
+                Builders<BsonDocument>.Filter.Regex("Payload.StreamId", new BsonRegularExpression($"^{streamPrefix}")),
+                Builders<BsonDocument>.Filter.Exists("Payload.StreamId", false));
+
+            return collection
+                .Find(filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("Payload.UpdatedUtc"))
+                .Limit(10)
+                .ToList()
+                .Select(FormatProjectionAuditRow)
+                .ToArray();
+        }
+
+        private static string FormatProjectionAuditRow(BsonDocument document)
+        {
+            var payload = document.GetValue("Payload", new BsonDocument()).AsBsonDocument;
+
+            return
+                $"{GetBsonString(payload, "StreamId", "<no-stream>")}:" +
+                $"revision={GetBsonString(payload, "Revision", "<null>")}:" +
+                $"status={GetBsonString(payload, "Status", "<null>")}:" +
+                $"error={GetBsonString(payload, "Error", "<null>")}:" +
+                $"updated={GetBsonString(payload, "UpdatedUtc", "<null>")}";
+        }
+
+        private static string GetBsonString(BsonDocument document, string fieldName, string fallback)
+        {
+            if (!document.TryGetValue(fieldName, out var value) || value == BsonNull.Value)
+            {
+                return fallback;
+            }
+
+            return value.ToString();
         }
 
         private static string FormatDbValue(object value)

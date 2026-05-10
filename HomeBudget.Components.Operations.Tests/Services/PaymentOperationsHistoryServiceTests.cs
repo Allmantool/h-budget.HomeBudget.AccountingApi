@@ -339,6 +339,90 @@ namespace HomeBudget.Components.Operations.Tests.Services
             rewrittenRecords.Single().Record.Amount.Should().Be(19m);
         }
 
+        [Test]
+        public async Task SyncHistory_WhenExpenseOperation_ThenWritesNegativeRunningBalance()
+        {
+            var paymentAccountId = Guid.Parse("99a87569-64ab-4cef-b62f-f79f8f79cdd3");
+            var operationId = Guid.Parse("4da53841-f4e5-41d7-b091-b5d3cc8844cd");
+            var categoryId = Guid.Parse("8edca550-3e18-4c3d-8235-7ff99357e61a");
+            var operationDay = new DateOnly(2024, 5, 7);
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+
+            var paymentsHistoryClientMock = BuildHistoryClientMock((_, records, _) => rewrittenRecords = records.ToList());
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                BuildCategoriesClientMock(categoryId, CategoryTypes.Expense).Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                [
+                    new PaymentOperationEvent
+                    {
+                        EventType = PaymentEventTypes.Added,
+                        Payload = new FinancialTransaction
+                        {
+                            PaymentAccountId = paymentAccountId,
+                            Key = operationId,
+                            CategoryId = categoryId,
+                            Amount = 8m,
+                            OperationDay = operationDay
+                        }
+                    }
+                ]);
+
+            result.Payload.Should().Be(-8m);
+            rewrittenRecords.Should().ContainSingle();
+            rewrittenRecords.Single().Balance.Should().Be(-8m);
+        }
+
+        [Test]
+        public async Task SyncHistory_WhenMultipleOperations_ThenWritesExpectedOrderingAndRunningBalances()
+        {
+            var paymentAccountId = Guid.Parse("ac11dc26-dd63-49da-9d2e-4d9bcf4c2d4a");
+            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
+            var operationDay = new DateOnly(2024, 3, 12);
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+
+            var operations = new[]
+            {
+                CreateEvent(paymentAccountId, Guid.Parse("00000000-0000-0000-0000-000000000002"), categoryId, 5m, operationDay.AddDays(1)),
+                CreateEvent(paymentAccountId, Guid.Parse("00000000-0000-0000-0000-000000000001"), categoryId, 3m, operationDay),
+                CreateEvent(paymentAccountId, Guid.Parse("00000000-0000-0000-0000-000000000003"), categoryId, 7m, operationDay.AddDays(2))
+            };
+
+            var paymentsHistoryClientMock = BuildHistoryClientMock((_, records, _) => rewrittenRecords = records.ToList());
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                BuildCategoriesClientMock(categoryId).Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                operations);
+
+            result.Payload.Should().Be(15m);
+            rewrittenRecords.Select(r => r.Record.Key).Should().Equal(
+                Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Guid.Parse("00000000-0000-0000-0000-000000000002"),
+                Guid.Parse("00000000-0000-0000-0000-000000000003"));
+            rewrittenRecords.Select(r => r.Balance).Should().Equal(3m, 8m, 15m);
+        }
+
+        [Test]
+        public void GetMonthPeriodPaymentAccountIdentifier_WhenCalled_ThenUsesCanonicalFinancialPeriodIdentifier()
+        {
+            var paymentAccountId = Guid.Parse("0330ec5c-643e-4833-9ad5-85085cb42ee5");
+            var operation = new FinancialTransaction
+            {
+                PaymentAccountId = paymentAccountId,
+                OperationDay = new DateOnly(2023, 12, 15)
+            };
+
+            var identifier = operation.GetMonthPeriodPaymentAccountIdentifier();
+
+            identifier.Should().Be(operation.OperationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId));
+            identifier.Should().Be($"{paymentAccountId}-2023-12-1-2023-12-31");
+        }
+
         private static PaymentOperationsHistoryService BuildServiceUnderTest()
         {
             var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
@@ -381,11 +465,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
         }
 
         private static Mock<ICategoryDocumentsClient> BuildCategoriesClientMock(Guid categoryId)
+            => BuildCategoriesClientMock(categoryId, CategoryTypes.Income);
+
+        private static Mock<ICategoryDocumentsClient> BuildCategoriesClientMock(Guid categoryId, CategoryTypes categoryType)
         {
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
 
             var category = new Category(
-                CategoryTypes.Income,
+                categoryType,
                 [
                     "test-category"
                 ])
@@ -407,6 +494,48 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .ReturnsAsync(() => Result<IReadOnlyCollection<CategoryDocument>>.Succeeded([payload]));
 
             return categoriesClient;
+        }
+
+        private static Mock<IPaymentsHistoryDocumentsClient> BuildHistoryClientMock(
+            Action<string, IEnumerable<PaymentOperationHistoryRecord>, Guid> rewriteCallback)
+        {
+            var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
+            paymentsHistoryClientMock
+                .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
+                .Returns(Task.CompletedTask);
+            paymentsHistoryClientMock
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+            paymentsHistoryClientMock
+                .Setup(c => c.RewriteAllAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
+                    It.IsAny<Guid>()))
+                .Callback(rewriteCallback)
+                .Returns(Task.CompletedTask);
+
+            return paymentsHistoryClientMock;
+        }
+
+        private static PaymentOperationEvent CreateEvent(
+            Guid paymentAccountId,
+            Guid operationId,
+            Guid categoryId,
+            decimal amount,
+            DateOnly operationDay)
+        {
+            return new PaymentOperationEvent
+            {
+                EventType = PaymentEventTypes.Added,
+                Payload = new FinancialTransaction
+                {
+                    PaymentAccountId = paymentAccountId,
+                    Key = operationId,
+                    CategoryId = categoryId,
+                    Amount = amount,
+                    OperationDay = operationDay
+                }
+            };
         }
     }
 }

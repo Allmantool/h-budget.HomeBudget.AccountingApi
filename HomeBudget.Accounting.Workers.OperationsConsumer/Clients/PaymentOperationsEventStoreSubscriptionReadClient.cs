@@ -39,6 +39,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly ILogger<PaymentOperationsEventStoreSubscriptionReadClient> _logger;
         private readonly ConcurrentDictionary<string, ProjectionBatchContext> _latestEventsPerAccount = new();
+        private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _projectionLocksByAccount = new();
         private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsBuffer;
         private readonly EventStoreDbOptions _opts;
         private readonly CancellationTokenSource _cts = new();
@@ -160,6 +161,27 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         }
 
         private async Task HandlePaymentOperationEventAsync(
+            ProjectionBatchContext projectionBatch,
+            EventStoreSubscriptionContext subscriptionContext,
+            CancellationToken ct)
+        {
+            var transaction = projectionBatch.LatestEvent.Payload;
+            var accountId = transaction.PaymentAccountId;
+
+            var projectionLock = _projectionLocksByAccount.GetOrAdd(accountId, _ => new SemaphoreSlim(1, 1));
+            await projectionLock.WaitAsync(ct);
+
+            try
+            {
+                await HandlePaymentOperationEventCoreAsync(projectionBatch, subscriptionContext, ct);
+            }
+            finally
+            {
+                projectionLock.Release();
+            }
+        }
+
+        private async Task HandlePaymentOperationEventCoreAsync(
             ProjectionBatchContext projectionBatch,
             EventStoreSubscriptionContext subscriptionContext,
             CancellationToken ct)

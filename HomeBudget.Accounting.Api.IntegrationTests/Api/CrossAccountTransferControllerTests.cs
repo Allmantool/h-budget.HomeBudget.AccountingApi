@@ -29,8 +29,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     {
         private const string CrossAccountsTransferApiHost = $"/{Endpoints.CrossAccountsTransfer}";
         private const string PaymentHistoryApiHost = $"/{Endpoints.PaymentsHistory}";
-        private static readonly TimeSpan HistoryProjectionTimeout = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan HistoryPollInterval = TimeSpan.FromMilliseconds(500);
 
         private readonly CrossAccountsTransferWebApp _sut = new();
         private RestClient _restClient;
@@ -190,39 +188,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecords = await GetHistoryByPaymentAccountIdAsync(accountId);
-
-                    if (condition(lastRecords))
-                    {
-                        return lastRecords;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = string.Join(
-                " | ",
-                lastRecords.Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
-
-            Assert.Fail(
-                $"Payment history for transfer account '{accountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecords;
+            return await PaymentProjectionWaiter.WaitForHistoryRecordsAsync(
+                _restClient,
+                accountId,
+                condition,
+                "transfer payment history reaches expected state",
+                cancellationToken: cancellationToken);
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync(decimal initialBalance, AccountTypes accountType, CurrencyTypes currencyType)

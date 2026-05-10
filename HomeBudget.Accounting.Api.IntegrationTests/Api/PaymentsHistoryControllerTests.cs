@@ -149,14 +149,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _restClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 2000);
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
+            var historyRecords = await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records => records.Count == 1 && records.Single().Balance == expectedBalanceAmount,
+                $"single expense operation is visible with balance {expectedBalanceAmount}",
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
 
-            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var accountAfter = await PaymentProjectionWaiter.WaitForPaymentAccountAsync(
+                _restClient,
+                paymentAccountId,
+                account => account.Balance == expectedBalanceAmount,
+                $"balance is {expectedBalanceAmount}",
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
 
             Assert.Multiple(() =>
             {
                 historyRecords.Single().Balance.Should().Be(expectedBalanceAmount);
-                balanceAfter.Should().Be(expectedBalanceAmount);
+                accountAfter.Balance.Should().Be(expectedBalanceAmount);
             });
         }
 
@@ -346,7 +355,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                            updatedRecord.Record.OperationDay == updateRequest.OperationDate &&
                            updatedRecord.Record.Comment == updateRequest.Comment &&
                            updatedRecord.Balance == 0.2m;
-                }))
+                },
+                knownOperationIds: [newOperationId]))
                 .Single(r => r.Record.Key == newOperationId);
 
             targetPaymentHistory.Balance.Should().Be(0.2m);
@@ -374,19 +384,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var newPaymentId = createPaymentRequestResult.Payload.PaymentOperationId;
 
-            var getPaymentByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newPaymentId}");
-
-            var paymentHistoryRequestResponse = await _restClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(
-                getPaymentByIdRequest,
-                executionDelayBeforeInMs: 5500);
-
-            var paymentHistoryResult = paymentHistoryRequestResponse.Data;
-            var paymentHistory = paymentHistoryResult.Payload;
+            var paymentHistory = await WaitForHistoryRecordAsync(
+                paymentAccountId,
+                Guid.Parse(newPaymentId),
+                record => record.Record.Amount == 35.64m,
+                "operation is visible by id with amount 35.64",
+                TestContext.CurrentContext.CancellationToken);
 
             Assert.Multiple(() =>
             {
                 createPaymentRequestResult.IsSucceeded.Should().BeTrue();
-                paymentHistoryResult.IsSucceeded.Should().BeTrue();
                 paymentHistory.Record.Amount.Should().Be(35.64m);
             });
         }
