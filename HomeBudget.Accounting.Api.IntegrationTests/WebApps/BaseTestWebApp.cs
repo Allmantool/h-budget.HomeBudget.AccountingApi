@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
@@ -17,6 +18,8 @@ using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
 using HomeBudget.Accounting.Domain.Constants;
+using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
+using HomeBudget.Core.Constants;
 using HomeBudget.Test.Core;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
@@ -25,6 +28,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
         where TWebAppEntryPoint : class
         where TWorkerEntryPoint : class
     {
+        private static readonly object ActiveAppsLock = new();
+        private static readonly List<BaseTestWebApp<TWebAppEntryPoint, TWorkerEntryPoint>> ActiveApps = [];
+
+        private bool _hostsStopped;
+
         private IntegrationTestWebApplicationFactory<TWebAppEntryPoint> WebFactory { get; set; }
 
         private List<IntegrationTestWorkerFactory<TWorkerEntryPoint>> WorkerFactories { get; set; } = new List<IntegrationTestWorkerFactory<TWorkerEntryPoint>>();
@@ -76,6 +84,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     }
 
                     await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
+                    await WaitForPaymentWorkerReadyAsync();
                 }
 
                 if (ShouldInitializeWebApp)
@@ -116,6 +125,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     );
                 }
 
+                RegisterActiveApp();
+
                 return true;
             }
             catch (Exception ex)
@@ -135,22 +146,38 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             return TestContainersService.IsReadyForUse;
         }
 
-        public static async Task ResetAsync()
+        private void RegisterActiveApp()
         {
-            if (TestContainersService == null)
+            lock (ActiveAppsLock)
+            {
+                if (!ActiveApps.Contains(this))
+                {
+                    ActiveApps.Add(this);
+                }
+            }
+        }
+
+        private static async Task StopActiveAppsAsync()
+        {
+            BaseTestWebApp<TWebAppEntryPoint, TWorkerEntryPoint>[] apps;
+
+            lock (ActiveAppsLock)
+            {
+                apps = ActiveApps.ToArray();
+                ActiveApps.Clear();
+            }
+
+            await Task.WhenAll(apps.Select(app => app.StopHostsAsync()));
+        }
+
+        private async Task StopHostsAsync()
+        {
+            if (_hostsStopped)
             {
                 return;
             }
 
-            await TestContainersService.ResetContainersAsync();
-        }
-
-        protected override async ValueTask DisposeAsyncCoreAsync()
-        {
-            if (TestContainersService != null)
-            {
-                await TestContainersService.DisposeAsync();
-            }
+            RestHttpClient?.Dispose();
 
             if (WebFactory != null)
             {
@@ -162,7 +189,63 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await Task.WhenAll(WorkerFactories.Select(w => w.StopAsync()));
             }
 
-            RestHttpClient?.Dispose();
+            _hostsStopped = true;
+        }
+
+        private async Task WaitForPaymentWorkerReadyAsync()
+        {
+            var timeoutAt = DateTime.UtcNow.AddSeconds(60);
+            Exception lastException = null;
+
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                try
+                {
+                    foreach (var workerFactory in WorkerFactories)
+                    {
+                        var topicManager = workerFactory.WorkerHost?.Services.GetService<ITopicManager>();
+                        if (topicManager is null)
+                        {
+                            continue;
+                        }
+
+                        if (await topicManager.HasActiveConsumerAsync(BaseTopics.AccountingPayments, "accounting.payments.group"))
+                        {
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+            }
+
+            throw new TimeoutException(
+                $"Kafka payment worker did not join consumer group 'accounting.payments.group' for topic '{BaseTopics.AccountingPayments}' within 60 seconds. Last exception: {lastException?.Message}");
+        }
+
+        public static async Task ResetAsync()
+        {
+            if (TestContainersService == null)
+            {
+                return;
+            }
+
+            await StopActiveAppsAsync();
+            await TestContainersService.ResetContainersAsync();
+        }
+
+        protected override async ValueTask DisposeAsyncCoreAsync()
+        {
+            await StopHostsAsync();
+
+            if (TestContainersService != null)
+            {
+                await TestContainersService.DisposeAsync();
+            }
         }
     }
 }

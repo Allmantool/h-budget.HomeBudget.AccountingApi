@@ -170,13 +170,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             var paymentAccountStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(monthPeriodPaymentAccountIdentifier);
 
-            var events = await _eventStoreDbStreamReadClient
-                .ReadAsync(paymentAccountStream, cancellationToken: ct)
-                .ToListAsync(ct);
+            var events = await ReadProjectionEventsAsync(paymentAccountStream, projectionBatch.LatestEvent, ct);
 
             if (events.Count == 0)
             {
-                return;
+                throw new InvalidOperationException(
+                    $"Projection stream read returned no events for stream '{paymentAccountStream}' after payment operation '{transaction.Key}' appeared.");
             }
 
             foreach (var e in events)
@@ -307,6 +306,32 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events, checkpoint), ct);
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
+        }
+
+        private async Task<List<PaymentOperationEvent>> ReadProjectionEventsAsync(
+            string paymentAccountStream,
+            PaymentOperationEvent appearedEvent,
+            CancellationToken ct)
+        {
+            List<PaymentOperationEvent> events = null;
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                events = await _eventStoreDbStreamReadClient
+                    .ReadAsync(paymentAccountStream, cancellationToken: ct)
+                    .ToListAsync(ct);
+
+                if (events.Count > 0)
+                {
+                    return events;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+            }
+
+            return appearedEvent is null
+                ? events ?? []
+                : [appearedEvent];
         }
     }
 }

@@ -47,8 +47,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
         }
 
-        public override Task StopAsync(CancellationToken cancellationToken)
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
+            await base.StopAsync(cancellationToken);
+
             try
             {
                 _subscription?.Dispose();
@@ -58,8 +60,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             {
                 logger.FailedToDisposeConsumer(ex);
             }
-
-            return base.StopAsync(cancellationToken);
         }
     }
 }
