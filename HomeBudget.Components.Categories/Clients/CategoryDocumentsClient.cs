@@ -46,35 +46,25 @@ namespace HomeBudget.Components.Categories.Clients
             var targetCollection = await GetCategoriesCollectionAsync();
             var filter = Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, payload.CategoryKey);
             var now = DateTime.UtcNow;
-            var update = Builders<CategoryDocument>.Update
-                .SetOnInsert(d => d.Payload, payload)
-                .SetOnInsert(d => d.CreatedUtc, now)
-                .SetOnInsert(d => d.UpdatedUtc, now);
 
             try
             {
-                var writeResult = await targetCollection.UpdateOneAsync(
-                    filter,
-                    update,
-                    new UpdateOptions { IsUpsert = true });
-
-                if (writeResult.UpsertedId != null)
+                if (await targetCollection.Find(filter).AnyAsync())
                 {
-                    return Result<Guid>.Succeeded(payload.Key);
+                    return Result<Guid>.Failure($"The category with '{payload.CategoryKey}' key already exists");
                 }
 
-                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+                await targetCollection.InsertOneAsync(new CategoryDocument
+                {
+                    Payload = payload,
+                    CreatedUtc = now,
+                    UpdatedUtc = now
+                });
 
-                return Result<Guid>.Succeeded(existing.Payload.Key);
+                return Result<Guid>.Succeeded(payload.Key);
             }
             catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
             {
-                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
-                if (existing != null)
-                {
-                    return Result<Guid>.Succeeded(existing.Payload.Key);
-                }
-
                 return Result<Guid>.Failure($"The category with '{payload.CategoryKey}' key already exists");
             }
         }

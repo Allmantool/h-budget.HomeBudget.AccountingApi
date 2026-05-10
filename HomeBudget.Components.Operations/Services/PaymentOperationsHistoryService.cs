@@ -58,7 +58,7 @@ namespace HomeBudget.Components.Operations.Services
             var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
             var historyRecords = latestActiveEvents.BuildHistoryRecords(categoryMap);
 
-            await _paymentsHistoryDocumentsClient.BulkWriteAsync(financialPeriodIdentifier, historyRecords);
+            await _paymentsHistoryDocumentsClient.RewriteAllAsync(financialPeriodIdentifier, historyRecords);
 
             return Result<decimal>.Succeeded(historyRecords[^1].Balance);
         }

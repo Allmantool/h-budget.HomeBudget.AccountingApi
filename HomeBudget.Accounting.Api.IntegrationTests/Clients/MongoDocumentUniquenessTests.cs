@@ -77,7 +77,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         }
 
         [Test]
-        public async Task ConcurrentCategoryCreate_WithSameBusinessKey_ShouldReturnExistingAndStoreOneDocument()
+        public async Task ConcurrentCategoryCreate_WithSameBusinessKey_ShouldFailDuplicatesAndStoreOneDocument()
         {
             await _categoryClient.GetAsync();
             var tasks = Enumerable.Range(0, 20)
@@ -91,13 +91,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var collection = _handbooksDatabase.GetCollection<CategoryDocument>(LedgerDbCollections.Categories);
             var stored = await collection.Find(c => c.Payload.CategoryKey == "0-concurrent-category").ToListAsync();
 
-            results.Should().OnlyContain(result => result.IsSucceeded);
-            results.Select(result => result.Payload).Distinct().Should().ContainSingle();
+            results.Count(result => result.IsSucceeded).Should().Be(1);
+            results.Where(result => !result.IsSucceeded).Should().OnlyContain(
+                result => result.StatusMessage == "The category with '0-concurrent-category' key already exists");
+            results.Where(result => result.IsSucceeded).Select(result => result.Payload).Should().ContainSingle();
             stored.Should().ContainSingle();
         }
 
         [Test]
-        public async Task ConcurrentContractorCreate_WithSameBusinessKey_ShouldReturnExistingAndStoreOneDocument()
+        public async Task ConcurrentContractorCreate_WithSameBusinessKey_ShouldFailDuplicatesAndStoreOneDocument()
         {
             await _contractorClient.GetAsync();
             var tasks = Enumerable.Range(0, 20)
@@ -111,8 +113,10 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var collection = _handbooksDatabase.GetCollection<ContractorDocument>(LedgerDbCollections.Contractors);
             var stored = await collection.Find(c => c.Payload.ContractorKey == "concurrent-contractor").ToListAsync();
 
-            results.Should().OnlyContain(result => result.IsSucceeded);
-            results.Select(result => result.Payload).Distinct().Should().ContainSingle();
+            results.Count(result => result.IsSucceeded).Should().Be(1);
+            results.Where(result => !result.IsSucceeded).Should().OnlyContain(
+                result => result.StatusMessage == "The contractor with 'concurrent-contractor' key already exists");
+            results.Where(result => result.IsSucceeded).Select(result => result.Payload).Should().ContainSingle();
             stored.Should().ContainSingle();
         }
 
@@ -156,8 +160,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 .Find(c => c.Payload.ContractorKey == firstContractor.ContractorKey)
                 .ToListAsync();
 
-            secondCategoryResult.Payload.Should().Be(firstCategoryResult.Payload);
-            secondContractorResult.Payload.Should().Be(firstContractorResult.Payload);
+            firstCategoryResult.IsSucceeded.Should().BeTrue();
+            secondCategoryResult.IsSucceeded.Should().BeFalse();
+            secondCategoryResult.StatusMessage.Should().Be(
+                $"The category with '{firstCategory.CategoryKey}' key already exists");
+            firstContractorResult.IsSucceeded.Should().BeTrue();
+            secondContractorResult.IsSucceeded.Should().BeFalse();
+            secondContractorResult.StatusMessage.Should().Be(
+                $"The contractor with '{firstContractor.ContractorKey}' key already exists");
             categories.Should().ContainSingle();
             contractors.Should().ContainSingle();
         }

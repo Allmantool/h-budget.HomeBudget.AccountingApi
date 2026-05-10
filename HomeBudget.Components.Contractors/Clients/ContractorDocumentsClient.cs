@@ -56,35 +56,25 @@ namespace HomeBudget.Components.Contractors.Clients
             var targetCollection = await GetContractorsCollectionAsync();
             var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, payload.ContractorKey);
             var now = DateTime.UtcNow;
-            var update = Builders<ContractorDocument>.Update
-                .SetOnInsert(d => d.Payload, payload)
-                .SetOnInsert(d => d.CreatedUtc, now)
-                .SetOnInsert(d => d.UpdatedUtc, now);
 
             try
             {
-                var writeResult = await targetCollection.UpdateOneAsync(
-                    filter,
-                    update,
-                    new UpdateOptions { IsUpsert = true });
-
-                if (writeResult.UpsertedId != null)
+                if (await targetCollection.Find(filter).AnyAsync())
                 {
-                    return Result<Guid>.Succeeded(payload.Key);
+                    return Result<Guid>.Failure($"The contractor with '{payload.ContractorKey}' key already exists");
                 }
 
-                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+                await targetCollection.InsertOneAsync(new ContractorDocument
+                {
+                    Payload = payload,
+                    CreatedUtc = now,
+                    UpdatedUtc = now
+                });
 
-                return Result<Guid>.Succeeded(existing.Payload.Key);
+                return Result<Guid>.Succeeded(payload.Key);
             }
             catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
             {
-                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
-                if (existing != null)
-                {
-                    return Result<Guid>.Succeeded(existing.Payload.Key);
-                }
-
                 return Result<Guid>.Failure($"The contractor with '{payload.ContractorKey}' key already exists");
             }
         }

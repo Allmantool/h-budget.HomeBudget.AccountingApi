@@ -58,6 +58,8 @@ namespace HomeBudget.Components.Operations.Services
             try
             {
                 var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(row.Payload);
+                StampOutboxMetadata(paymentEvent, row);
+
                 var messageResult = PaymentEventToMessageConverter.Convert(paymentEvent, row.CreatedUtc);
                 if (!messageResult.IsSucceeded)
                 {
@@ -93,6 +95,34 @@ namespace HomeBudget.Components.Operations.Services
                     dateTimeProvider.GetNowUtc());
 
                 return false;
+            }
+        }
+
+        private static void StampOutboxMetadata(
+            PaymentOperationEvent paymentEvent,
+            OutboxAccountPaymentsEntity row)
+        {
+            if (paymentEvent is null || row is null)
+            {
+                return;
+            }
+
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.MessageId, row.MessageId);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.CommandId, row.MessageId);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.CorrelationId, row.CorrelationId);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.CausationId, row.CausationId);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.TraceParent, row.TraceParent);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.TraceState, row.TraceState);
+        }
+
+        private static void SetIfNotEmpty(
+            PaymentOperationEvent paymentEvent,
+            string key,
+            string value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                paymentEvent.Metadata[key] = value;
             }
         }
     }

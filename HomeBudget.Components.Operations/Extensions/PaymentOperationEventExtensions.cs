@@ -12,21 +12,20 @@ namespace HomeBudget.Components.Operations.Extensions
         public static IReadOnlyCollection<PaymentOperationEvent> GetValidAndMostUpToDateOperations(
             this IEnumerable<PaymentOperationEvent> eventsForAccount)
         {
-            var existedOperationEventGroups = eventsForAccount
+            var validAndMostUpToDateOperations = eventsForAccount
+                .Where(ev => ev?.Payload != null)
                 .GroupBy(ev => ev.Payload.Key)
-                .Where(gr => gr.All(ev => ev.EventType != PaymentEventTypes.Removed));
-
-            var validAndMostUpToDateOperations = existedOperationEventGroups
                 .Select(gr => gr
-                    .OrderBy(ev => ev.Payload.Key)
-                    .ThenBy(ev => ev.Payload.OperationUnixTime)
+                    .OrderBy(ev => ev.Payload.OperationUnixTime)
                     .Last())
+                .Where(ev => ev.EventType != PaymentEventTypes.Removed)
                 .ToList();
 
             return validAndMostUpToDateOperations
-                    .OrderBy(ev => ev.Payload.Key)
-                    .ThenBy(ev => ev.Payload.OperationUnixTime)
-                    .ToList();
+                .OrderBy(ev => ev.Payload.OperationDay)
+                .ThenBy(ev => ev.Payload.OperationUnixTime)
+                .ThenBy(ev => ev.Payload.Key)
+                .ToList();
         }
 
         public static IReadOnlyList<PaymentOperationHistoryRecord> BuildHistoryRecords(
