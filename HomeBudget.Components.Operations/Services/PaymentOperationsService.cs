@@ -144,7 +144,9 @@ namespace HomeBudget.Components.Operations.Services
                 Comment = payload.Comment,
                 CategoryId = categoryIdResult.Payload,
                 ContractorId = contractorIdResult.Payload,
-                OperationDay = payload.OperationDate,
+                OperationDay = payload.OperationDate == default
+                    ? paymentRecord.OperationDay
+                    : payload.OperationDate,
                 TransactionType = TransactionTypes.Payment
             };
 

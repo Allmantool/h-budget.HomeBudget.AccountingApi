@@ -65,14 +65,11 @@ namespace HomeBudget.Accounting.Api.Controllers
         {
             var newContractor = contractorFactory.Create(request.NameNodes);
 
-            if (await contractorDocumentsClient.CheckIfExistsAsync(newContractor.ContractorKey))
-            {
-                return Result<Guid>.Failure($"The contractor with '{newContractor.ContractorKey}' key already exists");
-            }
-
             var saveResult = await contractorDocumentsClient.InsertOneAsync(newContractor);
 
-            return Result<Guid>.Succeeded(saveResult.Payload);
+            return saveResult.IsSucceeded
+                ? Result<Guid>.Succeeded(saveResult.Payload)
+                : Result<Guid>.Failure(saveResult.StatusMessage);
         }
     }
 }

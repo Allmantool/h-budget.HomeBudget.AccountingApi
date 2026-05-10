@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -183,6 +184,81 @@ namespace HomeBudget.Components.Operations.Tests.Services
             result.Payload.Should().Be(0);
         }
 
+        [Test]
+        public async Task SyncHistory_WhenOneOperationIsRemovedFromPeriod_ThenRewritesPeriodWithoutRemovedRecord()
+        {
+            var paymentAccountId = Guid.Parse("39e4f557-df45-4b61-9a02-a289de12136c");
+            var removedOperationId = Guid.Parse("21ca49e6-369b-420f-90ca-dd10b7ea7f7a");
+            var activeOperationId = Guid.Parse("fce777ae-4d3f-493c-b30b-d247a3477339");
+            var categoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
+            var operationDay = new DateOnly(2024, 1, 12);
+
+            var events = new List<PaymentOperationEvent>
+            {
+                new()
+                {
+                    EventType = PaymentEventTypes.Added,
+                    Payload = new FinancialTransaction
+                    {
+                        PaymentAccountId = paymentAccountId,
+                        Key = removedOperationId,
+                        CategoryId = categoryId,
+                        Amount = 12.10m,
+                        OperationDay = operationDay
+                    }
+                },
+                new()
+                {
+                    EventType = PaymentEventTypes.Added,
+                    Payload = new FinancialTransaction
+                    {
+                        PaymentAccountId = paymentAccountId,
+                        Key = activeOperationId,
+                        CategoryId = categoryId,
+                        Amount = 5.25m,
+                        OperationDay = operationDay.AddDays(1)
+                    }
+                },
+                new()
+                {
+                    EventType = PaymentEventTypes.Removed,
+                    Payload = new FinancialTransaction
+                    {
+                        PaymentAccountId = paymentAccountId,
+                        Key = removedOperationId,
+                        CategoryId = categoryId,
+                        Amount = 12.10m,
+                        OperationDay = operationDay
+                    }
+                }
+            };
+
+            var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+
+            paymentsHistoryClientMock
+                .Setup(c => c.RewriteAllAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>()))
+                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>>((_, records) => rewrittenRecords = records.ToList())
+                .Returns(Task.CompletedTask);
+
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                BuildCategoriesClientMock(categoryId).Object);
+            var periodIdentifier = operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId);
+
+            var result = await sut.SyncHistoryAsync(periodIdentifier, events);
+
+            Assert.Multiple(() =>
+            {
+                result.Payload.Should().Be(5.25m);
+                rewrittenRecords.Should().ContainSingle();
+                rewrittenRecords.Single().Record.Key.Should().Be(activeOperationId);
+                paymentsHistoryClientMock.Verify(c => c.RemoveAsync(It.IsAny<string>()), Times.Never);
+            });
+        }
+
         private static PaymentOperationsHistoryService BuildServiceUnderTest()
         {
             var paymentsHistoryClientMock = new Mock<IPaymentsHistoryDocumentsClient>();
@@ -198,6 +274,25 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     }
                 }));
 
+            var categoriesClient = BuildCategoriesClientMock(Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2"));
+
+            paymentsHistoryClientMock
+                .Setup(c => c.RewriteAllAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>()))
+                .Returns(Task.CompletedTask);
+
+            paymentsHistoryClientMock
+                .Setup(c => c.RemoveAsync(It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            return new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                categoriesClient.Object);
+        }
+
+        private static Mock<ICategoryDocumentsClient> BuildCategoriesClientMock(Guid categoryId)
+        {
             var categoriesClient = new Mock<ICategoryDocumentsClient>();
 
             var category = new Category(
@@ -206,7 +301,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     "test-category"
                 ])
             {
-                Key = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2")
+                Key = categoryId
             };
 
             var payload = new CategoryDocument
@@ -222,9 +317,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(c => c.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
                 .ReturnsAsync(() => Result<IReadOnlyCollection<CategoryDocument>>.Succeeded([payload]));
 
-            return new PaymentOperationsHistoryService(
-                paymentsHistoryClientMock.Object,
-                categoriesClient.Object);
+            return categoriesClient;
         }
     }
 }

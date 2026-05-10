@@ -19,6 +19,9 @@ namespace HomeBudget.Components.Accounts.Clients
         : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.LedgerDatabase),
         IPaymentAccountDocumentClient
     {
+        private const string PayloadKeyIndexName = "ux_payment_accounts_payload_key";
+        private const string TypeIndexName = "ix_payment_accounts_payload_type";
+
         public async Task<Result<IReadOnlyCollection<PaymentAccountDocument>>> GetAsync()
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
@@ -41,16 +44,33 @@ namespace HomeBudget.Components.Accounts.Clients
 
         public async Task<Result<Guid>> InsertOneAsync(PaymentAccount payload)
         {
-            var document = new PaymentAccountDocument
-            {
-                Payload = payload
-            };
-
             var targetCollection = await GetPaymentAccountsCollectionAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, payload.Key);
+            var now = DateTime.UtcNow;
+            var update = Builders<PaymentAccountDocument>.Update
+                .SetOnInsert(d => d.Payload, payload)
+                .SetOnInsert(d => d.CreatedUtc, now)
+                .SetOnInsert(d => d.UpdatedUtc, now);
 
-            await targetCollection.InsertOneAsync(document);
+            try
+            {
+                await targetCollection.UpdateOneAsync(
+                    filter,
+                    update,
+                    new UpdateOptions { IsUpsert = true });
 
-            return Result<Guid>.Succeeded(document.Payload.Key);
+                return Result<Guid>.Succeeded(payload.Key);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                var existing = await targetCollection.Find(filter).SingleOrDefaultAsync();
+                if (existing != null)
+                {
+                    return Result<Guid>.Succeeded(existing.Payload.Key);
+                }
+
+                return Result<Guid>.Failure($"The payment account with '{payload.Key}' key already exists");
+            }
         }
 
         public async Task<Result<Guid>> RemoveAsync(string paymentAccountId)
@@ -82,7 +102,12 @@ namespace HomeBudget.Components.Accounts.Clients
             var replacement = new PaymentAccountDocument
             {
                 Id = documentResult.Payload.Id,
-                Payload = paymentAccountForUpdate
+                Payload = paymentAccountForUpdate,
+                SourceSystem = documentResult.Payload.SourceSystem,
+                LegacyId = documentResult.Payload.LegacyId,
+                ImportBatchId = documentResult.Payload.ImportBatchId,
+                CreatedUtc = documentResult.Payload.CreatedUtc,
+                UpdatedUtc = DateTime.UtcNow
             };
 
             var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Id, replacement.Id);
@@ -96,18 +121,8 @@ namespace HomeBudget.Components.Accounts.Clients
         {
             var collection = MongoDatabase.GetCollection<PaymentAccountDocument>(LedgerDbCollections.PaymentAccounts);
 
-            var collectionIndexes = await collection.Indexes.ListAsync();
-
-            if (await collectionIndexes.AnyAsync())
-            {
-                return collection;
-            }
-
-            var indexKeysDefinition = Builders<PaymentAccountDocument>.IndexKeys
-                .Ascending(c => c.Payload.Key)
-                .Ascending(c => c.Payload.Type);
-
-            await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentAccountDocument>(indexKeysDefinition));
+            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
+            await EnsureNonUniqueIndexAsync(collection, "Payload.Type", TypeIndexName);
 
             return collection;
         }

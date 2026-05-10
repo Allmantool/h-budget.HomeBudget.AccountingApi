@@ -166,17 +166,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var createOperationResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 15000);
+            var createOperationResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             var newOperationId = createOperationResult.Data.Payload.PaymentOperationId;
 
-            var addOperationBalance = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var addOperationBalance = (await WaitForPaymentAccountAsync(
+                paymentAccountId,
+                account => account.Balance == requestBody.Amount + initialBalance)).Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
-            await _restClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest, executionDelayAfterInMs: 15000);
+            var deleteResponse = await _restClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            Assert.Multiple(() =>
+            {
+                deleteResponse.IsSuccessful.Should().BeTrue(DescribeResponse(deleteResponse));
+                deleteResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(deleteResponse));
+            });
 
-            var deleteOperationBalance = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var deleteOperationBalance = (await WaitForPaymentAccountAsync(
+                paymentAccountId,
+                account => account.Balance == initialBalance)).Balance;
 
             Assert.Multiple(() =>
             {
@@ -206,19 +215,31 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            var postResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 10000);
+            var postResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
+            var parsedOperationId = Guid.Parse(newOperationId);
+            await WaitForHistoryRecordAsync(paymentAccountId, parsedOperationId);
 
             var operationAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
-            await _restClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest, executionDelayAfterInMs: 5000);
+            var deleteResponse = await _restClient.ExecuteWithDelayAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            Assert.Multiple(() =>
+            {
+                deleteResponse.IsSuccessful.Should().BeTrue(DescribeResponse(deleteResponse));
+                deleteResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(deleteResponse));
+            });
 
-            var operationAmountAfter = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
+            var operationAmountAfter = (await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records => records.All(record => record.Record.Key != parsedOperationId))).Count;
 
-            operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
+            Assert.Multiple(() =>
+            {
+                operationAmountBefore.Should().BeGreaterThan(operationAmountAfter);
+            });
         }
 
         [Test]
@@ -429,12 +450,121 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return getResponse.Data.Payload;
         }
 
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryRecordsAsync(
+            Guid paymentAccountId,
+            Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
+            CancellationToken cancellationToken = default)
+        {
+            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
+            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
+            Exception lastException = null;
+
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    lastRecords = await GetHistoryRecordsOnceAsync(paymentAccountId);
+
+                    if (condition(lastRecords))
+                    {
+                        return lastRecords;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+
+                await Task.Delay(HistoryPollInterval, cancellationToken);
+            }
+
+            var snapshot = string.Join(
+                " | ",
+                lastRecords
+                    .OrderBy(r => r.Record.OperationDay)
+                    .ThenBy(r => r.Record.Key)
+                    .Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
+
+            Assert.Fail(
+                $"Payment history for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
+
+            return lastRecords;
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsOnceAsync(Guid paymentAccountId)
+        {
+            var request = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
+            var response = await _restClient.ExecuteAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(request);
+
+            if (!response.IsSuccessful || response.Data?.Payload == null)
+            {
+                return Array.Empty<PaymentOperationHistoryRecordResponse>();
+            }
+
+            return response.Data.Payload;
+        }
+
         private async Task<PaymentAccount> GetPaymentsAccountAsync(Guid paymentAccountId)
         {
             var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
 
             var getResponse = await _restClient
                 .ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentsAccountRequest, executionDelayBeforeInMs: 5000);
+
+            return getResponse.Data.Payload;
+        }
+
+        private async Task<PaymentAccount> WaitForPaymentAccountAsync(
+            Guid paymentAccountId,
+            Func<PaymentAccount, bool> condition,
+            CancellationToken cancellationToken = default)
+        {
+            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
+            PaymentAccount lastAccount = null;
+            Exception lastException = null;
+
+            while (DateTime.UtcNow < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    lastAccount = await GetPaymentsAccountOnceAsync(paymentAccountId);
+
+                    if (lastAccount is not null && condition(lastAccount))
+                    {
+                        return lastAccount;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+
+                await Task.Delay(HistoryPollInterval, cancellationToken);
+            }
+
+            var snapshot = lastAccount is null
+                ? "<missing>"
+                : $"{lastAccount.Key}:{lastAccount.InitialBalance}:{lastAccount.Balance}";
+
+            Assert.Fail(
+                $"Payment account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
+
+            return lastAccount;
+        }
+
+        private async Task<PaymentAccount> GetPaymentsAccountOnceAsync(Guid paymentAccountId)
+        {
+            var getPaymentsAccountRequest = new RestRequest($"{Endpoints.PaymentAccounts}/byId/{paymentAccountId}");
+            var getResponse = await _restClient.ExecuteAsync<Result<PaymentAccount>>(getPaymentsAccountRequest);
+
+            if (!getResponse.IsSuccessful || getResponse.Data?.Payload == null)
+            {
+                return null;
+            }
 
             return getResponse.Data.Payload;
         }

@@ -20,8 +20,10 @@
 
         public const int CategoryDocumentsClientTests = 8;
 
-        public const int PaymentOperationsEventStoreClientTests = 9;
+        public const int MongoDocumentUniquenessTests = 9;
 
-        public const int PaymentOperationsProducerTests = 10;
+        public const int PaymentOperationsEventStoreClientTests = 10;
+
+        public const int PaymentOperationsProducerTests = 11;
     }
 }

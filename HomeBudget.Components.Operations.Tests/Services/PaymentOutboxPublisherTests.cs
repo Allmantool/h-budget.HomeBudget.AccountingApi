@@ -12,6 +12,7 @@ using NUnit.Framework;
 
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
@@ -113,6 +114,29 @@ namespace HomeBudget.Components.Operations.Tests.Services
             dependencies.Outbox.Verify(
                 x => x.MarkPublishedAsync(row.MessageId, It.IsAny<string>(), dependencies.NowUtc),
                 Times.Once);
+        }
+
+        [Test]
+        public async Task PublishRetryableRowsAsync_WhenPayloadMetadataIsMissing_ThenPublishesDurableOutboxMessageIdHeader()
+        {
+            var row = BuildOutboxRow(OutboxStatus.Pending);
+            var dependencies = BuildDependencies([row]);
+            Message<string, string> publishedMessage = null;
+
+            dependencies.KafkaProducer
+                .Setup(x => x.ProduceAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Message<string, string>>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<string, Message<string, string>, CancellationToken>((_, message, _) => publishedMessage = message)
+                .ReturnsAsync(new DeliveryResult<string, string>());
+            var sut = dependencies.BuildPublisher();
+
+            await sut.PublishRetryableRowsAsync(CancellationToken.None);
+
+            publishedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.MessageId, out var messageIdBytes)
+                .Should().BeTrue();
+            System.Text.Encoding.UTF8.GetString(messageIdBytes).Should().Be(row.MessageId);
         }
 
         private static OutboxPublisherDependencies BuildDependencies(IReadOnlyCollection<OutboxAccountPaymentsEntity> rows)
