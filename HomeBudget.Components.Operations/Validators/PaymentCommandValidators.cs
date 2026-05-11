@@ -4,8 +4,6 @@ using System.Linq;
 
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
-using HomeBudget.Components.Operations.Commands.Models;
-using HomeBudget.Core.Validation;
 
 namespace HomeBudget.Components.Operations.Validators
 {
@@ -88,66 +86,6 @@ namespace HomeBudget.Components.Operations.Validators
             }
 
             return failures;
-        }
-    }
-
-    internal sealed class AddPaymentOperationCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<AddPaymentOperationCommand>
-    {
-        public IReadOnlyCollection<string> Validate(AddPaymentOperationCommand request)
-        {
-            return ValidatePaymentOperation(request.OperationForAdd, "Payment operation");
-        }
-    }
-
-    internal sealed class UpdatePaymentOperationCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<UpdatePaymentOperationCommand>
-    {
-        public IReadOnlyCollection<string> Validate(UpdatePaymentOperationCommand request)
-        {
-            return ValidatePaymentOperation(request.OperationForUpdate, "Payment operation");
-        }
-    }
-
-    internal sealed class RemovePaymentOperationCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<RemovePaymentOperationCommand>
-    {
-        public IReadOnlyCollection<string> Validate(RemovePaymentOperationCommand request)
-        {
-            return ValidatePaymentOperation(request.OperationForDelete, "Payment operation");
-        }
-    }
-
-    internal sealed class ApplyTransferCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<ApplyTransferCommand>
-    {
-        public IReadOnlyCollection<string> Validate(ApplyTransferCommand request)
-        {
-            return ValidateTransferOperations(request.Key, request.PaymentOperations);
-        }
-    }
-
-    internal sealed class UpdateTransferCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<UpdateTransferCommand>
-    {
-        public IReadOnlyCollection<string> Validate(UpdateTransferCommand request)
-        {
-            return ValidateTransferOperations(request.Key, request.PaymentOperations);
-        }
-    }
-
-    internal sealed class RemoveTransferCommandValidator
-        : PaymentOperationCommandValidatorBase,
-            IRequestValidator<RemoveTransferCommand>
-    {
-        public IReadOnlyCollection<string> Validate(RemoveTransferCommand request)
-        {
-            return ValidateTransferOperations(request.Key, request.PaymentOperations);
         }
     }
 }
