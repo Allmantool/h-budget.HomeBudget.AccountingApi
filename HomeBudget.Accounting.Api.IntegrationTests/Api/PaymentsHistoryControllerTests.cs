@@ -31,8 +31,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     public class PaymentsHistoryControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentsHistory}";
-        private static readonly TimeSpan HistoryProjectionTimeout = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan HistoryPollInterval = TimeSpan.FromMilliseconds(500);
 
         private readonly OperationsTestWebApp _sut = new();
         private RestClient _restClient;
@@ -75,6 +73,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var paymentAccountId = paymentAccountOperationResult.Payload;
 
             var categoryId = await SaveCategoryAsync(CategoryTypes.Income, "add-test-6");
+            var operationIds = new Collection<Guid>();
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
             {
@@ -90,17 +89,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _restClient.ExecuteWithDelayAsync(postCreateRequest, 1000);
+                var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+                createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+                var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+                operationIds.Add(operationId);
+
+                await WaitForHistoryRecordAsync(
+                    paymentAccountId,
+                    operationId,
+                    record => record.Record.Amount == requestBody.Amount &&
+                              record.Record.OperationDay == requestBody.OperationDate,
+                    cancellationToken: TestContext.CurrentContext.CancellationToken);
             }
 
             var historyRecords = await WaitForHistoryRecordsAsync(
                 paymentAccountId,
                 records =>
+                    operationIds.All(operationId => records.Any(record => record.Record.Key == operationId)) &&
                     records.Count == createRequestAmount &&
                     records
                         .OrderBy(r => r.Record.OperationDay)
                         .Select(r => r.Balance)
-                        .SequenceEqual([22.2m, 34.2m, 47.2m]));
+                        .SequenceEqual([22.2m, 34.2m, 47.2m]),
+                "all created operations are visible and balances are 22.2, 34.2, 47.2",
+                operationIds);
 
             var historyRecordBalance = historyRecords.OrderBy(r => r.Record.OperationDay).Select(r => r.Balance);
 
@@ -135,14 +149,23 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _restClient.ExecuteWithDelayAsync(postCreateRequest, executionDelayInMs: 2000);
 
-            var historyRecords = await GetHistoryRecordsAsync(paymentAccountId);
+            var historyRecords = await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records => records.Count == 1 && records.Single().Balance == expectedBalanceAmount,
+                $"single expense operation is visible with balance {expectedBalanceAmount}",
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
 
-            var balanceAfter = (await GetPaymentsAccountAsync(paymentAccountId)).Balance;
+            var accountAfter = await PaymentProjectionWaiter.WaitForPaymentAccountAsync(
+                _restClient,
+                paymentAccountId,
+                account => account.Balance == expectedBalanceAmount,
+                $"balance is {expectedBalanceAmount}",
+                cancellationToken: TestContext.CurrentContext.CancellationToken);
 
             Assert.Multiple(() =>
             {
                 historyRecords.Single().Balance.Should().Be(expectedBalanceAmount);
-                balanceAfter.Should().Be(expectedBalanceAmount);
+                accountAfter.Balance.Should().Be(expectedBalanceAmount);
             });
         }
 
@@ -151,6 +174,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             const int createRequestAmount = 3;
             var paymentAccountId = (await SavePaymentAccountAsync(11.2m)).Payload;
+            var operationIds = new Collection<Guid>();
 
             foreach (var i in Enumerable.Range(1, createRequestAmount))
             {
@@ -166,17 +190,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"/{Endpoints.PaymentOperations}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _restClient.ExecuteWithDelayAsync(postCreateRequest, 5000);
+                var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+                createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+                var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+                operationIds.Add(operationId);
+
+                await WaitForHistoryRecordAsync(
+                    paymentAccountId,
+                    operationId,
+                    record => record.Record.Amount == requestBody.Amount &&
+                              record.Record.OperationDay == requestBody.OperationDate,
+                    cancellationToken: TestContext.CurrentContext.CancellationToken);
             }
 
             var historyRecords = await WaitForHistoryRecordsAsync(
                 paymentAccountId,
                 records =>
+                    operationIds.All(operationId => records.Any(record => record.Record.Key == operationId)) &&
                     records.Count == createRequestAmount &&
                     records
                         .Select(r => r.Balance)
                         .OrderBy(balance => balance)
-                        .SequenceEqual([19.2m, 28.2m, 38.2m]));
+                        .SequenceEqual([19.2m, 28.2m, 38.2m]),
+                "all created operation IDs are visible and balances are 19.2, 28.2, 38.2",
+                operationIds);
 
             historyRecords.Select(r => r.Balance).Should().BeEquivalentTo([19.2m, 28.2m, 38.2m]);
         }
@@ -316,7 +355,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                            updatedRecord.Record.OperationDay == updateRequest.OperationDate &&
                            updatedRecord.Record.Comment == updateRequest.Comment &&
                            updatedRecord.Balance == 0.2m;
-                }))
+                },
+                knownOperationIds: [newOperationId]))
                 .Single(r => r.Record.Key == newOperationId);
 
             targetPaymentHistory.Balance.Should().Be(0.2m);
@@ -344,19 +384,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var newPaymentId = createPaymentRequestResult.Payload.PaymentOperationId;
 
-            var getPaymentByIdRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/byId/{newPaymentId}");
-
-            var paymentHistoryRequestResponse = await _restClient.ExecuteWithDelayAsync<Result<PaymentOperationHistoryRecordResponse>>(
-                getPaymentByIdRequest,
-                executionDelayBeforeInMs: 5500);
-
-            var paymentHistoryResult = paymentHistoryRequestResponse.Data;
-            var paymentHistory = paymentHistoryResult.Payload;
+            var paymentHistory = await WaitForHistoryRecordAsync(
+                paymentAccountId,
+                Guid.Parse(newPaymentId),
+                record => record.Record.Amount == 35.64m,
+                "operation is visible by id with amount 35.64",
+                TestContext.CurrentContext.CancellationToken);
 
             Assert.Multiple(() =>
             {
                 createPaymentRequestResult.IsSucceeded.Should().BeTrue();
-                paymentHistoryResult.IsSucceeded.Should().BeTrue();
                 paymentHistory.Record.Amount.Should().Be(35.64m);
             });
         }
@@ -390,44 +427,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryRecordsAsync(
             Guid paymentAccountId,
             Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
+            string conditionDescription = null,
+            IEnumerable<Guid> knownOperationIds = null,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecords = await GetHistoryRecordsOnceAsync(paymentAccountId);
-
-                    if (condition(lastRecords))
-                    {
-                        return lastRecords;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = string.Join(
-                " | ",
-                lastRecords
-                    .OrderBy(r => r.Record.OperationDay)
-                    .ThenBy(r => r.Record.Key)
-                    .Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
-
-            Assert.Fail(
-                $"Payment history for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecords;
+            return await PaymentProjectionWaiter.WaitForHistoryRecordsAsync(
+                _restClient,
+                paymentAccountId,
+                condition,
+                conditionDescription ?? "custom payment history condition",
+                knownOperationIds,
+                cancellationToken);
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsOnceAsync(Guid paymentAccountId)
@@ -447,41 +457,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Guid paymentAccountId,
             Guid operationId,
             Func<PaymentOperationHistoryRecordResponse, bool> condition = null,
+            string conditionDescription = null,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            PaymentOperationHistoryRecordResponse lastRecord = null;
-            Exception lastException = null;
+            return await PaymentProjectionWaiter.WaitForHistoryRecordAsync(
+                _restClient,
+                paymentAccountId,
+                operationId,
+                condition,
+                conditionDescription,
+                cancellationToken);
+        }
 
-            while (DateTime.UtcNow < timeoutAt)
+        private static string DescribeResponse<T>(RestResponse<Result<T>> response)
+        {
+            if (response == null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecord = await GetHistoryRecordAsync(paymentAccountId, operationId);
-
-                    if (lastRecord is not null && (condition == null || condition(lastRecord)))
-                    {
-                        return lastRecord;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
+                return "Response was null.";
             }
 
-            var snapshot = lastRecord is null
-                ? "<missing>"
-                : $"{lastRecord.Record.Key}:{lastRecord.Record.OperationDay:yyyy-MM-dd}:{lastRecord.Record.Amount}:{lastRecord.Balance}";
-
-            Assert.Fail(
-                $"Payment history record '{operationId}' for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecord;
+            return $"HTTP {(int)response.StatusCode} {response.StatusCode}, transport-success={response.IsSuccessful}, rest-error='{response.ErrorMessage}', domain-success={response.Data?.IsSucceeded}, status='{response.Data?.StatusMessage}', content='{response.Content}'";
         }
 
         private async Task<PaymentOperationHistoryRecordResponse> GetHistoryRecordAsync(Guid paymentAccountId, Guid operationId)

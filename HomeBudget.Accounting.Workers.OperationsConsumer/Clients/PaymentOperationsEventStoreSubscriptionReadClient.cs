@@ -33,17 +33,19 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
     internal sealed class PaymentOperationsEventStoreSubscriptionReadClient
         : BaseEventStoreSubscriptionReadClient<PaymentOperationEvent>
     {
-        private const string Group = "ps-homeledger-mongo-projection-v1";
+        private const string DefaultGroup = "ps-homeledger-mongo-projection-v1";
 
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IDateTimeProvider _dateTimeProvider;
         private readonly ILogger<PaymentOperationsEventStoreSubscriptionReadClient> _logger;
         private readonly ConcurrentDictionary<string, ProjectionBatchContext> _latestEventsPerAccount = new();
+        private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _projectionLocksByAccount = new();
         private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsBuffer;
         private readonly EventStoreDbOptions _opts;
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
         private readonly IEventStoreDbStreamReadClient<PaymentOperationEvent> _eventStoreDbStreamReadClient;
+        private readonly string _group;
 
         public PaymentOperationsEventStoreSubscriptionReadClient(
             ILogger<PaymentOperationsEventStoreSubscriptionReadClient> logger,
@@ -59,6 +61,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             _opts = options.Value;
             _logger = logger;
             _serviceScopeFactory = serviceScopeFactory;
+            _group = string.IsNullOrWhiteSpace(_opts.PaymentHistoryProjectionGroup)
+                ? DefaultGroup
+                : _opts.PaymentHistoryProjectionGroup;
             _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
@@ -68,14 +73,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
         public override Task CreatePersistentSubscriptionAsync(CancellationToken ct)
         {
-            return CreatePersistentSubscriptionAsync(Group, ct);
+            return CreatePersistentSubscriptionAsync(_group, ct);
         }
 
         public override Task<PersistentSubscription> SubscribeAsync(
             Func<ResolvedEvent, Task> handler = null,
             CancellationToken ct = default)
         {
-            return SubscribeAsync(Group, handler, ct);
+            return SubscribeAsync(_group, handler, ct);
         }
 
         protected override async Task OnEventAppearedAsync(PaymentOperationEvent eventData)
@@ -94,6 +99,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             {
                 _logger.ChannelWriteCanceled();
             }
+        }
+
+        protected override Task OnEventAppearedAsync(
+            PaymentOperationEvent eventData,
+            EventStoreSubscriptionContext context)
+        {
+            return HandlePaymentOperationEventAsync(
+                ProjectionBatchContext.Create(ActivityEnvelope<PaymentOperationEvent>.Capture(eventData)),
+                context,
+                _cts.Token);
         }
 
         private async Task ProcessEventBatchAsync()
@@ -131,7 +146,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 {
                     try
                     {
-                        await HandlePaymentOperationEventAsync(latestEvent, _cts.Token);
+                        await HandlePaymentOperationEventAsync(latestEvent, null, _cts.Token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -149,7 +164,31 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
-        private async Task HandlePaymentOperationEventAsync(ProjectionBatchContext projectionBatch, CancellationToken ct)
+        private async Task HandlePaymentOperationEventAsync(
+            ProjectionBatchContext projectionBatch,
+            EventStoreSubscriptionContext subscriptionContext,
+            CancellationToken ct)
+        {
+            var transaction = projectionBatch.LatestEvent.Payload;
+            var accountId = transaction.PaymentAccountId;
+
+            var projectionLock = _projectionLocksByAccount.GetOrAdd(accountId, _ => new SemaphoreSlim(1, 1));
+            await projectionLock.WaitAsync(ct);
+
+            try
+            {
+                await HandlePaymentOperationEventCoreAsync(projectionBatch, subscriptionContext, ct);
+            }
+            finally
+            {
+                projectionLock.Release();
+            }
+        }
+
+        private async Task HandlePaymentOperationEventCoreAsync(
+            ProjectionBatchContext projectionBatch,
+            EventStoreSubscriptionContext subscriptionContext,
+            CancellationToken ct)
         {
             var transaction = projectionBatch.LatestEvent.Payload;
             var accountId = transaction.PaymentAccountId;
@@ -157,13 +196,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             var paymentAccountStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(monthPeriodPaymentAccountIdentifier);
 
-            var events = await _eventStoreDbStreamReadClient
-                .ReadAsync(paymentAccountStream, cancellationToken: ct)
-                .ToListAsync(ct);
+            var events = await ReadProjectionEventsAsync(paymentAccountStream, projectionBatch.LatestEvent, ct);
 
             if (events.Count == 0)
             {
-                return;
+                throw new InvalidOperationException(
+                    $"Projection stream read returned no events for stream '{paymentAccountStream}' after payment operation '{transaction.Key}' appeared.");
             }
 
             foreach (var e in events)
@@ -236,7 +274,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                         projectionDelay,
                         [new("projection_name", "sync_operations_history")]);
                     activity?.SetTag("projection.delay_ms", projectionDelay);
-                    await SendSyncOperationsHistoryAsync(accountId, events, ct);
+                    await SendSyncOperationsHistoryAsync(
+                        accountId,
+                        events,
+                        new ProjectionCheckpoint
+                        {
+                            StreamId = subscriptionContext?.StreamId ?? paymentAccountStream,
+                            Revision = subscriptionContext?.Revision,
+                            Position = subscriptionContext?.Position
+                        },
+                        ct);
 
                     syncStopwatch.Stop();
                     TelemetryMetrics.ProjectionSyncDurationMs.Record(
@@ -252,20 +299,33 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
             catch (Exception ex)
             {
-                _logger.SyncFailed(accountId, paymentAccountStream, ex);
+                _logger.SyncFailed(MaskAccountId(accountId), paymentAccountStream, ex);
                 throw;
             }
+        }
+
+        private static string MaskAccountId(Guid accountId)
+        {
+            var value = accountId.ToString("N");
+            if (string.IsNullOrEmpty(value))
+            {
+                return "***";
+            }
+
+            var suffixLength = Math.Min(8, value.Length);
+            return $"***{value[^suffixLength..]}";
         }
 
         private async Task SendSyncOperationsHistoryAsync(
             Guid paymentAccountId,
             IEnumerable<PaymentOperationEvent> events,
+            ProjectionCheckpoint checkpoint,
             CancellationToken ct)
         {
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            _logger.DispatchingSync(paymentAccountId, events.Count());
+            _logger.DispatchingSync(paymentAccountId.ToString(), events.Count());
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CorrelationId)))
             using (var activity = ActivityPropagation.StartActivity("mediatr.send.sync_operations_history", ActivityKind.Internal))
@@ -281,9 +341,35 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     activity.SetAccount(paymentAccountId);
                 }
 
-                await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events), ct);
+                await sender.Send(new SyncOperationsHistoryCommand(paymentAccountId, events, checkpoint), ct);
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
+        }
+
+        private async Task<List<PaymentOperationEvent>> ReadProjectionEventsAsync(
+            string paymentAccountStream,
+            PaymentOperationEvent appearedEvent,
+            CancellationToken ct)
+        {
+            List<PaymentOperationEvent> events = null;
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                events = await _eventStoreDbStreamReadClient
+                    .ReadAsync(paymentAccountStream, cancellationToken: ct)
+                    .ToListAsync(ct);
+
+                if (events.Count > 0)
+                {
+                    return events;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+            }
+
+            return appearedEvent is null
+                ? events ?? []
+                : [appearedEvent];
         }
     }
 }

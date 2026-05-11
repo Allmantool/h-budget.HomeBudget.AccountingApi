@@ -102,10 +102,18 @@ try
 
     await app.RunAsync();
 }
+catch (OperationCanceledException) when (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+{
+    app.Logger.LogInformation("Application shutdown requested.");
+}
 catch (Exception ex)
 {
-    app.Logger.LogError($"Fatal error: {ex}");
-    Environment.Exit(1);
+    app.Logger.LogError(ex, "Fatal error");
+
+    if (!environment.IsIntegrationTesting())
+    {
+        Environment.Exit(1);
+    }
 }
 
 // To add visibility for integration tests

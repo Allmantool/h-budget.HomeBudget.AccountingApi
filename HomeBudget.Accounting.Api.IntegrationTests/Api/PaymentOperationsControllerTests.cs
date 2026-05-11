@@ -30,8 +30,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
     public class PaymentOperationsControllerTests : BaseIntegrationTests
     {
         private const string ApiHost = $"/{Endpoints.PaymentOperations}";
-        private static readonly TimeSpan HistoryProjectionTimeout = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan HistoryPollInterval = TimeSpan.FromMilliseconds(500);
 
         private readonly OperationsTestWebApp _sut = new();
         private RestClient _restClient;
@@ -60,7 +58,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
                 ContractorId = string.Empty,
-                OperationDate = new DateOnly(2027, 1, 3)
+                OperationDate = new DateOnly(2024, 1, 3)
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
@@ -70,16 +68,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 postCreateRequest,
                 executionDelayAfterInMs: 5000);
 
-            response.IsSuccessful.Should().Be(true);
+            response.IsSuccessful.Should().Be(true, DescribeResponse(response));
+            response.Data.IsSucceeded.Should().BeTrue(DescribeResponse(response));
 
             var result = response.Data;
             var payload = result.Payload;
+            var operationId = Guid.Parse(payload.PaymentOperationId);
 
-            var operationAmountAfter = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
+            var operationAmountAfter = (await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records => records.Any(record => record.Record.Key == operationId),
+                $"created operation '{operationId}' is visible in payment history",
+                [operationId])).Count;
 
             Assert.Multiple(() =>
             {
-                Guid.TryParse(payload.PaymentOperationId, out _).Should().BeTrue();
+                operationId.Should().NotBeEmpty();
                 Guid.TryParse(payload.PaymentAccountId, out _).Should().BeTrue();
                 operationAmountBefore.Should().BeLessThan(operationAmountAfter);
             });
@@ -91,6 +95,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var paymentAccountId = (await SavePaymentAccountAsync()).Payload;
 
             var operationsAmountBefore = (await GetHistoryRecordsAsync(paymentAccountId)).Count;
+
+            var operationIds = new List<Guid>();
 
             foreach (var i in Enumerable.Range(1, 7))
             {
@@ -106,15 +112,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var postCreateRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Post)
                     .AddJsonBody(requestBody);
 
-                await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+                createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+                createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+                var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+                operationIds.Add(operationId);
+
+                await WaitForHistoryRecordAsync(
+                    paymentAccountId,
+                    operationId,
+                    record => record.Record.Amount == requestBody.Amount &&
+                              record.Record.OperationDay == requestBody.OperationDate,
+                    cancellationToken: TestContext.CurrentContext.CancellationToken);
             }
 
-            var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
-
-            var paymentsHistoryResponse = await _sut.RestHttpClient
-                .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getPaymentHistoryRecordsRequest, executionDelayBeforeInMs: 2000);
-
-            var operationAmountAfter = paymentsHistoryResponse.Data.Payload.Count;
+            var operationAmountAfter = (await WaitForHistoryRecordsAsync(
+                paymentAccountId,
+                records => operationIds.All(operationId => records.Any(record => record.Record.Key == operationId)),
+                "all created operations are visible in payment history",
+                operationIds)).Count;
 
             operationsAmountBefore.Should().BeLessThan(operationAmountAfter);
         }
@@ -134,14 +151,28 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 Comment = "New operation",
                 CategoryId = categoryIdResult.Payload,
                 ContractorId = string.Empty,
+                OperationDate = new DateOnly(2024, 1, 6)
             };
 
             var postCreateRequest = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest, executionDelayAfterInMs: 5000);
+            var createResponse = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
 
-            var operationAmountAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+            await WaitForHistoryRecordAsync(
+                accountId,
+                operationId,
+                record => record.Record.Amount == requestBody.Amount,
+                $"created operation '{operationId}' with amount {requestBody.Amount} is visible");
+
+            var operationAmountAfter = (await WaitForPaymentAccountAsync(
+                accountId,
+                account => account.Balance == balanceBefore + requestBody.Amount,
+                $"balance equals initial balance {balanceBefore} plus operation amount {requestBody.Amount}",
+                [operationId])).Balance;
 
             operationAmountAfter.Should().Be(balanceBefore + requestBody.Amount);
         }
@@ -167,12 +198,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestBody);
 
             var createOperationResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            createOperationResult.IsSuccessful.Should().BeTrue(DescribeResponse(createOperationResult));
+            createOperationResult.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createOperationResult));
 
             var newOperationId = createOperationResult.Data.Payload.PaymentOperationId;
+            var parsedOperationId = Guid.Parse(newOperationId);
+            await WaitForHistoryRecordAsync(
+                paymentAccountId,
+                parsedOperationId,
+                record => record.Record.Amount == requestBody.Amount,
+                $"created operation '{parsedOperationId}' is visible before delete");
 
             var addOperationBalance = (await WaitForPaymentAccountAsync(
                 paymentAccountId,
-                account => account.Balance == requestBody.Amount + initialBalance)).Balance;
+                account => account.Balance == requestBody.Amount + initialBalance,
+                $"balance includes created operation '{parsedOperationId}'",
+                [parsedOperationId])).Balance;
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{paymentAccountId}/{newOperationId}", Method.Delete);
 
@@ -185,7 +226,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deleteOperationBalance = (await WaitForPaymentAccountAsync(
                 paymentAccountId,
-                account => account.Balance == initialBalance)).Balance;
+                account => account.Balance == initialBalance,
+                $"balance returns to initial balance after deleting operation '{parsedOperationId}'",
+                [parsedOperationId])).Balance;
+
+            await PaymentProjectionWaiter.WaitForHistoryRecordRemovedAsync(
+                _restClient,
+                paymentAccountId,
+                parsedOperationId);
 
             Assert.Multiple(() =>
             {
@@ -216,6 +264,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .AddJsonBody(requestBody);
 
             var postResult = await _restClient.ExecuteWithDelayAsync<Result<CreateOperationResponse>>(postCreateRequest);
+            postResult.IsSuccessful.Should().BeTrue(DescribeResponse(postResult));
+            postResult.Data.IsSucceeded.Should().BeTrue(DescribeResponse(postResult));
 
             var newOperationId = postResult.Data.Payload.PaymentOperationId;
             var parsedOperationId = Guid.Parse(newOperationId);
@@ -412,7 +462,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var justCreatedOperationId = Guid.Parse(saveResponseResult.Data.Payload.PaymentOperationId);
             await WaitForHistoryRecordAsync(accountId, justCreatedOperationId);
 
-            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var balanceBefore = (await WaitForPaymentAccountAsync(
+                accountId,
+                account => account.Balance == account.InitialBalance + requestCreateBody.Amount,
+                $"balance includes created operation '{justCreatedOperationId}'",
+                [justCreatedOperationId])).Balance;
 
             var requestUpdateBody = new UpdateOperationRequest
             {
@@ -435,7 +489,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 updateResponse.Data.StatusMessage.Should().BeNullOrEmpty(DescribeResponse(updateResponse));
             });
 
-            var balanceAfter = (await GetPaymentsAccountAsync(accountId)).Balance;
+            await WaitForHistoryRecordAsync(
+                accountId,
+                justCreatedOperationId,
+                record => record.Record.Amount == requestUpdateBody.Amount &&
+                          record.Record.Comment == requestUpdateBody.Comment &&
+                          record.Record.OperationDay == requestUpdateBody.OperationDate);
+
+            var balanceAfter = (await WaitForPaymentAccountAsync(
+                accountId,
+                account => account.Balance == account.InitialBalance + requestUpdateBody.Amount,
+                $"balance includes updated operation '{justCreatedOperationId}'",
+                [justCreatedOperationId])).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
         }
@@ -453,44 +518,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryRecordsAsync(
             Guid paymentAccountId,
             Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
+            string conditionDescription = "custom payment history condition",
+            IEnumerable<Guid> knownOperationIds = null,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            IReadOnlyCollection<PaymentOperationHistoryRecordResponse> lastRecords = Array.Empty<PaymentOperationHistoryRecordResponse>();
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecords = await GetHistoryRecordsOnceAsync(paymentAccountId);
-
-                    if (condition(lastRecords))
-                    {
-                        return lastRecords;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = string.Join(
-                " | ",
-                lastRecords
-                    .OrderBy(r => r.Record.OperationDay)
-                    .ThenBy(r => r.Record.Key)
-                    .Select(r => $"{r.Record.Key}:{r.Record.OperationDay:yyyy-MM-dd}:{r.Record.Amount}:{r.Balance}"));
-
-            Assert.Fail(
-                $"Payment history for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecords;
+            return await PaymentProjectionWaiter.WaitForHistoryRecordsAsync(
+                _restClient,
+                paymentAccountId,
+                condition,
+                conditionDescription,
+                knownOperationIds,
+                cancellationToken: cancellationToken);
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsOnceAsync(Guid paymentAccountId)
@@ -519,41 +557,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private async Task<PaymentAccount> WaitForPaymentAccountAsync(
             Guid paymentAccountId,
             Func<PaymentAccount, bool> condition,
+            string conditionDescription = null,
+            IEnumerable<Guid> knownOperationIds = null,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            PaymentAccount lastAccount = null;
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastAccount = await GetPaymentsAccountOnceAsync(paymentAccountId);
-
-                    if (lastAccount is not null && condition(lastAccount))
-                    {
-                        return lastAccount;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = lastAccount is null
-                ? "<missing>"
-                : $"{lastAccount.Key}:{lastAccount.InitialBalance}:{lastAccount.Balance}";
-
-            Assert.Fail(
-                $"Payment account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastAccount;
+            return await PaymentProjectionWaiter.WaitForPaymentAccountAsync(
+                _restClient,
+                paymentAccountId,
+                condition,
+                conditionDescription ?? "custom payment account condition",
+                knownOperationIds,
+                cancellationToken);
         }
 
         private async Task<PaymentAccount> GetPaymentsAccountOnceAsync(Guid paymentAccountId)
@@ -573,41 +587,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             Guid paymentAccountId,
             Guid operationId,
             Func<PaymentOperationHistoryRecordResponse, bool> condition = null,
+            string conditionDescription = null,
             CancellationToken cancellationToken = default)
         {
-            var timeoutAt = DateTime.UtcNow + HistoryProjectionTimeout;
-            PaymentOperationHistoryRecordResponse lastRecord = null;
-            Exception lastException = null;
-
-            while (DateTime.UtcNow < timeoutAt)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    lastRecord = await GetHistoryRecordAsync(paymentAccountId, operationId);
-
-                    if (lastRecord is not null && (condition == null || condition(lastRecord)))
-                    {
-                        return lastRecord;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-
-                await Task.Delay(HistoryPollInterval, cancellationToken);
-            }
-
-            var snapshot = lastRecord is null
-                ? "<missing>"
-                : $"{lastRecord.Record.Key}:{lastRecord.Record.OperationDay:yyyy-MM-dd}:{lastRecord.Record.Amount}:{lastRecord.Balance}";
-
-            Assert.Fail(
-                $"Payment history record '{operationId}' for account '{paymentAccountId}' did not reach the expected state within {HistoryProjectionTimeout.TotalSeconds} seconds. Last snapshot: {snapshot}. Last exception: {lastException?.Message}");
-
-            return lastRecord;
+            return await PaymentProjectionWaiter.WaitForHistoryRecordAsync(
+                _restClient,
+                paymentAccountId,
+                operationId,
+                condition,
+                conditionDescription,
+                cancellationToken);
         }
 
         private async Task<PaymentOperationHistoryRecordResponse> GetHistoryRecordAsync(Guid paymentAccountId, Guid operationId)

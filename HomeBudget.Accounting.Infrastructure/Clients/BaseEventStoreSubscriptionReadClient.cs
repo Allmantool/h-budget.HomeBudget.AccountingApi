@@ -46,7 +46,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 var settings = new PersistentSubscriptionSettings(
                     resolveLinkTos: true,
-                    startFrom: Position.Start);
+                    startFrom: _options.PaymentHistoryProjectionStartFromCurrent
+                        ? Position.End
+                        : Position.Start);
 
                 await _client.CreateToAllAsync(
                     groupName,
@@ -62,6 +64,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             catch (Exception ex)
             {
                 _logger.FailedCreateSubscription(ex, groupName);
+                throw;
             }
         }
 
@@ -113,6 +116,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                             }
 
                             MergeMetadata(resolvedEvent.Metadata.Span, eventData);
+                            ApplyEventStorePosition(resolvedEvent, eventData);
 
                             var correlationId = eventData.Metadata.Get(EventMetadataKeys.CorrelationId);
                             var traceParent = eventData.Metadata.Get(EventMetadataKeys.TraceParent);
@@ -161,7 +165,14 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 // Call the handler
                                 if (handler is null)
                                 {
-                                    await OnEventAppearedAsync(eventData);
+                                    await OnEventAppearedAsync(
+                                        eventData,
+                                        new EventStoreSubscriptionContext
+                                        {
+                                            StreamId = resolvedEvent.EventStreamId,
+                                            Revision = resolvedEvent.EventNumber.ToString(),
+                                            Position = resolvedEvent.Position.ToString()
+                                        });
                                 }
                                 else
                                 {
@@ -223,6 +234,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         protected virtual Task OnEventAppearedAsync(T eventData) => Task.CompletedTask;
 
+        protected virtual Task OnEventAppearedAsync(T eventData, EventStoreSubscriptionContext context)
+            => OnEventAppearedAsync(eventData);
+
         private static void MergeMetadata(ReadOnlySpan<byte> metadataBytes, T target)
         {
             if (metadataBytes.IsEmpty || target is not BaseEvent baseEvent)
@@ -239,6 +253,19 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             foreach (var item in metadata)
             {
                 baseEvent.Metadata[item.Key] = item.Value;
+            }
+        }
+
+        private static void ApplyEventStorePosition(EventRecord resolvedEvent, T target)
+        {
+            if (target is not BaseEvent baseEvent)
+            {
+                return;
+            }
+
+            if (long.TryParse(resolvedEvent.EventNumber.ToString(), out var sequenceNumber))
+            {
+                baseEvent.SequenceNumber = sequenceNumber;
             }
         }
 

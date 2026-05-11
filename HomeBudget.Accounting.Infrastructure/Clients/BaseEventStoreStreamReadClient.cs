@@ -62,6 +62,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 if (evt != null)
                 {
                     MergeMetadata(resolvedEvent.Event.Metadata.Span, evt);
+                    ApplyEventStorePosition(resolvedEvent.Event, evt);
                     count++;
                     yield return evt;
                 }
@@ -84,6 +85,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                         if (evt != null)
                         {
                             MergeMetadata(resolvedEvent.Event.Metadata.Span, evt);
+                            ApplyEventStorePosition(resolvedEvent.Event, evt);
                             await onEventAppeared(evt);
                         }
                     },
@@ -121,6 +123,19 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             foreach (var item in metadata)
             {
                 baseEvent.Metadata[item.Key] = item.Value;
+            }
+        }
+
+        private static void ApplyEventStorePosition(EventRecord resolvedEvent, T target)
+        {
+            if (target is not BaseEvent baseEvent)
+            {
+                return;
+            }
+
+            if (long.TryParse(resolvedEvent.EventNumber.ToString(), out var sequenceNumber))
+            {
+                baseEvent.SequenceNumber = sequenceNumber;
             }
         }
 

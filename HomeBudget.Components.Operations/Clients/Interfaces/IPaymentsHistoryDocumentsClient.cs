@@ -16,7 +16,14 @@ namespace HomeBudget.Components.Operations.Clients.Interfaces
 
         Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId);
 
-        Task RewriteAllAsync(string financialPeriodIdentifier, IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords);
+        Task RewriteAllAsync(
+            string financialPeriodIdentifier,
+            IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords,
+            Guid projectionRunId);
+
+        Task BeginProjectionRunAsync(ProjectionAuditRecord auditRecord);
+
+        Task CompleteProjectionRunAsync(Guid projectionRunId, string status, string error = null);
 
         Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload);
 

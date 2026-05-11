@@ -73,19 +73,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             }
         }
 
-        public override Task StopAsync(CancellationToken cancellationToken)
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            try
-            {
-                _consumer?.UnSubscribe();
-                _consumer?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                logger.FailedToDisposeConsumer(ex);
-            }
-
-            return base.StopAsync(cancellationToken);
+            await base.StopAsync(cancellationToken);
+            CleanupConsumer();
         }
 
         private void CleanupConsumer()

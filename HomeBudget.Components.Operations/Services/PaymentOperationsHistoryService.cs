@@ -27,7 +27,8 @@ namespace HomeBudget.Components.Operations.Services
 
         public async Task<Result<decimal>> SyncHistoryAsync(
             string financialPeriodIdentifier,
-            IEnumerable<PaymentOperationEvent> eventsForAccount)
+            IEnumerable<PaymentOperationEvent> eventsForAccount,
+            ProjectionCheckpoint checkpoint = null)
         {
             if (string.IsNullOrWhiteSpace(financialPeriodIdentifier))
             {
@@ -44,23 +45,52 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<decimal>.Succeeded(0m);
             }
 
-            var latestActiveEvents = inputEvents
-                .GetValidAndMostUpToDateOperations()
-                .Where(static x => x?.Payload != null)
-                .ToList();
-
-            if (latestActiveEvents.Count == 0)
+            var projectionRunId = Guid.NewGuid();
+            var now = DateTime.UtcNow;
+            await _paymentsHistoryDocumentsClient.BeginProjectionRunAsync(new ProjectionAuditRecord
             {
-                await _paymentsHistoryDocumentsClient.RemoveAsync(financialPeriodIdentifier);
-                return Result<decimal>.Succeeded(0m);
+                ProjectionRunId = projectionRunId,
+                StreamId = checkpoint?.StreamId,
+                Revision = checkpoint?.Revision,
+                Position = checkpoint?.Position,
+                Status = "Started",
+                StartedUtc = now,
+                UpdatedUtc = now
+            });
+
+            try
+            {
+                var latestActiveEvents = inputEvents
+                    .GetValidAndMostUpToDateOperations()
+                    .Where(static x => x?.Payload != null)
+                    .ToList();
+
+                if (latestActiveEvents.Count == 0)
+                {
+                    await _paymentsHistoryDocumentsClient.RewriteAllAsync(
+                        financialPeriodIdentifier,
+                        [],
+                        projectionRunId);
+                    await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
+                    return Result<decimal>.Succeeded(0m);
+                }
+
+                var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
+                var historyRecords = latestActiveEvents.BuildHistoryRecords(categoryMap);
+
+                await _paymentsHistoryDocumentsClient.RewriteAllAsync(
+                    financialPeriodIdentifier,
+                    historyRecords,
+                    projectionRunId);
+                await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
+
+                return Result<decimal>.Succeeded(historyRecords[^1].Balance);
             }
-
-            var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
-            var historyRecords = latestActiveEvents.BuildHistoryRecords(categoryMap);
-
-            await _paymentsHistoryDocumentsClient.RewriteAllAsync(financialPeriodIdentifier, historyRecords);
-
-            return Result<decimal>.Succeeded(historyRecords[^1].Balance);
+            catch (Exception ex)
+            {
+                await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Failed", ex.Message);
+                throw;
+            }
         }
 
         private async Task<IReadOnlyDictionary<Guid, Category>> LoadCategoryMapAsync(

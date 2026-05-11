@@ -68,6 +68,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         options.LedgerDatabase = "ledger_test";
                     });
 
+                    services.Configure<EventStoreDbOptions>(options =>
+                    {
+                        options.PaymentHistoryProjectionGroup = $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+                        options.PaymentHistoryProjectionStartFromCurrent = true;
+                    });
+
                     var eventStoreDbOptions = new EventStoreDbOptions();
                     services.AddEventStoreClient(
                         _containersConnections.EventSourceDbContainer,
@@ -114,9 +120,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             await WorkerHost.StartAsync();
         }
 
-        public Task StopAsync()
+        public async Task StopAsync()
         {
-            return WorkerHost != null ? WorkerHost.StopAsync() : Task.CompletedTask;
+            if (WorkerHost is null)
+            {
+                return;
+            }
+
+            await WorkerHost.StopAsync();
+            WorkerHost.Dispose();
+            WorkerHost = null;
         }
     }
 }
