@@ -25,10 +25,10 @@ namespace HomeBudget.Accounting.Api.Extensions
 
             Log.Information("Current env is '{0}'.", env.EnvironmentName);
 
+            app.UseApiExceptionHandling();
+
             if (env.IsUnderDevelopment())
             {
-                app.UseDeveloperExceptionPage();
-
                 app.UseCors(corsPolicyBuilder =>
                 {
                     var allowedUiOrigins = configuration.GetSection("UiOriginsUrl").Get<string[]>();

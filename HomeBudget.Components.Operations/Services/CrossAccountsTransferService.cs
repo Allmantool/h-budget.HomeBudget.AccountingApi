@@ -29,17 +29,29 @@ namespace HomeBudget.Components.Operations.Services
                     payload.Sender,
                     -Math.Abs(payload.Amount),
                     payload.OperationAt);
+            if (!senderOperation.IsSucceeded)
+            {
+                return Result<Guid>.Failure(senderOperation.StatusMessage);
+            }
 
             var recipientOperation = financialTransactionFactory
                 .CreateTransfer(
                     payload.Recipient,
                     Math.Abs(payload.Amount * payload.Multiplier),
                     payload.OperationAt);
+            if (!recipientOperation.IsSucceeded)
+            {
+                return Result<Guid>.Failure(recipientOperation.StatusMessage);
+            }
 
             var transferOperation = await crossAccountsTransferBuilder
                 .WithSender(senderOperation.Payload)
                 .WithRecipient(recipientOperation.Payload)
                 .BuildAsync();
+            if (!transferOperation.IsSucceeded)
+            {
+                return Result<Guid>.Failure(transferOperation.StatusMessage);
+            }
 
             return await mediator.Send(new ApplyTransferCommand(transferOperation.Payload), token);
         }
@@ -75,6 +87,10 @@ namespace HomeBudget.Components.Operations.Services
                 .WithRecipient(transferRecipientOperationForRemove)
                 .WithTransferId(removeTransferPayload.TransferOperationId)
                 .BuildAsync();
+            if (!transferOperation.IsSucceeded)
+            {
+                return Result<IEnumerable<Guid>>.Failure(transferOperation.StatusMessage);
+            }
 
             await mediator.Send(new RemoveTransferCommand(transferOperation.Payload), token);
 
@@ -90,6 +106,10 @@ namespace HomeBudget.Components.Operations.Services
                 .GetByIdAsync(
                     updateTransferPayload.Sender,
                     updateTransferPayload.TransferOperationId);
+            if (senderOperationDocument is null)
+            {
+                return Result<Guid>.Failure("Sender transfer operation hasn't been found");
+            }
 
             var senderOperation = senderOperationDocument.Payload.Record;
 
@@ -97,6 +117,10 @@ namespace HomeBudget.Components.Operations.Services
                 .GetByIdAsync(
                     updateTransferPayload.Recipient,
                     updateTransferPayload.TransferOperationId);
+            if (recipientOperationDocument is null)
+            {
+                return Result<Guid>.Failure("Recipient transfer operation hasn't been found");
+            }
 
             var recipientOperation = recipientOperationDocument.Payload.Record;
 
@@ -104,6 +128,10 @@ namespace HomeBudget.Components.Operations.Services
                 .WithSender(senderOperation)
                 .WithRecipient(recipientOperation)
                 .BuildAsync();
+            if (!transferOperation.IsSucceeded)
+            {
+                return Result<Guid>.Failure(transferOperation.StatusMessage);
+            }
 
             return await mediator.Send(new UpdateTransferCommand(transferOperation.Payload), token);
         }

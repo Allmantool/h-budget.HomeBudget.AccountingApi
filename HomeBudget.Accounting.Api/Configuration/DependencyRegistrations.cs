@@ -14,6 +14,7 @@ using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
 using HomeBudget.Components.Operations.PIpelines;
+using HomeBudget.Core.Validation;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -51,6 +52,10 @@ namespace HomeBudget.Accounting.Api.Configuration
                     configuration.AddBehavior(
                         typeof(IPipelineBehavior<,>),
                         typeof(CorrelationIdBehavior<,>)
+                    );
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(ValidationBehavior<,>)
                     );
                     configuration.AddBehavior(
                         typeof(IPipelineBehavior<,>),

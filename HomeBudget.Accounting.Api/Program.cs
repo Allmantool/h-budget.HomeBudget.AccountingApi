@@ -1,12 +1,16 @@
 ﻿using System;
 
+using System.Linq;
+
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.Configuration;
 using HomeBudget.Accounting.Api.Extensions;
+using HomeBudget.Accounting.Api.Filters;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure;
@@ -16,6 +20,7 @@ using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Notifications.Configuration;
 using HomeBudget.Components.Operations.MapperProfileConfigurations;
+using HomeBudget.Core.Models;
 
 var webAppBuilder = WebApplication.CreateBuilder(args);
 var webHost = webAppBuilder.WebHost;
@@ -31,10 +36,27 @@ services
     .AddControllers(o =>
     {
         o.Conventions.Add(new SwaggerControllerDocConvention());
+        o.Filters.Add<ResultToHttpStatusFilter>();
     })
     .AddJsonOptions(configure =>
     {
         configure.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .SelectMany(entry => entry.Value.Errors.Select(error => FormatModelStateError(entry.Key, error.ErrorMessage)))
+                .ToList();
+
+            var message = errors.Count == 0
+                ? "Validation failed"
+                : $"Validation failed: {string.Join("; ", errors)}";
+
+            return new BadRequestObjectResult(Result<object>.Failure(message));
+        };
     });
 
 services
@@ -114,6 +136,16 @@ catch (Exception ex)
     {
         Environment.Exit(1);
     }
+}
+
+static string FormatModelStateError(string key, string errorMessage)
+{
+    if (string.IsNullOrWhiteSpace(key))
+    {
+        return errorMessage;
+    }
+
+    return $"{key}: {errorMessage}";
 }
 
 // To add visibility for integration tests

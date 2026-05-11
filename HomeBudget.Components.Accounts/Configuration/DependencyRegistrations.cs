@@ -11,6 +11,8 @@ using HomeBudget.Components.Accounts.Factories;
 using HomeBudget.Components.Accounts.Handlers;
 using HomeBudget.Components.Accounts.Services;
 using HomeBudget.Components.Accounts.Services.Interfaces;
+using HomeBudget.Components.Accounts.Validators;
+using HomeBudget.Core.Validation;
 
 namespace HomeBudget.Components.Accounts.Configuration
 {
@@ -23,6 +25,7 @@ namespace HomeBudget.Components.Accounts.Configuration
                 .AddScoped<IPaymentAccountFactory, PaymentAccountFactory>()
                 .AddScoped<IPaymentAccountService, PaymentAccountService>()
                 .AddScoped<IPaymentAccountProducerService, PaymentAccountProducerService>()
+                .AddScoped<IRequestValidator<Commands.Models.UpdatePaymentAccountBalanceCommand>, UpdatePaymentAccountBalanceCommandValidator>()
                 .RegisterMongoDbClient()
                 .RegisterAccountsClients();
         }
