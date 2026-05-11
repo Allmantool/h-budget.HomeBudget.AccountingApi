@@ -155,6 +155,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     catch (Exception ex)
                     {
                         _logger.HandleEventsFailed(periodKey, ex);
+                        TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
                     }
                     finally
                     {
@@ -220,6 +221,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 var traceState = firstEvent?.Metadata.Get(EventMetadataKeys.TraceState);
                 var baggage = firstEvent?.Metadata.Get(EventMetadataKeys.Baggage);
                 var messageId = firstEvent?.Metadata.Get(EventMetadataKeys.MessageId);
+                var commandId = firstEvent?.Metadata.Get(EventMetadataKeys.CommandId);
+                var traceId = firstEvent?.Metadata.Get(EventMetadataKeys.TraceId);
+                var importBatchId = firstEvent?.Metadata.Get(EventMetadataKeys.ImportBatchId);
                 var propagationContext = TraceContextPropagation.Extract(
                     projectionBatch.PropagationCarriers.FirstOrDefault()
                     ?? TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
@@ -245,6 +249,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
                 using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
                 using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
+                using (LogContext.PushProperty("MessageId", messageId))
+                using (LogContext.PushProperty("CommandId", commandId))
+                using (LogContext.PushProperty("OperationId", transaction.Key))
+                using (LogContext.PushProperty("PaymentAccountId", accountId))
+                using (LogContext.PushProperty("StreamId", paymentAccountStream))
+                using (LogContext.PushProperty("CorrelationId", correlationId))
+                using (LogContext.PushProperty("TraceId", traceId))
+                using (LogContext.PushProperty("ImportBatchId", importBatchId))
                 using (LogContext.PushProperty("projection_name", "sync_operations_history"))
                 using (LogContext.PushProperty("stream_id", paymentAccountStream))
                 using (LogContext.PushProperty("aggregate_id", accountId))
@@ -273,6 +285,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     TelemetryMetrics.ProjectionDelayMs.Record(
                         projectionDelay,
                         [new("projection_name", "sync_operations_history")]);
+                    TelemetryMetrics.SetProjectionLagSeconds((long)(projectionDelay / 1000));
                     activity?.SetTag("projection.delay_ms", projectionDelay);
                     await SendSyncOperationsHistoryAsync(
                         accountId,
@@ -300,6 +313,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             catch (Exception ex)
             {
                 _logger.SyncFailed(MaskAccountId(accountId), paymentAccountStream, ex);
+                TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
                 throw;
             }
         }

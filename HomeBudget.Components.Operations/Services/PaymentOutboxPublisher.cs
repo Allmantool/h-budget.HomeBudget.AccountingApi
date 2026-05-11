@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog.Context;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
@@ -13,6 +14,7 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Options;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Services
 {
@@ -55,6 +57,13 @@ namespace HomeBudget.Components.Operations.Services
             int maxRetryAttempts,
             CancellationToken cancellationToken)
         {
+            using var messageIdScope = LogContext.PushProperty("MessageId", row.MessageId);
+            using var commandIdScope = LogContext.PushProperty("CommandId", row.MessageId);
+            using var operationIdScope = LogContext.PushProperty("OperationId", row.OperationId);
+            using var paymentAccountIdScope = LogContext.PushProperty("PaymentAccountId", row.AggregateId);
+            using var correlationIdScope = LogContext.PushProperty("CorrelationId", row.CorrelationId);
+            using var traceIdScope = LogContext.PushProperty("TraceId", ExtractTraceId(row.TraceParent));
+
             try
             {
                 var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(row.Payload);
@@ -81,6 +90,7 @@ namespace HomeBudget.Components.Operations.Services
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 var reason = ex.InnerException?.Message ?? ex.Message;
+                TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "outbox_publish")]);
                 logger.LogError(
                     ex,
                     "Outbox payment publish failed. MessageId={MessageId}, Reason={Reason}",
@@ -96,6 +106,17 @@ namespace HomeBudget.Components.Operations.Services
 
                 return false;
             }
+        }
+
+        private static string ExtractTraceId(string traceParent)
+        {
+            if (string.IsNullOrWhiteSpace(traceParent))
+            {
+                return null;
+            }
+
+            var parts = traceParent.Split('-');
+            return parts.Length >= 2 ? parts[1] : null;
         }
 
         private static void StampOutboxMetadata(

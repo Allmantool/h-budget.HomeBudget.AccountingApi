@@ -193,10 +193,18 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                         var causationId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.CausationId, out var causationIdBytes)
                             ? Encoding.UTF8.GetString(causationIdBytes)
                             : string.Empty;
+                        var traceId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.TraceId, out var traceIdBytes)
+                            ? Encoding.UTF8.GetString(traceIdBytes)
+                            : string.Empty;
+                        var importBatchId = consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.ImportBatchId, out var importBatchIdBytes)
+                            ? Encoding.UTF8.GetString(importBatchIdBytes)
+                            : string.Empty;
 
-                        using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CorrelationId), correlationId))
-                        using (LogContext.PushProperty(nameof(KafkaMessageHeaders.MessageId), messageId))
+                        using (LogContext.PushProperty("CorrelationId", correlationId))
+                        using (LogContext.PushProperty("MessageId", messageId))
                         using (LogContext.PushProperty(nameof(KafkaMessageHeaders.CausationId), causationId))
+                        using (LogContext.PushProperty("TraceId", traceId))
+                        using (LogContext.PushProperty("ImportBatchId", importBatchId))
                         {
                             var propagationCarrier = new Dictionary<string, string>(3);
                             if (consumedMessage.Headers.TryGetLastBytes(KafkaMessageHeaders.Traceparent, out var traceParentBytes))
@@ -240,6 +248,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             if (!_disposed)
                             {
                                 _consumer.Commit(consumeResult);
+                                TryRecordConsumerLag(consumeResult);
 
                                 if (afterCommitCallbackAsync is not null)
                                 {
@@ -254,6 +263,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     }
                     catch (ConsumeException ex)
                     {
+                        TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "consume")]);
                         if (ex.Error.Code == ErrorCode.UnknownTopicOrPart)
                         {
                             _logger.TopicPartitionNotFound(ex.Error.Reason);
@@ -274,6 +284,7 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                     catch (Exception ex)
                     {
                         _logger.UnhandledErrorInLoop(ex.Message, ex);
+                        TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "processing")]);
                         throw;
                     }
                 }
@@ -281,6 +292,29 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             finally
             {
                 CloseConsumer();
+            }
+        }
+
+        private void TryRecordConsumerLag(ConsumeResult<TKey, TValue> consumeResult)
+        {
+            try
+            {
+                var watermarks = _consumer.QueryWatermarkOffsets(
+                    consumeResult.TopicPartition,
+                    TimeSpan.FromSeconds(1));
+
+                if (watermarks is null)
+                {
+                    BaseKafkaConsumerLogs.ConsumerLagUnavailable(_logger, "Watermark offsets were not returned.");
+                    return;
+                }
+
+                var lag = watermarks.High.Value - consumeResult.Offset.Value - 1;
+                TelemetryMetrics.SetKafkaConsumerLag(lag);
+            }
+            catch (Exception ex) when (ex is KafkaException or ObjectDisposedException or InvalidOperationException or NotImplementedException)
+            {
+                BaseKafkaConsumerLogs.ConsumerLagUnavailable(_logger, ex.Message);
             }
         }
 

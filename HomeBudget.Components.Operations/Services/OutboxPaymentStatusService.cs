@@ -194,6 +194,8 @@ namespace HomeBudget.Components.Operations.Services
                 DeadLetterStatus = OutboxStatus.DeadLettered.Key,
                 UpdatedUtc = updatedUtc
             });
+
+            TelemetryMetrics.OutboxStatusTransitions.Add(1, [new("status", "FailedOrDeadLettered")]);
         }
 
         public async Task SetStatusAsync(string messageId, OutboxStatus status)

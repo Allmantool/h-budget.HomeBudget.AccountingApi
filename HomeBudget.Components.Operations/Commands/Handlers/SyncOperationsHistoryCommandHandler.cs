@@ -48,6 +48,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             var traceState = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.TraceState);
             var baggage = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.Baggage);
             var messageId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.MessageId);
+            var commandId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.CommandId);
+            var traceId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.TraceId);
+            var importBatchId = events.FirstOrDefault()?.Metadata.Get(EventMetadataKeys.ImportBatchId);
             var propagationContext = TraceContextPropagation.Extract(
                 TraceContextPropagation.BuildCarrier(traceParent, traceState, baggage));
             var (parentContext, links) = TraceContextPropagation.ResolveParentAndLinks(
@@ -58,6 +61,14 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             using (LogContext.PushProperty(EventMetadataKeys.CorrelationId, correlationId))
             using (LogContext.PushProperty(EventMetadataKeys.MessageId, messageId))
+            using (LogContext.PushProperty("MessageId", messageId))
+            using (LogContext.PushProperty("CommandId", commandId))
+            using (LogContext.PushProperty("OperationId", financialTransaction.Key))
+            using (LogContext.PushProperty("PaymentAccountId", accountId))
+            using (LogContext.PushProperty("StreamId", request.Checkpoint?.StreamId))
+            using (LogContext.PushProperty("CorrelationId", correlationId))
+            using (LogContext.PushProperty("TraceId", traceId))
+            using (LogContext.PushProperty("ImportBatchId", importBatchId))
             using (LogContext.PushProperty("projection_name", "sync_operations_history"))
             using (LogContext.PushProperty("aggregate_id", accountId))
             {

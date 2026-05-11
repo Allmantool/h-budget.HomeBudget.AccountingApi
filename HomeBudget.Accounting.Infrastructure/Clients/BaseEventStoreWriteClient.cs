@@ -99,6 +99,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 [data],
                 cancellationToken: CancellationToken.None);
             TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object>("event_type", eventForSending.GetType().Name)]);
+            TelemetryMetrics.IncrementEventStoreDeadLetterCount();
         }
 
         public virtual async Task SendToDeadLetterQueueAsync(
@@ -123,7 +124,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                 StreamState.Any,
                 data,
                 cancellationToken: cts.Token);
-            TelemetryMetrics.EventStoreDeadLettered.Add(1, [new KeyValuePair<string, object>("event_type", typeof(T).Name)]);
+            var count = eventsForSending.Count();
+            TelemetryMetrics.EventStoreDeadLettered.Add(count, [new KeyValuePair<string, object>("event_type", typeof(T).Name)]);
+            TelemetryMetrics.IncrementEventStoreDeadLetterCount(count);
         }
 
         private static EventData CreateEventData(T @event, string eventType)

@@ -10,6 +10,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Serilog.Context;
 
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
@@ -270,6 +271,18 @@ namespace HomeBudget.Components.Operations.Consumers
 
             var streamName = GenerateStreamName(paymentEvent);
             var eventTypeTitle = $"{paymentEvent.EventType}_{paymentEvent.Payload.Key}";
+            var commandId = paymentEvent.Metadata.Get(EventMetadataKeys.CommandId);
+            var operationId = paymentEvent.Payload.Key.ToString();
+            var paymentAccountId = paymentEvent.Payload.PaymentAccountId.ToString();
+
+            using var messageIdScope = LogContext.PushProperty("MessageId", messageId);
+            using var commandIdScope = LogContext.PushProperty("CommandId", commandId);
+            using var operationIdScope = LogContext.PushProperty("OperationId", operationId);
+            using var paymentAccountIdScope = LogContext.PushProperty("PaymentAccountId", paymentAccountId);
+            using var streamIdScope = LogContext.PushProperty("StreamId", streamName);
+            using var correlationIdScope = LogContext.PushProperty("CorrelationId", correlationId);
+            using var traceIdScope = LogContext.PushProperty("TraceId", traceId);
+            using var importBatchIdScope = LogContext.PushProperty("ImportBatchId", importBatchId);
 
             try
             {
@@ -281,6 +294,8 @@ namespace HomeBudget.Components.Operations.Consumers
             }
             catch (Exception ex)
             {
+                TelemetryMetrics.EventStoreAppendFailures.Add(1, [new("stream_id", streamName)]);
+                TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "eventstore_append")]);
                 var failure = await inboxService.MarkFailedAsync(
                     messageId,
                     ex.Message,

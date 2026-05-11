@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
@@ -41,15 +42,18 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
                 catch (ConsumeException ex) when (!ex.Error.IsFatal)
                 {
                     logger.NonFatalConsumeError(ex);
+                    TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "consume_nonfatal")]);
                 }
                 catch (KafkaException ex)
                 {
                     logger.ErrorConsumingMessages(ex);
+                    TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "kafka")]);
                     throw;
                 }
                 catch (Exception ex)
                 {
                     logger.ErrorConsumingMessages(ex);
+                    TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "processing")]);
                     throw;
                 }
             }

@@ -11,6 +11,7 @@ using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
+using HomeBudget.Core.Observability;
 
 namespace HomeBudget.Components.Operations.Services
 {
@@ -88,6 +89,7 @@ namespace HomeBudget.Components.Operations.Services
             }
             catch (Exception ex)
             {
+                TelemetryMetrics.ReconciliationFailures.Add(1, [new("projection_name", "sync_operations_history")]);
                 await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Failed", ex.Message);
                 throw;
             }

@@ -10,7 +10,7 @@ using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Categories.Factories;
 
-namespace HomeBudget.Components.Operations.Tests
+namespace HomeBudget.Components.Categories.Tests
 {
     [TestFixture]
     public class CategoryDocumentTests
@@ -25,7 +25,6 @@ namespace HomeBudget.Components.Operations.Tests
         [Test]
         public void Should_Deserialize_Category_With_OperationUnixTime()
         {
-            // Arrange
             var categoryType = CategoryTypes.Expense;
             var nameNodes = new[] { "Node1", "Node2" };
             var expectedKey = $"{categoryType.Key}-{string.Join(',', nameNodes)}";
@@ -39,7 +38,6 @@ namespace HomeBudget.Components.Operations.Tests
                 { "OperationUnixTime", expectedOperationUnixTime }
             };
 
-            // Act
             var deserializedCategory = BsonSerializer.Deserialize<Category>(bsonDocument);
 
             Assert.Multiple(() =>
@@ -59,8 +57,7 @@ namespace HomeBudget.Components.Operations.Tests
 
             var category = categoryFactory.Create(
                 CategoryTypes.Expense,
-                ["Node1", "Node2"]
-            );
+                ["Node1", "Node2"]);
 
             var expectedBsonDocument = new BsonDocument
             {
@@ -70,13 +67,11 @@ namespace HomeBudget.Components.Operations.Tests
                 { "OperationUnixTime", category.OperationUnixTime }
             };
 
-            // Act
             var serializedBsonDocument = category.ToBsonDocument();
 
             var expectedBinaryData = expectedBsonDocument["Key"].AsBsonBinaryData;
             var actualBinaryData = serializedBsonDocument["Key"].AsBsonBinaryData;
 
-            // Assert
             Assert.Multiple(() =>
             {
                 actualBinaryData.Bytes.Should().BeEquivalentTo(expectedBinaryData.Bytes);
