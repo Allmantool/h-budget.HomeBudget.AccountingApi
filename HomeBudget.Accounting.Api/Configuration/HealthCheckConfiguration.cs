@@ -10,6 +10,7 @@ using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Extensions.Logs;
 using HomeBudget.Accounting.Api.Middlewares;
 using HomeBudget.Accounting.Infrastructure.Extensions;
+using HomeBudget.Accounting.Infrastructure.HealthChecks;
 
 namespace HomeBudget.Accounting.Api.Configuration
 {
@@ -22,8 +23,9 @@ namespace HomeBudget.Accounting.Api.Configuration
         {
             services
                 .AddHealthChecks()
-                .AddCheck("heartbeat", () => HealthCheckResult.Healthy())
-                .AddCheck<CustomLogicHealthCheck>(nameof(CustomLogicHealthCheck), tags: ["custom"]);
+                .AddCheck("heartbeat", () => HealthCheckResult.Healthy(), tags: ["live"])
+                .AddCheck<CustomLogicHealthCheck>(nameof(CustomLogicHealthCheck), tags: ["custom", "ready"])
+                .AddAccountingReadinessChecks();
 
             services.AddHealthChecksUI(setupSettings: setup =>
             {
@@ -45,6 +47,18 @@ namespace HomeBudget.Accounting.Api.Configuration
                 config.MapHealthChecks(Endpoints.HealthCheckSource, new HealthCheckOptions
                 {
                     Predicate = _ => true,
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
+                });
+
+                config.MapHealthChecks("/health/live", new HealthCheckOptions
+                {
+                    Predicate = check => check.Tags.Contains("live"),
+                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
+                });
+
+                config.MapHealthChecks("/health/ready", new HealthCheckOptions
+                {
+                    Predicate = check => check.Tags.Contains("ready"),
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
                 });
 

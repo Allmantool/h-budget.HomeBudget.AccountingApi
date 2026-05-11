@@ -17,6 +17,7 @@ using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
+using HomeBudget.Accounting.Infrastructure.HealthChecks;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Components.Categories.Configuration;
@@ -81,7 +82,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             services
                 .AddHealthChecks()
-                .AddCheck("heartbeat", () => HealthCheckResult.Healthy());
+                .AddCheck("heartbeat", () => HealthCheckResult.Healthy(), tags: ["live"])
+                .AddAccountingReadinessChecks();
 
             var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
             var isTracingEnabled = services.TryAddTracingSupport(
@@ -108,11 +110,19 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
             var app = builder.Build();
 
+            app.MapHealthChecks("/health");
+            app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("live")
+            });
+            app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("ready")
+            });
+
             if (isTracingEnabled)
             {
                 app.UseOpenTelemetryPrometheusScrapingEndpoint();
-
-                app.MapHealthChecks("/health");
                 app.MapPrometheusScrapingEndpoint("/metrics");
             }
 

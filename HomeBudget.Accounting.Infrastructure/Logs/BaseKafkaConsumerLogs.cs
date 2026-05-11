@@ -157,5 +157,11 @@ namespace HomeBudget.Accounting.Infrastructure.Logs
             Level = LogLevel.Error,
             Message = "Unexpected error checking consumer liveness")]
         public static partial void UnExpectedError(this ILogger logger, Exception exception);
+
+        [LoggerMessage(
+            EventId = 1027,
+            Level = LogLevel.Debug,
+            Message = "Kafka consumer lag unavailable: {Reason}")]
+        public static partial void ConsumerLagUnavailable(this ILogger logger, string reason);
     }
 }

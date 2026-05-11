@@ -57,6 +57,7 @@ namespace HomeBudget.Components.Operations.Configuration
                     configuration.GetSection(PaymentOutboxPublisherOptions.SectionName))
                 .Configure<PaymentInboxOptions>(
                     configuration.GetSection(PaymentInboxOptions.SectionName))
+                .AddHostedService<PaymentOutboxMetricsWorker>()
                 .AddHostedService<PaymentOutboxPublisherWorker>();
         }
 

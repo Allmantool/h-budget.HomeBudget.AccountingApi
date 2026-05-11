@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
+using Serilog.Context;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Extensions;
@@ -19,6 +20,7 @@ using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
+using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
@@ -76,6 +78,7 @@ namespace HomeBudget.Components.Operations.Clients
             catch (Exception ex)
             {
                 PaymentOperationsEventStoreWriteClientLogs.AppendFailed(_logger, ex.Message, ex);
+                TelemetryMetrics.EventStoreAppendFailures.Add(1, [new("stream_id", streamName ?? nameof(PaymentOperationEvent))]);
                 throw;
             }
             finally
@@ -118,10 +121,26 @@ namespace HomeBudget.Components.Operations.Clients
             var eventId = PaymentOperationEventIdentity.GetDeterministicEventId(eventForSending, writeEventType);
             var streamLock = StreamLocks.GetOrAdd(writeStreamName, _ => new SemaphoreSlim(1, 1));
             var streamCache = StreamCaches.GetOrAdd(writeStreamName, _ => new PaymentStreamCache());
+            var operationId = eventForSending.Payload?.Key.ToString();
+            var paymentAccountId = eventForSending.Payload?.PaymentAccountId.ToString();
+            var correlationId = eventForSending.Metadata.Get(EventMetadataKeys.CorrelationId);
+            var messageId = eventForSending.Metadata.Get(EventMetadataKeys.MessageId);
+            var commandId = eventForSending.Metadata.Get(EventMetadataKeys.CommandId);
+            var traceId = eventForSending.Metadata.Get(EventMetadataKeys.TraceId);
+            var importBatchId = eventForSending.Metadata.Get(EventMetadataKeys.ImportBatchId);
 
             await streamLock.WaitAsync(token);
             try
             {
+                using var messageIdScope = LogContext.PushProperty("MessageId", messageId);
+                using var commandIdScope = LogContext.PushProperty("CommandId", commandId);
+                using var operationIdScope = LogContext.PushProperty("OperationId", operationId);
+                using var paymentAccountIdScope = LogContext.PushProperty("PaymentAccountId", paymentAccountId);
+                using var streamIdScope = LogContext.PushProperty("StreamId", writeStreamName);
+                using var correlationIdScope = LogContext.PushProperty("CorrelationId", correlationId);
+                using var traceIdScope = LogContext.PushProperty("TraceId", traceId);
+                using var importBatchIdScope = LogContext.PushProperty("ImportBatchId", importBatchId);
+
                 return await _retryPolicy.ExecuteAsync(
                     async retryCtx =>
                     {
