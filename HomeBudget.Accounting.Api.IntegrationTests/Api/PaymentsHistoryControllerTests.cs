@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -34,6 +35,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -42,6 +44,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [Test]
@@ -406,11 +409,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getOperationByIdRequest = new RestRequest($"{ApiHost}/{accountId}/byId/{operationId}");
 
-            var response = await _restClient.ExecuteAsync<Result<PaymentOperationHistoryRecord>>(getOperationByIdRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<PaymentOperationHistoryRecordResponse>>(
+                getOperationByIdRequest,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment history route ids should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain("payment account", response.DescribeResponse());
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsAsync(Guid paymentAccountId)
