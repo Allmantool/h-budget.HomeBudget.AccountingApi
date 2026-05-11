@@ -302,6 +302,13 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                 var watermarks = _consumer.QueryWatermarkOffsets(
                     consumeResult.TopicPartition,
                     TimeSpan.FromSeconds(1));
+
+                if (watermarks is null)
+                {
+                    BaseKafkaConsumerLogs.ConsumerLagUnavailable(_logger, "Watermark offsets were not returned.");
+                    return;
+                }
+
                 var lag = watermarks.High.Value - consumeResult.Offset.Value - 1;
                 TelemetryMetrics.SetKafkaConsumerLag(lag);
             }
