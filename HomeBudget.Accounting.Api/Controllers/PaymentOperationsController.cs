@@ -61,7 +61,12 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<RemoveOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
-            var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, Guid.Parse(operationId), token);
+            if (!Guid.TryParse(operationId, out var targetOperationGuid))
+            {
+                return Result<RemoveOperationResponse>.Failure($"Invalid payment operation '{operationId}' has been provided");
+            }
+
+            var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, targetOperationGuid, token);
 
             var response = new RemoveOperationResponse
             {

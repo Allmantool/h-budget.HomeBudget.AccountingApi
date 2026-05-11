@@ -53,7 +53,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (!documentResult.IsSucceeded || documentResult.Payload == null)
             {
-                return Result<CategoryResponse>.Failure($"The contractor with '{targetCategoryId}' hasn't been found");
+                return Result<CategoryResponse>.Failure($"The category with '{targetCategoryId}' hasn't been found");
             }
 
             var document = documentResult.Payload;

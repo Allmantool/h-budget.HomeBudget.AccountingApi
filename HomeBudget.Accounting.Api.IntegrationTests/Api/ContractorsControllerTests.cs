@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -8,6 +9,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Contractor;
 using HomeBudget.Accounting.Domain.Models;
@@ -25,6 +27,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly ContractorsTestWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -33,6 +36,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [OneTimeTearDown]
@@ -78,11 +82,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getContractorsRequest = new RestRequest($"{ApiHost}/byId/b4a1bc33-a50f-4c9d-aac4-761dfec063dc");
 
-            var response = await _restClient.ExecuteAsync<Result<Contractor>>(getContractorsRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Contractor>>(
+                getContractorsRequest,
+                [HttpStatusCode.NotFound]);
 
-            var payload = response.Data;
+            var payload = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.NotFound,
+                "missing contractor lookup should return not found");
 
-            payload.IsSucceeded.Should().BeFalse();
+            payload.StatusMessage.Should().Contain("hasn't been found", response.DescribeResponse());
         }
 
         [Test]
@@ -106,18 +114,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task CreateNewContractor_WhenTheSameContractorAlreadyExists_ReturnsExpectedExceptions()
         {
+            var uniqueNode = $"{nameof(CreateNewContractor_WhenTheSameContractorAlreadyExists_ReturnsExpectedExceptions)}-{Guid.NewGuid()}";
             var requestBody = new CreateContractorRequest
             {
-                NameNodes = new[] { "Node1", "Node2" }
+                NameNodes = new[] { "duplicate", uniqueNode }
             };
 
-            var postCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
+            var firstCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
                 .AddJsonBody(requestBody);
+            var firstResponse = await _restClient.ExecuteAsync<Result<Guid>>(firstCreateContractorRequest);
 
-            await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
-            var secondResponse = await _restClient.ExecuteAsync<Result<string>>(postCreateContractorRequest);
+            var duplicateCreateContractorRequest = new RestRequest(ApiHost, Method.Post)
+                .AddJsonBody(requestBody);
+            var secondResponse = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Guid>>(
+                duplicateCreateContractorRequest,
+                [HttpStatusCode.Conflict]);
 
-            secondResponse.Data.IsSucceeded.Should().BeFalse();
+            var duplicatedContractorResult = secondResponse.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.Conflict,
+                "duplicate contractor create should return conflict");
+
+            Assert.Multiple(() =>
+            {
+                firstResponse.ShouldBeHttpSuccessWithDomainSuccess("first contractor create should succeed");
+                duplicatedContractorResult.StatusMessage.Should().Contain("already exists", secondResponse.DescribeResponse());
+                duplicatedContractorResult.StatusMessage.Should().Contain(uniqueNode, secondResponse.DescribeResponse());
+            });
         }
     }
 }

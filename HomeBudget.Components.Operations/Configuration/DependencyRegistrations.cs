@@ -18,7 +18,9 @@ using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Options;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Components.Operations.Validators;
 using HomeBudget.Core.Options;
+using HomeBudget.Core.Validation;
 
 namespace HomeBudget.Components.Operations.Configuration
 {
@@ -34,6 +36,12 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
                 .AddScoped<IOutboxPaymentStatusService, OutboxPaymentStatusService>()
                 .AddScoped<IPaymentMessageInboxService, PaymentMessageInboxService>()
+                .AddScoped<IRequestValidator<Commands.Models.AddPaymentOperationCommand>, AddPaymentOperationCommandValidator>()
+                .AddScoped<IRequestValidator<Commands.Models.UpdatePaymentOperationCommand>, UpdatePaymentOperationCommandValidator>()
+                .AddScoped<IRequestValidator<Commands.Models.RemovePaymentOperationCommand>, RemovePaymentOperationCommandValidator>()
+                .AddScoped<IRequestValidator<Commands.Models.ApplyTransferCommand>, ApplyTransferCommandValidator>()
+                .AddScoped<IRequestValidator<Commands.Models.UpdateTransferCommand>, UpdateTransferCommandValidator>()
+                .AddScoped<IRequestValidator<Commands.Models.RemoveTransferCommand>, RemoveTransferCommandValidator>()
                 .AddScoped<PaymentOutboxPublisher>()
                 .RegisterOperationsClients()
                 .RegisterEventStoreDbClient(webHostEnvironment)

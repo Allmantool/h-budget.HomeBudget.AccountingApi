@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -8,6 +9,7 @@ using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
+using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
 using HomeBudget.Accounting.Api.IntegrationTests.TestSources;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
@@ -26,6 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CategoriesTestWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -34,6 +37,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [Test]
@@ -67,11 +71,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var getCategoriesRequest = new RestRequest($"{ApiHost}/byId/1c0112d1-3310-46d7-b8c3-b248002b9a8c");
 
-            var response = await _restClient.ExecuteAsync<Result<CategoryResponse>>(getCategoriesRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CategoryResponse>>(
+                getCategoriesRequest,
+                [HttpStatusCode.NotFound]);
 
-            var payload = response.Data;
+            var payload = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.NotFound,
+                "missing category lookup should return not found");
 
-            payload.IsSucceeded.Should().BeFalse();
+            payload.StatusMessage.Should().Contain("hasn't been found", response.DescribeResponse());
         }
 
         [Test]
@@ -85,14 +93,35 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [Test]
         public async Task CreateNewCategory_WhenTryCreateAlreadyExistedCategory_FailsWithExpectedMessage()
         {
-            _ = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
+            var requestBody = new CreateCategoryRequest
+            {
+                CategoryType = CategoryTypes.Expense.Key,
+                NameNodes =
+                [
+                    "categoryType",
+                    "duplicated,nodes"
+                ]
+            };
 
-            var duplicatedCategoryResult = await SaveCategoryAsync(CategoryTypes.Expense, "duplicated,nodes");
+            var firstCreateRequest = new RestRequest(ApiHost, Method.Post)
+                .AddJsonBody(requestBody);
+            var firstCreateResponse = await _restClient.ExecuteAsync<Result<Guid>>(firstCreateRequest);
+
+            var duplicatedCategoryRequest = new RestRequest(ApiHost, Method.Post)
+                .AddJsonBody(requestBody);
+            var duplicatedCategoryResponse = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Guid>>(
+                duplicatedCategoryRequest,
+                [HttpStatusCode.Conflict]);
+
+            var duplicatedCategoryResult = duplicatedCategoryResponse.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.Conflict,
+                "duplicate category create should return conflict");
 
             Assert.Multiple(() =>
             {
-                duplicatedCategoryResult.IsSucceeded.Should().BeFalse();
-                duplicatedCategoryResult.StatusMessage.Should().BeEquivalentTo("The category with '1-categoryType,duplicated,nodes' key already exists");
+                firstCreateResponse.ShouldBeHttpSuccessWithDomainSuccess("first category create should succeed");
+                duplicatedCategoryResult.StatusMessage.Should().Contain("already exists", duplicatedCategoryResponse.DescribeResponse());
+                duplicatedCategoryResult.StatusMessage.Should().Contain("duplicated,nodes", duplicatedCategoryResponse.DescribeResponse());
             });
         }
 

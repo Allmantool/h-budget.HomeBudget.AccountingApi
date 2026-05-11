@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -31,6 +32,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly AccountingTestWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -39,6 +41,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [Test]
@@ -79,11 +82,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{paymentAccountId}");
 
-            var response = await _restClient.ExecuteWithDelayAsync<Result<PaymentAccount>>(getPaymentAccountByIdRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteWithDelayAsync<Result<PaymentAccountResponse>>(
+                getPaymentAccountByIdRequest,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment account id should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain(nameof(paymentAccountId), response.DescribeResponse());
         }
 
         [Test]
@@ -94,18 +102,22 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 InitialBalance = 100,
                 AccountType = AccountTypes.Cash.Key,
                 Agent = "Vtb",
-                Currency = "",
+                Currency = "BYN",
                 Description = "Some description"
             };
 
             var postMakePaymentAccountRequest = new RestRequest(ApiHost, Method.Post).AddJsonBody(requestBody);
 
-            var response = await _restClient.ExecuteAsync<Result<string>>(postMakePaymentAccountRequest);
+            var response = await _restClient.ExecuteAsync<Result<Guid>>(postMakePaymentAccountRequest);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpSuccessWithDomainSuccess("valid payment account create should succeed");
             var payload = result.Payload;
 
-            Guid.TryParse(payload, out _).Should().BeTrue();
+            payload.Should().NotBeEmpty(response.DescribeResponse());
+
+            var getPaymentAccountByIdRequest = new RestRequest($"{ApiHost}/byId/{payload}");
+            var getByIdResponse = await _restClient.ExecuteAsync<Result<PaymentAccountResponse>>(getPaymentAccountByIdRequest);
+            getByIdResponse.ShouldBeHttpSuccessWithDomainSuccess("created payment account should be readable by id");
         }
 
         [Test]
@@ -168,21 +180,26 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
-        public void RemovePaymentAccount_WithInValidPaymentAccountRef_ThenFail()
+        public async Task RemovePaymentAccount_WithInValidPaymentAccountRef_ThenFail()
         {
             const string paymentAccountId = "Invalid";
 
             var deletePaymentAccountRequest = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Delete);
 
-            var response = _restClient.Execute<Result<Guid>>(deletePaymentAccountRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Guid>>(
+                deletePaymentAccountRequest,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment account delete id should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain(nameof(paymentAccountId), response.DescribeResponse());
         }
 
         [Test]
-        public void Update_WithInvalid_ThenFail()
+        public async Task Update_WithInvalid_ThenFail()
         {
             const string paymentAccountId = "Invalid";
 
@@ -198,11 +215,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{paymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = _restClient.Execute<Result<string>>(patchUpdatePaymentAccount);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Guid>>(
+                patchUpdatePaymentAccount,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment account update id should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain(nameof(paymentAccountId), response.DescribeResponse());
         }
 
         [Test]
@@ -325,14 +347,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdatePaymentAccount = new RestRequest($"{ApiHost}/{missingPaymentAccountId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = await _restClient.ExecuteAsync<Result<string>>(patchUpdatePaymentAccount);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<Guid>>(
+                patchUpdatePaymentAccount,
+                [HttpStatusCode.NotFound]);
 
-            Assert.Multiple(() =>
-            {
-                response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
-                response.Data.IsSucceeded.Should().BeFalse(DescribeResponse(response));
-                response.Data.StatusMessage.Should().Contain(missingPaymentAccountId.ToString(), DescribeResponse(response));
-            });
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.NotFound,
+                "missing payment account update should return not found");
+
+            result.Payload.Should().Be(Guid.Empty, response.DescribeResponse());
+            result.StatusMessage.Should().Contain(missingPaymentAccountId.ToString(), response.DescribeResponse());
+            result.StatusMessage.Should().Contain("hasn't been found", response.DescribeResponse());
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync()

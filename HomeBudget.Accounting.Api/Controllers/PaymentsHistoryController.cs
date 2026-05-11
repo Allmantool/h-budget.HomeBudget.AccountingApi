@@ -28,7 +28,12 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet]
         public async Task<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>> GetHistoryPaymentOperationsAsync(string paymentAccountId)
         {
-            var documents = await paymentsHistoryDocumentsClient.GetAsync(Guid.Parse(paymentAccountId));
+            if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
+            {
+                return Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
+            }
+
+            var documents = await paymentsHistoryDocumentsClient.GetAsync(targetAccountGuid);
 
             var initialBalance = await paymentAccountService.GetInitialBalanceAsync(paymentAccountId);
 

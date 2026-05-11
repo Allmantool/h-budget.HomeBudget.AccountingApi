@@ -27,6 +27,10 @@ namespace HomeBudget.Accounting.Api.Controllers
             var operationPayload = mapper.Map<CrossAccountsTransferPayload>(request);
 
             var responseResult = await crossAccountsTransferService.ApplyAsync(operationPayload, token);
+            if (!responseResult.IsSucceeded)
+            {
+                return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
+            }
 
             var response = new CrossAccountsTransferResponse
             {
@@ -49,6 +53,10 @@ namespace HomeBudget.Accounting.Api.Controllers
             var removeTransferPayload = mapper.Map<RemoveTransferPayload>(request);
 
             var responseResult = await crossAccountsTransferService.RemoveAsync(removeTransferPayload, token);
+            if (!responseResult.IsSucceeded)
+            {
+                return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
+            }
 
             var response = new CrossAccountsTransferResponse
             {
@@ -67,6 +75,10 @@ namespace HomeBudget.Accounting.Api.Controllers
             var updateTransferPayload = mapper.Map<UpdateTransferPayload>(request);
 
             var responseResult = await crossAccountsTransferService.UpdateAsync(updateTransferPayload, token);
+            if (!responseResult.IsSucceeded)
+            {
+                return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
+            }
 
             var response = new CrossAccountsTransferResponse
             {

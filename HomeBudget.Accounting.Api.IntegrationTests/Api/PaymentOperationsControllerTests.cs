@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,6 +34,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly OperationsTestWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -41,6 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [Test]
@@ -300,11 +303,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var deleteOperationRequest = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete);
 
-            var response = await _restClient.ExecuteAsync<Result<RemoveOperationResponse>>(deleteOperationRequest);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<RemoveOperationResponse>>(
+                deleteOperationRequest,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment operation delete route ids should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain("payment account", response.DescribeResponse());
         }
 
         [Test]
@@ -326,11 +334,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<UpdateOperationResponse>>(
+                patchUpdateOperation,
+                [HttpStatusCode.BadRequest]);
 
-            var result = response.Data;
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.BadRequest,
+                "invalid payment operation update route ids should be rejected");
 
-            result.IsSucceeded.Should().BeFalse();
+            result.StatusMessage.Should().Contain("Invalid", response.DescribeResponse());
+            result.StatusMessage.Should().Contain("payment account", response.DescribeResponse());
         }
 
         [Test]
@@ -353,14 +366,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var patchUpdateOperation = new RestRequest($"{ApiHost}/{accountId}/{missingOperationId}", Method.Patch)
                 .AddJsonBody(requestBody);
 
-            var response = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(patchUpdateOperation);
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<UpdateOperationResponse>>(
+                patchUpdateOperation,
+                [HttpStatusCode.NotFound]);
+
+            var result = response.ShouldBeHttpFailureWithDomainFailure(
+                HttpStatusCode.NotFound,
+                "missing operation update should return not found");
 
             Assert.Multiple(() =>
             {
-                response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
-                response.Data.IsSucceeded.Should().BeFalse(DescribeResponse(response));
-                response.Data.StatusMessage.Should().Contain(missingOperationId.ToString(), DescribeResponse(response));
-                response.Data.StatusMessage.Should().Contain(accountId.ToString(), DescribeResponse(response));
+                result.Payload.Should().BeNull(response.DescribeResponse());
+                result.StatusMessage.Should().Contain(missingOperationId.ToString(), response.DescribeResponse());
+                result.StatusMessage.Should().Contain(accountId.ToString(), response.DescribeResponse());
+                result.StatusMessage.Should().Contain("hasn't been found", response.DescribeResponse());
             });
         }
 

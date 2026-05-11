@@ -43,6 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
         internal static TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
+        internal RestClient RestHttpClientAllowingHttpErrors { get; set; }
 
         public async Task<bool> InitAsync(int workersMaxAmount = 1)
         {
@@ -123,6 +124,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                             ConfigureMessageHandler = (handler) => new ErrorHandlerDelegatingHandler(new HttpClientHandler())
                         }
                     );
+
+                    RestHttpClientAllowingHttpErrors = new RestClient(
+                        baseClient,
+                        new RestClientOptions
+                        {
+                            ThrowOnAnyError = false
+                        }
+                    );
                 }
 
                 RegisterActiveApp();
@@ -178,6 +187,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             }
 
             RestHttpClient?.Dispose();
+            RestHttpClientAllowingHttpErrors?.Dispose();
 
             if (WebFactory != null)
             {
