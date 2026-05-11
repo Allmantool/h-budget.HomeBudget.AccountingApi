@@ -68,6 +68,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                         options.LedgerDatabase = "ledger_test";
                     });
 
+                    services.Configure<EventStoreDbOptions>(options =>
+                    {
+                        options.PaymentHistoryProjectionGroup = $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+                        options.PaymentHistoryProjectionStartFromCurrent = true;
+                    });
+
                     var eventStoreDbOptions = new EventStoreDbOptions();
                     services.AddEventStoreClient(
                         _containersConnections.EventSourceDbContainer,

@@ -26,5 +26,7 @@ namespace HomeBudget.Core.Options
 
         public int BatchProcessingFlushPeriodInMs { get; init; } = 100;
         public int RetryInSeconds { get; set; } = 5;
+        public string PaymentHistoryProjectionGroup { get; set; } = "ps-homeledger-mongo-projection-v1";
+        public bool PaymentHistoryProjectionStartFromCurrent { get; set; }
     }
 }

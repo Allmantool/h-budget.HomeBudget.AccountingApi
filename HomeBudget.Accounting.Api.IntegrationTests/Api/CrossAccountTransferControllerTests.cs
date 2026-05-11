@@ -36,6 +36,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         [OneTimeSetUp]
         public override async Task SetupAsync()
         {
+            await OperationsTestWebApp.ResetAsync();
             await _sut.InitAsync();
             await base.SetupAsync();
 
@@ -60,12 +61,24 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var createRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Post)
                 .AddJsonBody(requestBody);
 
-            await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(
+            var transferOperationResponse = await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(
                 createRequest,
                 executionDelayAfterInMs: 20000);
 
-            var senderHistoryResponsePayload = await WaitForHistoryAsync(senderAccountId, records => records.Count == 1);
-            var recipientHistoryResponsePayload = await WaitForHistoryAsync(recipientAccountId, records => records.Count == 1);
+            transferOperationResponse.IsSuccessful.Should().BeTrue(DescribeResponse(transferOperationResponse));
+            transferOperationResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(transferOperationResponse));
+
+            var transferOperationId = transferOperationResponse.Data.Payload.PaymentOperationId;
+            var knownOperationIds = new[] { transferOperationId };
+
+            var senderHistoryResponsePayload = await WaitForHistoryAsync(
+                senderAccountId,
+                records => records.Count == 1,
+                knownOperationIds);
+            var recipientHistoryResponsePayload = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == 1,
+                knownOperationIds);
 
             Assert.Multiple(() =>
             {
@@ -102,13 +115,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             var transferOperationResponse = await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(createRequest, executionDelayAfterInMs: 3000);
 
-            await WaitForHistoryAsync(senderAccountId, records => records.Count == 1);
-            await WaitForHistoryAsync(recipientAccountId, records => records.Count == 1);
+            transferOperationResponse.IsSuccessful.Should().BeTrue(DescribeResponse(transferOperationResponse));
+            transferOperationResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(transferOperationResponse));
+
+            var transferOperationId = transferOperationResponse.Data.Payload.PaymentOperationId;
+            var knownOperationIds = new[] { transferOperationId };
+
+            await WaitForHistoryAsync(senderAccountId, records => records.Count == 1, knownOperationIds);
+            await WaitForHistoryAsync(recipientAccountId, records => records.Count == 1, knownOperationIds);
 
             var removeTransferRequestBody = new RemoveTransferRequest
             {
                 PaymentAccountId = senderAccountId,
-                TransferOperationId = transferOperationResponse.Data.Payload.PaymentOperationId
+                TransferOperationId = transferOperationId
             };
 
             var removeRequest = new RestRequest($"{CrossAccountsTransferApiHost}", Method.Delete)
@@ -116,8 +135,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(removeRequest, executionDelayBeforeInMs: 3000, executionDelayAfterInMs: 2500);
 
-            var senderHistoryResponsePayload = await WaitForHistoryAsync(senderAccountId, records => records.Count == 0);
-            var recipientHistoryResponsePayload = await WaitForHistoryAsync(recipientAccountId, records => records.Count == 0);
+            var senderHistoryResponsePayload = await WaitForHistoryAsync(
+                senderAccountId,
+                records => records.Count == 0,
+                knownOperationIds);
+            var recipientHistoryResponsePayload = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == 0,
+                knownOperationIds);
 
             Assert.Multiple(() =>
             {
@@ -186,6 +211,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryAsync(
             Guid accountId,
             Func<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>, bool> condition,
+            IEnumerable<Guid> knownOperationIds = null,
             CancellationToken cancellationToken = default)
         {
             return await PaymentProjectionWaiter.WaitForHistoryRecordsAsync(
@@ -193,7 +219,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 accountId,
                 condition,
                 "transfer payment history reaches expected state",
+                knownOperationIds,
                 cancellationToken: cancellationToken);
+        }
+
+        private static string DescribeResponse<T>(RestResponse<Result<T>> response)
+        {
+            if (response == null)
+            {
+                return "Response was null.";
+            }
+
+            return $"HTTP {(int)response.StatusCode} {response.StatusCode}, transport-success={response.IsSuccessful}, rest-error='{response.ErrorMessage}', domain-success={response.Data?.IsSucceeded}, status='{response.Data?.StatusMessage}', content='{response.Content}'";
         }
 
         private async Task<Result<Guid>> SavePaymentAccountAsync(decimal initialBalance, AccountTypes accountType, CurrencyTypes currencyType)

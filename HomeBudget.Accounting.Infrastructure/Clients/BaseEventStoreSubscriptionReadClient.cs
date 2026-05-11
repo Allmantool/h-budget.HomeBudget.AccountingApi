@@ -46,7 +46,9 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 var settings = new PersistentSubscriptionSettings(
                     resolveLinkTos: true,
-                    startFrom: Position.Start);
+                    startFrom: _options.PaymentHistoryProjectionStartFromCurrent
+                        ? Position.End
+                        : Position.Start);
 
                 await _client.CreateToAllAsync(
                     groupName,
@@ -62,6 +64,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             catch (Exception ex)
             {
                 _logger.FailedCreateSubscription(ex, groupName);
+                throw;
             }
         }
 

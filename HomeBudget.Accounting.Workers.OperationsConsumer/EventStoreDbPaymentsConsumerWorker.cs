@@ -24,8 +24,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await client.CreatePersistentSubscriptionAsync(stoppingToken);
-
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -33,6 +31,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                     _subscription?.Dispose();
                     _subscription = null;
 
+                    await client.CreatePersistentSubscriptionAsync(stoppingToken);
                     _subscription = await client.SubscribeAsync(stoppingToken);
                 }
                 catch (OperationCanceledException)

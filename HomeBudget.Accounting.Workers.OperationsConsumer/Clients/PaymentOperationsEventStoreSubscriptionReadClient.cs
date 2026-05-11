@@ -33,7 +33,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
     internal sealed class PaymentOperationsEventStoreSubscriptionReadClient
         : BaseEventStoreSubscriptionReadClient<PaymentOperationEvent>
     {
-        private const string Group = "ps-homeledger-mongo-projection-v1";
+        private const string DefaultGroup = "ps-homeledger-mongo-projection-v1";
 
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IDateTimeProvider _dateTimeProvider;
@@ -45,6 +45,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
         private readonly IEventStoreDbStreamReadClient<PaymentOperationEvent> _eventStoreDbStreamReadClient;
+        private readonly string _group;
 
         public PaymentOperationsEventStoreSubscriptionReadClient(
             ILogger<PaymentOperationsEventStoreSubscriptionReadClient> logger,
@@ -60,6 +61,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             _opts = options.Value;
             _logger = logger;
             _serviceScopeFactory = serviceScopeFactory;
+            _group = string.IsNullOrWhiteSpace(_opts.PaymentHistoryProjectionGroup)
+                ? DefaultGroup
+                : _opts.PaymentHistoryProjectionGroup;
             _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
@@ -69,14 +73,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
         public override Task CreatePersistentSubscriptionAsync(CancellationToken ct)
         {
-            return CreatePersistentSubscriptionAsync(Group, ct);
+            return CreatePersistentSubscriptionAsync(_group, ct);
         }
 
         public override Task<PersistentSubscription> SubscribeAsync(
             Func<ResolvedEvent, Task> handler = null,
             CancellationToken ct = default)
         {
-            return SubscribeAsync(Group, handler, ct);
+            return SubscribeAsync(_group, handler, ct);
         }
 
         protected override async Task OnEventAppearedAsync(PaymentOperationEvent eventData)
