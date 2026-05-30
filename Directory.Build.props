@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>All</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <CodeAnalysisRuleSet>$(SolutionDir)StyleCopConfig.ruleset</CodeAnalysisRuleSet>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DebugType>Full</DebugType>

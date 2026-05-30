@@ -30,3 +30,42 @@ dotnet_analyzer_diagnostic.category-StyleCop.CSharp.OrderingRules.severity = sug
 
 # Default severity for all analyzer diagnostics
 dotnet_analyzer_diagnostic.severity = silent
+
+# Repository quality gates: keep these gradual so existing code can migrate safely.
+dotnet_diagnostic.SA1402.severity = warning
+dotnet_diagnostic.S107.severity = warning
+dotnet_diagnostic.S134.severity = warning
+dotnet_diagnostic.S138.severity = warning
+dotnet_diagnostic.S3776.severity = warning
+
+# Async, cancellation, and logging reliability.
+dotnet_diagnostic.CA1849.severity = warning
+dotnet_diagnostic.CA2016.severity = warning
+dotnet_diagnostic.CA2254.severity = warning
+
+# Maintainability and readability suggestions.
+dotnet_diagnostic.CA1822.severity = suggestion
+dotnet_diagnostic.CA1852.severity = suggestion
+dotnet_diagnostic.IDE0017.severity = suggestion
+dotnet_diagnostic.IDE0028.severity = suggestion
+dotnet_diagnostic.IDE0032.severity = suggestion
+dotnet_diagnostic.IDE0040.severity = suggestion
+dotnet_diagnostic.IDE0044.severity = suggestion
+dotnet_diagnostic.IDE0051.severity = suggestion
+dotnet_diagnostic.IDE0052.severity = suggestion
+dotnet_diagnostic.IDE0059.severity = suggestion
+dotnet_diagnostic.IDE0060.severity = suggestion
+dotnet_diagnostic.IDE0090.severity = suggestion
+
+csharp_prefer_braces = true:suggestion
+csharp_style_expression_bodied_methods = false:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_readonly_field = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
