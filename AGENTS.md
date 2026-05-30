@@ -9,7 +9,21 @@
 - Shared code is split across domain, infrastructure, core, notifications, and feature components (`Accounts`, `Categories`, `Contractors`, `Operations`).
 - Tests use NUnit, FluentAssertions, Moq, Coverlet, and Testcontainers.
 - Node is present only for release automation (`semantic-release`); application build/runtime is .NET-based.
-- No checked-in `README`, `CONTRIBUTING`, `docs/`, or static OpenAPI file was found. Treat code, CI, and config as the source of truth.
+- No checked-in `README`, `CONTRIBUTING`, or static OpenAPI file was found. Treat code, CI, and config as the source of truth.
+- Repository-level development standards live in `AGENTS.md`, `docs/coding-standards.md`, `docs/code-review-checklist.md`, `.editorconfig`, `Directory.Build.props`, and `StyleCopConfig.ruleset`.
+
+## Engineering Priorities
+
+When priorities compete, use this order:
+
+1. Correctness.
+2. Simplicity.
+3. Readability.
+4. Maintainability.
+5. Testability.
+6. Performance only where it is needed and measured.
+
+Prefer the smallest production-safe change that satisfies the request. Do not optimize, generalize, or redesign beyond the current problem unless the user explicitly asks for it or the existing code makes a narrow change unsafe.
 
 ## Repository Structure
 
@@ -67,6 +81,8 @@
 
 - No dedicated repo script for `lint`, `typecheck`, or `dotnet format` was found.
 - The practical lint gate is `dotnet build`, because analyzers are enabled globally in `Directory.Build.props` and StyleCop/Sonar analyzers are referenced centrally.
+- `.editorconfig` carries repository code-style/analyzer severity guidance. `StyleCopConfig.ruleset` carries the legacy StyleCop/Sonar rule baseline.
+- Do not enable `TreatWarningsAsErrors` globally unless the repository is proven clean under the proposed warnings. Prefer gradual enforcement.
 - Coverage/test behavior is configured in `coverlet.runsettings`.
 - Do not invent a new repo-standard formatting workflow unless the task explicitly requires it.
 
@@ -85,6 +101,7 @@
 ## Coding Conventions
 
 - Target framework is `net10.0`; implicit usings are disabled and nullable is disabled in `Directory.Build.props`.
+- Respect the current nullable baseline. Do not introduce null-unsafe code; when touching files that already use nullability annotations or defensive null checks, preserve or improve them.
 - Match nearby code instead of introducing a new style.
 - Observed conventions:
   - explicit `using` directives
@@ -92,6 +109,67 @@
   - async methods should end with `Async` per `.editorconfig`
   - central package management via `Directory.Packages.props`
 - Tests rely on `InternalsVisibleTo` across multiple projects. Avoid changing assembly visibility casually.
+- Prefer one top-level class, record, interface, enum, or exception per file. File names should match the main type name.
+- Keep related but separate responsibilities in separate files. Avoid large "god files" and use the existing feature/domain folder structure.
+- Prefer sealed classes when inheritance is not intended and the existing design does not require proxying or subclassing.
+- Prefer records for immutable data carriers.
+- Prefer clear domain names over vague names such as `Manager`, `Helper`, `Processor`, or `Util`; keep those names only when they match established local concepts.
+- Avoid large LINQ expressions when they harm readability. Split complex transformations into intention-revealing steps.
+- For EF Core-style data access, keep queries translatable and avoid accidental client-side evaluation. This repository primarily uses MongoDB, Dapper, and EventStoreDB, so follow each provider's query/serialization constraints.
+
+## Core Design Principles
+
+- Apply SOLID and GRASP pragmatically: keep responsibilities focused, dependencies explicit, and behavior close to the module that owns the needed information.
+- Use KISS and YAGNI: solve the current requirement clearly without speculative extension points.
+- Use DRY to remove harmful duplication, but do not create premature abstractions or meaningless parameter bags just to satisfy a metric.
+- Follow the Law of Demeter. Avoid deep chains that leak object internals; add intention-revealing methods near the owning type when that reduces coupling.
+- Prefer composition over inheritance.
+- Keep business/domain logic separate from infrastructure, transport, persistence, framework, and wiring code where the architecture already supports it.
+- Do not introduce broad rewrites, new layers, new interfaces, or new patterns unless they solve a concrete current problem.
+
+## Size and Complexity Guidance
+
+These limits are review guidance, not blind mechanical rules. If exceeding them is reasonable, explain why in the final response.
+
+- Target file size: under 150 lines.
+- Soft maximum file size: 250 lines.
+- Target method size: under 30 lines.
+- Soft maximum method size: 50 lines.
+- Maximum nesting depth: 3.
+- Prefer small cohesive classes and methods with one clear reason to change.
+
+## Method and Constructor Parameters
+
+- Preferred maximum method parameters: 4.
+- Soft maximum method parameters: 5.
+- Preferred maximum constructor parameters: 5.
+- Soft maximum constructor parameters: 7.
+- When a signature exceeds these limits, consider a request object, command object, options object, context object, value object, or domain-specific parameter object.
+- Do not create vague parameter bags only to satisfy a number. The grouping must express a real domain or workflow concept.
+
+## Static Classes and Extension Methods
+
+- Use static classes for pure helper methods, extension methods, mapping helpers, and constants grouped by domain concept.
+- Do not use static classes for business workflows with dependencies, I/O, logging, configuration-dependent behavior, or mutable shared state.
+- Extension methods must improve readability and must not hide expensive side effects, persistence, network calls, logging, or service resolution.
+
+## Async, Logging, and Reliability
+
+- Async methods performing I/O should accept and pass `CancellationToken` unless there is a clear boundary reason not to.
+- Do not use `.Result`, `.Wait()`, or other sync-over-async patterns.
+- Preserve timeout, retry, idempotency, and cancellation behavior when touching Kafka, EventStoreDB, MongoDB, SQL, HTTP, or background worker code.
+- Use structured logging and existing logging helpers/source-generated log patterns where present.
+- Do not log secrets, credentials, tokens, personal data, or sensitive business data.
+- Preserve observability/tracing/correlation behavior already used in the API, worker, infrastructure, and operations components.
+
+## Refactoring Rules
+
+- Preserve behavior unless the task explicitly requests a behavior change.
+- Avoid unrelated changes and broad formatting churn.
+- Keep public contracts stable unless the task requires changing them.
+- Prefer extracting private methods before adding services. Extract classes/services only when doing so reduces real complexity, coupling, or duplication.
+- Add or update tests for changed behavior where practical, especially for bug fixes.
+- Explain intentional trade-offs, public contract changes, and standards deviations in the final response.
 
 ## Safe Change Rules
 
@@ -130,6 +208,16 @@
 - If you changed package versions, update them centrally in `Directory.Packages.props`.
 - If you changed host behavior, inspect both corresponding `Program.cs` and `Configuration/DependencyRegistrations.cs`.
 - If behavior seems ambiguous, prefer CI workflow commands over inferred local shortcuts.
+
+## Definition of Done for Codex Changes
+
+Final responses for non-trivial code/configuration changes must include:
+
+- What changed.
+- Why the design or configuration was chosen.
+- What checks were run and their results.
+- Any checks that could not be run.
+- Any intentional deviations from these standards.
 
 ## Codex Scanning Optimization
 
