@@ -2,7 +2,7 @@
 
 namespace HomeBudget.Accounting.Api.Extensions.Logs
 {
-    public static partial class LoggerExtensions
+    internal static partial class LoggerExtensions
     {
         [LoggerMessage(
             EventId = 0,

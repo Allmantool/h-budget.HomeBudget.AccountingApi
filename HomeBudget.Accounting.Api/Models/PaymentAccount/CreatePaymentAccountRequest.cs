@@ -5,7 +5,7 @@ using HomeBudget.Accounting.Domain.Enumerations;
 
 namespace HomeBudget.Accounting.Api.Models.PaymentAccount
 {
-    public class CreatePaymentAccountRequest : IValidatableObject
+    internal class CreatePaymentAccountRequest : IValidatableObject
     {
         public string Agent { get; set; }
         public decimal InitialBalance { get; set; }
@@ -15,11 +15,6 @@ namespace HomeBudget.Accounting.Api.Models.PaymentAccount
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
-            if (string.IsNullOrWhiteSpace(Agent))
-            {
-                yield return new ValidationResult("Agent is required", [nameof(Agent)]);
-            }
-
             if (string.IsNullOrWhiteSpace(Currency))
             {
                 yield return new ValidationResult("Currency is required", [nameof(Currency)]);
