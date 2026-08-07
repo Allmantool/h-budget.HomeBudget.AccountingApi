@@ -5,7 +5,7 @@ using HomeBudget.Accounting.Domain.Enumerations;
 
 namespace HomeBudget.Accounting.Api.Models.PaymentAccount
 {
-    internal class UpdatePaymentAccountRequest : IValidatableObject
+    public class UpdatePaymentAccountRequest : IValidatableObject
     {
         public string Agent { get; set; }
         public decimal Balance { get; set; }
