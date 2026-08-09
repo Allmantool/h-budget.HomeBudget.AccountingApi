@@ -96,6 +96,45 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task ApplyTransfer_WithOpeningBalances_ThenHistoryShowsEachAccountsResultingBalanceAsync()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(34m, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(8m, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
+            var requestBody = new CrossAccountsTransferRequest
+            {
+                Amount = 1m,
+                Recipient = recipientAccountId,
+                Sender = senderAccountId,
+                OperationAt = new DateOnly(2024, 05, 07),
+                Multiplier = 1m
+            };
+
+            var response = await _restClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post).AddJsonBody(requestBody));
+
+            response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+            response.Data.IsSucceeded.Should().BeTrue(DescribeResponse(response));
+
+            var knownOperationIds = new[] { response.Data.Payload.PaymentOperationId };
+            var senderHistory = await WaitForHistoryAsync(
+                senderAccountId,
+                records => records.Count == 1 && records.Single().Balance == 33m,
+                knownOperationIds);
+            var recipientHistory = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == 1 && records.Single().Balance == 9m,
+                knownOperationIds);
+
+            Assert.Multiple(() =>
+            {
+                senderHistory.Single().Record.Amount.Should().Be(-1m);
+                senderHistory.Single().Balance.Should().Be(33m);
+                recipientHistory.Single().Record.Amount.Should().Be(1m);
+                recipientHistory.Single().Balance.Should().Be(9m);
+            });
+        }
+
+        [Test]
         public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeletedAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;

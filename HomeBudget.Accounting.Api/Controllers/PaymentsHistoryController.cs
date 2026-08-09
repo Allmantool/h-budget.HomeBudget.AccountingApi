@@ -8,10 +8,12 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.History;
-using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Services.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
+using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
+using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
@@ -33,43 +35,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
             }
 
-            var documents = await paymentsHistoryDocumentsClient.GetAsync(targetAccountGuid);
-
-            var initialBalance = await paymentAccountService.GetInitialBalanceAsync(paymentAccountId);
-
-            var historyRecords = documents.Select(d => d.Payload);
-
-            var paymentAccountOperations = historyRecords
-                .GroupBy(op => op.Record.Key)
-                .Select(gr => gr
-                    .OrderBy(op => op.Record.OperationDay)
-                    .ThenBy(op => op.Record.OperationUnixTime)
-                    .ThenBy(op => op.Record.Key)
-                    .Last())
-                .OrderBy(r => r.Record.OperationDay)
-                .ThenBy(r => r.Record.OperationUnixTime)
-                .ThenBy(r => r.Record.Key);
-
-            var categoriesResult = await categoryDocumentsClient.GetAsync();
-            var categories = categoriesResult.Payload;
-
-            var runningBalance = initialBalance;
-
-            foreach (var historyRecord in paymentAccountOperations)
-            {
-                var historyRecordCategory = categories.FirstOrDefault(c => c.Payload.Key.CompareTo(historyRecord.Record.CategoryId) == 0);
-
-                if (historyRecordCategory == null)
-                {
-                    continue;
-                }
-
-                var isIncome = historyRecordCategory.Payload.CategoryType == CategoryTypes.Income;
-                var operationAmount = historyRecord.Record.Amount;
-
-                runningBalance += isIncome ? Math.Abs(operationAmount) : -Math.Abs(operationAmount);
-                historyRecord.Balance = runningBalance;
-            }
+            var paymentAccountOperations = await GetHistoryWithRunningBalancesAsync(targetAccountGuid);
 
             var responsePayload = mapper.Map<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>(paymentAccountOperations);
 
@@ -89,13 +55,46 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<PaymentOperationHistoryRecordResponse>.Failure($"Invalid payment operation '{nameof(targetOperationGuid)}' has been provided");
             }
 
-            var document = await paymentsHistoryDocumentsClient.GetByIdAsync(targetAccountGuid, targetOperationGuid);
-
-            var operationById = document?.Payload;
+            var operationById = (await GetHistoryWithRunningBalancesAsync(targetAccountGuid))
+                .SingleOrDefault(operation => operation.Record.Key == targetOperationGuid);
 
             return operationById == null
                 ? Result<PaymentOperationHistoryRecordResponse>.Failure($"The operation with '{operationId}' hasn't been found")
                 : Result<PaymentOperationHistoryRecordResponse>.Succeeded(mapper.Map<PaymentOperationHistoryRecordResponse>(operationById));
+        }
+
+        private async Task<IReadOnlyCollection<PaymentOperationHistoryRecord>> GetHistoryWithRunningBalancesAsync(Guid paymentAccountId)
+        {
+            var documents = await paymentsHistoryDocumentsClient.GetAsync(paymentAccountId);
+            var initialBalance = await paymentAccountService.GetInitialBalanceAsync(paymentAccountId.ToString());
+            var categoriesResult = await categoryDocumentsClient.GetAsync();
+            var categories = categoriesResult.Payload ?? Array.Empty<CategoryDocument>();
+            var categoryMap = categories
+                .Where(category => category?.Payload != null)
+                .GroupBy(category => category.Payload.Key)
+                .ToDictionary(group => group.Key, group => group.Last().Payload);
+            var paymentAccountOperations = documents
+                .Select(document => document.Payload)
+                .GroupBy(operation => operation.Record.Key)
+                .Select(group => group
+                    .OrderBy(operation => operation.Record.OperationDay)
+                    .ThenBy(operation => operation.Record.OperationUnixTime)
+                    .ThenBy(operation => operation.Record.Key)
+                    .Last())
+                .OrderBy(operation => operation.Record.OperationDay)
+                .ThenBy(operation => operation.Record.OperationUnixTime)
+                .ThenBy(operation => operation.Record.Key)
+                .ToArray();
+
+            var runningBalance = initialBalance;
+
+            foreach (var operation in paymentAccountOperations)
+            {
+                runningBalance += operation.Record.CalculateIncrement(categoryMap);
+                operation.Balance = runningBalance;
+            }
+
+            return paymentAccountOperations;
         }
     }
 }
