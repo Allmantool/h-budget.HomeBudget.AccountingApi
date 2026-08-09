@@ -92,6 +92,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 var recipientOperationId = recipientResponse.Record.Key;
 
                 recipientOperationId.Should().Be(senderOperationId);
+                senderResponse.Record.RelatedPaymentAccountId.Should().Be(recipientAccountId);
+                recipientResponse.Record.RelatedPaymentAccountId.Should().Be(senderAccountId);
             });
         }
 
