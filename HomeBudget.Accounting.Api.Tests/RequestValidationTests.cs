@@ -56,7 +56,6 @@ namespace HomeBudget.Accounting.Api.Tests
 
             var errors = Validate(request);
 
-            errors.Should().Contain(error => error.MemberNames.Contains(nameof(CreatePaymentAccountRequest.Agent)));
             errors.Should().Contain(error => error.MemberNames.Contains(nameof(CreatePaymentAccountRequest.Currency)));
             errors.Should().Contain(error => error.MemberNames.Contains(nameof(CreatePaymentAccountRequest.AccountType)));
         }

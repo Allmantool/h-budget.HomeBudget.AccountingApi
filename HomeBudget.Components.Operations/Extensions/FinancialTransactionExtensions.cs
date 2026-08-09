@@ -6,13 +6,13 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Components.Operations.Extensions
 {
-    internal static class FinancialTransactionExtensions
+    public static class FinancialTransactionExtensions
     {
         public static decimal CalculateIncrement(
             this FinancialTransaction operation,
             IReadOnlyDictionary<Guid, Category> categoryMap)
         {
-            if (operation.CategoryId == Guid.Empty)
+            if (operation.TransactionType == TransactionTypes.Transfer || operation.CategoryId == Guid.Empty)
             {
                 return operation.Amount;
             }
