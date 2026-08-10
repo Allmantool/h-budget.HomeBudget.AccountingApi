@@ -75,7 +75,6 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ToDictionary(group => group.Key, group => group.Last().Payload);
             var paymentAccountOperations = documents
                 .Select(document => document.Payload)
-                .GetMostRecentByOperationKey()
                 .OrderByHistoryOrder()
                 .ToArray();
 

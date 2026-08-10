@@ -117,10 +117,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     .Where(d => d != null)
                     .Select(d => d.Payload);
 
-                var syncedStateRecords = monthBalanceHistoryRecords
-                    .GetMostRecentByOperationKey();
-
-                var totalBalanceForAccount = syncedStateRecords.Sum(r => r.Balance);
+                var totalBalanceForAccount = monthBalanceHistoryRecords.Sum(r => r.Balance);
 
                 var finalBalance = await paymentAccountService.GetInitialBalanceAsync(accountId.ToString()) + totalBalanceForAccount;
 

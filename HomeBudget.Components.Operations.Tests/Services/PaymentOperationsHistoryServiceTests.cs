@@ -447,6 +447,40 @@ namespace HomeBudget.Components.Operations.Tests.Services
         }
 
         [Test]
+        public async Task SyncHistory_WhenAnOperationIsUpdatedAfterASameTimestampPeer_ThenKeepsItsCreationOrder()
+        {
+            var paymentAccountId = Guid.Parse("ac11dc26-dd63-49da-9d2e-4d9bcf4c2d4a");
+            var operationDay = new DateOnly(2024, 3, 12);
+            var firstOperationId = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+            var secondOperationId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+            var operations = new[]
+            {
+                CreateTransferEvent(paymentAccountId, firstOperationId, -2m, operationDay, 0),
+                CreateTransferEvent(paymentAccountId, secondOperationId, -5.1m, operationDay, 1),
+                CreateTransferEvent(paymentAccountId, firstOperationId, -7.25m, operationDay, 2, PaymentEventTypes.Updated)
+            };
+
+            var paymentsHistoryClientMock = BuildHistoryClientMock((_, records, _) => rewrittenRecords = records.ToList());
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                new Mock<ICategoryDocumentsClient>().Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                operations);
+
+            Assert.Multiple(() =>
+            {
+                result.Payload.Should().Be(-12.35m);
+                rewrittenRecords.Select(record => record.Record.Key).Should().Equal(firstOperationId, secondOperationId);
+                rewrittenRecords.Select(record => record.Record.Amount).Should().Equal(-7.25m, -5.1m);
+                rewrittenRecords.Select(record => record.StreamRevision).Should().Equal(0L, 1L);
+                rewrittenRecords.Select(record => record.Balance).Should().Equal(-7.25m, -12.35m);
+            });
+        }
+
+        [Test]
         public async Task SyncHistory_WhenPaymentsAndTransfersAreMixed_ThenUsesAccountLocalSignedAmounts()
         {
             var paymentAccountId = Guid.Parse("ac11dc26-dd63-49da-9d2e-4d9bcf4c2d4a");
@@ -656,11 +690,12 @@ namespace HomeBudget.Components.Operations.Tests.Services
             Guid operationId,
             decimal amount,
             DateOnly operationDay,
-            long streamRevision)
+            long streamRevision,
+            PaymentEventTypes eventType = PaymentEventTypes.Added)
         {
             return new PaymentOperationEvent
             {
-                EventType = PaymentEventTypes.Added,
+                EventType = eventType,
                 SequenceNumber = streamRevision,
                 Payload = new FinancialTransaction
                 {

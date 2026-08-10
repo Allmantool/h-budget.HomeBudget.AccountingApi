@@ -24,28 +24,44 @@ namespace HomeBudget.Components.Operations.Extensions
                 .Where(ev => ev.EventType != PaymentEventTypes.Removed)
                 .ToList();
 
-            return validAndMostUpToDateOperations
-                .OrderByHistoryOrder()
-                .ToList();
+            return validAndMostUpToDateOperations;
         }
 
         public static IReadOnlyList<PaymentOperationHistoryRecord> BuildHistoryRecords(
-            this IReadOnlyCollection<PaymentOperationEvent> operations,
+            this IEnumerable<PaymentOperationEvent> eventsForAccount,
             IReadOnlyDictionary<Guid, Category> categoryMap)
         {
-            var historyRecords = new List<PaymentOperationHistoryRecord>(operations.Count);
+            var historyRecords = eventsForAccount
+                .Where(static operation => operation?.Payload != null)
+                .GroupBy(static operation => operation.Payload.Key)
+                .Select(static group => new
+                {
+                    Latest = group
+                        .OrderBy(static operation => operation.SequenceNumber)
+                        .ThenBy(static operation => operation.ProcessedAt)
+                        .ThenBy(static operation => operation.OccurredOn)
+                        .ThenBy(static operation => operation.EnvelopId)
+                        .Last(),
+                    CreationRevision = group
+                        .Where(static operation => operation.EventType == PaymentEventTypes.Added)
+                        .OrderBy(static operation => operation.SequenceNumber)
+                        .Select(static operation => (long?)operation.SequenceNumber)
+                        .FirstOrDefault()
+                })
+                .Where(static operation => operation.Latest.EventType != PaymentEventTypes.Removed)
+                .Select(static operation => new PaymentOperationHistoryRecord
+                {
+                    Record = operation.Latest.Payload,
+                    StreamRevision = operation.CreationRevision ?? operation.Latest.SequenceNumber
+                })
+                .OrderByHistoryOrder()
+                .ToList();
             var balance = 0m;
 
-            foreach (var operation in operations.OrderByHistoryOrder())
+            foreach (var operation in historyRecords)
             {
-                balance += operation.Payload.CalculateIncrement(categoryMap);
-
-                historyRecords.Add(new PaymentOperationHistoryRecord
-                {
-                    Record = operation.Payload,
-                    StreamRevision = operation.SequenceNumber,
-                    Balance = balance
-                });
+                balance += operation.Record.CalculateIncrement(categoryMap);
+                operation.Balance = balance;
             }
 
             return historyRecords;
