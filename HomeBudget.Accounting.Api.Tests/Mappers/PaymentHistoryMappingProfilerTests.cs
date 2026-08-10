@@ -45,6 +45,20 @@ namespace HomeBudget.Accounting.Api.Tests.Mappers
         }
 
         [Test]
+        public void Map_Transfer_ThenIncludesHistoricalConversionMultiplier()
+        {
+            var source = new FinancialTransaction
+            {
+                TransactionType = TransactionTypes.Transfer,
+                ConversionMultiplier = 3.1m
+            };
+
+            var result = _configuration.CreateMapper().Map<HistoryOperationRecordResponse>(source);
+
+            Assert.That(result.ConversionMultiplier, Is.EqualTo(3.1m));
+        }
+
+        [Test]
         public void Map_Payment_ThenDoesNotIncludeRelatedPaymentAccountId()
         {
             var source = new FinancialTransaction
@@ -56,6 +70,7 @@ namespace HomeBudget.Accounting.Api.Tests.Mappers
             var result = _configuration.CreateMapper().Map<HistoryOperationRecordResponse>(source);
 
             Assert.That(result.RelatedPaymentAccountId, Is.Null);
+            Assert.That(result.ConversionMultiplier, Is.Null);
         }
     }
 }
