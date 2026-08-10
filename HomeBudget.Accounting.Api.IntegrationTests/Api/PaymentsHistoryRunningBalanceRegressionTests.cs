@@ -45,7 +45,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         {
             var senderAccountId = (await SavePaymentAccountAsync(34m)).Payload;
             var recipientAccountId = (await SavePaymentAccountAsync(0m)).Payload;
-            var transferAmounts = new[] { 2m, 2m, 5.1m };
+            var transferAmounts = new[] { 2m, 5.1m, 7.25m };
             var operationIds = new List<Guid>();
 
             foreach (var amount in transferAmounts)
@@ -62,21 +62,30 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var history = await WaitForHistoryAsync(
                 senderAccountId,
                 records => records.Count == transferAmounts.Length &&
-                           records.Select(record => record.Balance).SequenceEqual([32m, 30m, 24.9m]),
+                           records.Select(record => record.Balance).SequenceEqual([32m, 26.9m, 19.65m]),
                 operationIds);
             var account = await PaymentProjectionWaiter.WaitForPaymentAccountAsync(
                 _restClient,
                 senderAccountId,
-                account => account.Balance == 24.9m,
+                account => account.Balance == 19.65m,
                 "authoritative account balance reconciles with completed history",
                 operationIds,
                 TestContext.CurrentContext.CancellationToken);
+            var recipientHistory = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == transferAmounts.Length &&
+                           records.Select(record => record.Balance).SequenceEqual([2m, 7.1m, 14.35m]),
+                operationIds);
             var repeatedHistory = await GetHistoryAsync(senderAccountId);
 
             Assert.Multiple(() =>
             {
-                history.Select(record => record.Record.Amount).Should().Equal(-2m, -2m, -5.1m);
-                history.Select(record => record.Balance).Should().Equal(32m, 30m, 24.9m);
+                history.Select(record => record.Record.Key).Should().Equal(operationIds);
+                history.Select(record => record.Record.Amount).Should().Equal(-2m, -5.1m, -7.25m);
+                history.Select(record => record.Balance).Should().Equal(32m, 26.9m, 19.65m);
+                recipientHistory.Select(record => record.Record.Key).Should().Equal(operationIds);
+                recipientHistory.Select(record => record.Record.Amount).Should().Equal(2m, 5.1m, 7.25m);
+                recipientHistory.Select(record => record.Balance).Should().Equal(2m, 7.1m, 14.35m);
                 repeatedHistory.Select(record => record.Record.Key).Should().Equal(history.Select(record => record.Record.Key));
                 repeatedHistory.Select(record => record.Balance).Should().Equal(history.Select(record => record.Balance));
                 history.Last().Balance.Should().Be(account.Balance);

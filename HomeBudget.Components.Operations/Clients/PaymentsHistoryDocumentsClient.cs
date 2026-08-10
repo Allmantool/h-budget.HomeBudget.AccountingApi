@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
+using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
@@ -38,7 +39,8 @@ namespace HomeBudget.Components.Operations.Clients
                     async () =>
                     {
                         var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(collectionName);
-                        return await targetCollection.Find(_ => true).ToListAsync();
+                        var documents = await targetCollection.Find(_ => true).ToListAsync();
+                        return OrderHistoryDocuments(documents);
                     },
                     accountId);
             }
@@ -63,12 +65,8 @@ namespace HomeBudget.Components.Operations.Clients
                 {
                     var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
 
-                    return await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                        .SortByDescending(f => f.Payload.Record.OperationDay)
-                        .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
-                        .ThenByDescending(f => f.Payload.Record.Key)
-                        .Limit(1)
-                        .FirstOrDefaultAsync();
+                    var documents = await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty).ToListAsync();
+                    return OrderHistoryDocuments(documents).LastOrDefault();
                 });
         }
 
@@ -80,12 +78,11 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-                    var tasks = targetCollections.Select(cl => cl.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                        .SortByDescending(f => f.Payload.Record.OperationDay)
-                        .ThenByDescending(f => f.Payload.Record.OperationUnixTime)
-                        .ThenByDescending(f => f.Payload.Record.Key)
-                        .Limit(1)
-                        .FirstOrDefaultAsync());
+                    var tasks = targetCollections.Select(async collection =>
+                    {
+                        var documents = await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty).ToListAsync();
+                        return OrderHistoryDocuments(documents).LastOrDefault();
+                    });
 
                     return await Task.WhenAll(tasks);
                 },
@@ -203,12 +200,6 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var records = (operationHistoryRecords ?? [])
                 .Where(static x => x?.Record != null)
-                .GroupBy(static x => x.Record.Key)
-                .Select(static x => x
-                    .OrderBy(static r => r.Record.OperationDay)
-                    .ThenBy(static r => r.Record.OperationUnixTime)
-                    .ThenBy(static r => r.Record.Key)
-                    .Last())
                 .ToList();
 
             await TraceMongoAsync(
@@ -330,7 +321,15 @@ namespace HomeBudget.Components.Operations.Clients
             var tasks = collections.Select(async collection => await collection.Find(filter).ToListAsync());
             var results = await Task.WhenAll(tasks);
 
-            return results.SelectMany(docs => docs).ToList().AsReadOnly();
+            return OrderHistoryDocuments(results.SelectMany(static documents => documents)).AsReadOnly();
+        }
+
+        private static List<PaymentHistoryDocument> OrderHistoryDocuments(IEnumerable<PaymentHistoryDocument> documents)
+        {
+            return documents
+                .Where(static document => document?.Payload?.Record != null)
+                .OrderByHistoryOrder()
+                .ToList();
         }
 
         private static async Task<T> TraceMongoAsync<T>(

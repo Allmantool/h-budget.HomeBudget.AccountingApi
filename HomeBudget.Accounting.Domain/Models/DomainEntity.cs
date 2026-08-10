@@ -6,6 +6,6 @@ namespace HomeBudget.Accounting.Domain.Models
     {
         public Guid Key { get; set; }
 
-        public long OperationUnixTime { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        public long OperationUnixTime { get; init; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 }

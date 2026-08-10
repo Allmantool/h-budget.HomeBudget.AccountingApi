@@ -77,7 +77,7 @@ namespace HomeBudget.Components.Operations.Services
                 }
 
                 var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
-                var historyRecords = latestActiveEvents.BuildHistoryRecords(categoryMap);
+                var historyRecords = inputEvents.BuildHistoryRecords(categoryMap);
 
                 await _paymentsHistoryDocumentsClient.RewriteAllAsync(
                     financialPeriodIdentifier,

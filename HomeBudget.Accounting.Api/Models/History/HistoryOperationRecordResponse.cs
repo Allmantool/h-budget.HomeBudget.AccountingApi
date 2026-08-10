@@ -11,6 +11,7 @@ namespace HomeBudget.Accounting.Api.Models.History
         public Guid ContractorId { get; set; }
         public Guid CategoryId { get; set; }
         public Guid PaymentAccountId { get; set; }
+        public Guid? RelatedPaymentAccountId { get; set; }
         public decimal Amount { get; set; }
     }
 }

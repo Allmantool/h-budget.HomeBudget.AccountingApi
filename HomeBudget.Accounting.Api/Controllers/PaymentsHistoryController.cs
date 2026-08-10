@@ -75,15 +75,7 @@ namespace HomeBudget.Accounting.Api.Controllers
                 .ToDictionary(group => group.Key, group => group.Last().Payload);
             var paymentAccountOperations = documents
                 .Select(document => document.Payload)
-                .GroupBy(operation => operation.Record.Key)
-                .Select(group => group
-                    .OrderBy(operation => operation.Record.OperationDay)
-                    .ThenBy(operation => operation.Record.OperationUnixTime)
-                    .ThenBy(operation => operation.Record.Key)
-                    .Last())
-                .OrderBy(operation => operation.Record.OperationDay)
-                .ThenBy(operation => operation.Record.OperationUnixTime)
-                .ThenBy(operation => operation.Record.Key)
+                .OrderByHistoryOrder()
                 .ToArray();
 
             var runningBalance = initialBalance;
