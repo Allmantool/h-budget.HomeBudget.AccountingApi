@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -15,6 +16,7 @@ using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Models;
 using HomeBudget.Components.Operations.Clients.Interfaces;
+using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
 using HomeBudget.Core.Models;
@@ -408,6 +410,96 @@ namespace HomeBudget.Components.Operations.Tests.Services
         }
 
         [Test]
+        public async Task SyncHistory_WhenSameDayTransfersShareTimestamp_ThenUsesStreamRevisionForRunningBalances()
+        {
+            var paymentAccountId = Guid.Parse("ac11dc26-dd63-49da-9d2e-4d9bcf4c2d4a");
+            var operationDay = new DateOnly(2024, 3, 12);
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+            var operationIds = new[]
+            {
+                Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+                Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Guid.Parse("80000000-0000-0000-0000-000000000000")
+            };
+            var operations = new[]
+            {
+                CreateTransferEvent(paymentAccountId, operationIds[0], -2m, operationDay, 0),
+                CreateTransferEvent(paymentAccountId, operationIds[1], -5.1m, operationDay, 1),
+                CreateTransferEvent(paymentAccountId, operationIds[2], -7.25m, operationDay, 2)
+            };
+
+            var paymentsHistoryClientMock = BuildHistoryClientMock((_, records, _) => rewrittenRecords = records.ToList());
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                new Mock<ICategoryDocumentsClient>().Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                operations);
+
+            Assert.Multiple(() =>
+            {
+                result.Payload.Should().Be(-14.35m);
+                rewrittenRecords.Select(record => record.Record.Key).Should().Equal(operationIds);
+                rewrittenRecords.Select(record => record.StreamRevision).Should().Equal(0L, 1L, 2L);
+                rewrittenRecords.Select(record => record.Balance).Should().Equal(-2m, -7.1m, -14.35m);
+            });
+        }
+
+        [Test]
+        public async Task SyncHistory_WhenPaymentsAndTransfersAreMixed_ThenUsesAccountLocalSignedAmounts()
+        {
+            var paymentAccountId = Guid.Parse("ac11dc26-dd63-49da-9d2e-4d9bcf4c2d4a");
+            var expenseCategoryId = Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2");
+            var incomeCategoryId = Guid.Parse("8edca550-3e18-4c3d-8235-7ff99357e61a");
+            var operationDay = new DateOnly(2024, 3, 12);
+            IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
+            var operations = new[]
+            {
+                CreatePaymentEvent(paymentAccountId, Guid.NewGuid(), expenseCategoryId, 2m, operationDay, 0),
+                CreateTransferEvent(paymentAccountId, Guid.NewGuid(), -5.1m, operationDay, 1),
+                CreatePaymentEvent(paymentAccountId, Guid.NewGuid(), incomeCategoryId, 10m, operationDay, 2),
+                CreateTransferEvent(paymentAccountId, Guid.NewGuid(), -7.25m, operationDay, 3)
+            };
+
+            var paymentsHistoryClientMock = BuildHistoryClientMock((_, records, _) => rewrittenRecords = records.ToList());
+            var sut = new PaymentOperationsHistoryService(
+                paymentsHistoryClientMock.Object,
+                BuildCategoriesClientMock(
+                    (expenseCategoryId, CategoryTypes.Expense),
+                    (incomeCategoryId, CategoryTypes.Income)).Object);
+
+            var result = await sut.SyncHistoryAsync(
+                operationDay.ToFinancialPeriod().ToFinancialMonthIdentifier(paymentAccountId),
+                operations);
+
+            Assert.Multiple(() =>
+            {
+                result.Payload.Should().Be(-4.35m);
+                rewrittenRecords.Select(record => record.Balance).Should().Equal(-2m, -7.1m, 2.9m, -4.35m);
+                rewrittenRecords.Last().Balance.Should().Be(rewrittenRecords.Sum(record => record.Record.CalculateIncrement(
+                    new Dictionary<Guid, Category>
+                    {
+                        [expenseCategoryId] = new Category(CategoryTypes.Expense, ["expense"]),
+                        [incomeCategoryId] = new Category(CategoryTypes.Income, ["income"])
+                    })));
+            });
+        }
+
+        [Test]
+        public void FinancialTransaction_WhenSerializedAndDeserialized_ThenRetainsOperationUnixTime()
+        {
+            var source = new FinancialTransaction
+            {
+                OperationUnixTime = 1_700_000_000_000
+            };
+
+            var result = JsonSerializer.Deserialize<FinancialTransaction>(JsonSerializer.Serialize(source));
+
+            result.OperationUnixTime.Should().Be(source.OperationUnixTime);
+        }
+
+        [Test]
         public void GetMonthPeriodPaymentAccountIdentifier_WhenCalled_ThenUsesCanonicalFinancialPeriodIdentifier()
         {
             var paymentAccountId = Guid.Parse("0330ec5c-643e-4833-9ad5-85085cb42ee5");
@@ -496,6 +588,27 @@ namespace HomeBudget.Components.Operations.Tests.Services
             return categoriesClient;
         }
 
+        private static Mock<ICategoryDocumentsClient> BuildCategoriesClientMock(
+            params (Guid CategoryId, CategoryTypes CategoryType)[] categories)
+        {
+            var categoryDocuments = categories
+                .Select(category => new CategoryDocument
+                {
+                    Payload = new Category(category.CategoryType, ["test-category"])
+                    {
+                        Key = category.CategoryId
+                    }
+                })
+                .ToArray();
+            var categoriesClient = new Mock<ICategoryDocumentsClient>();
+
+            categoriesClient
+                .Setup(c => c.GetByIdsAsync(It.IsAny<IEnumerable<Guid>>()))
+                .ReturnsAsync(Result<IReadOnlyCollection<CategoryDocument>>.Succeeded(categoryDocuments));
+
+            return categoriesClient;
+        }
+
         private static Mock<IPaymentsHistoryDocumentsClient> BuildHistoryClientMock(
             Action<string, IEnumerable<PaymentOperationHistoryRecord>, Guid> rewriteCallback)
         {
@@ -534,6 +647,54 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     CategoryId = categoryId,
                     Amount = amount,
                     OperationDay = operationDay
+                }
+            };
+        }
+
+        private static PaymentOperationEvent CreateTransferEvent(
+            Guid paymentAccountId,
+            Guid operationId,
+            decimal amount,
+            DateOnly operationDay,
+            long streamRevision)
+        {
+            return new PaymentOperationEvent
+            {
+                EventType = PaymentEventTypes.Added,
+                SequenceNumber = streamRevision,
+                Payload = new FinancialTransaction
+                {
+                    PaymentAccountId = paymentAccountId,
+                    Key = operationId,
+                    Amount = amount,
+                    OperationDay = operationDay,
+                    OperationUnixTime = 1_700_000_000_000,
+                    TransactionType = TransactionTypes.Transfer
+                }
+            };
+        }
+
+        private static PaymentOperationEvent CreatePaymentEvent(
+            Guid paymentAccountId,
+            Guid operationId,
+            Guid categoryId,
+            decimal amount,
+            DateOnly operationDay,
+            long streamRevision)
+        {
+            return new PaymentOperationEvent
+            {
+                EventType = PaymentEventTypes.Added,
+                SequenceNumber = streamRevision,
+                Payload = new FinancialTransaction
+                {
+                    PaymentAccountId = paymentAccountId,
+                    Key = operationId,
+                    CategoryId = categoryId,
+                    Amount = amount,
+                    OperationDay = operationDay,
+                    OperationUnixTime = 1_700_000_000_000,
+                    TransactionType = TransactionTypes.Payment
                 }
             };
         }

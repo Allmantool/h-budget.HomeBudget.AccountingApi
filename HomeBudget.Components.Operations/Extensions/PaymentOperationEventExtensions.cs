@@ -25,9 +25,7 @@ namespace HomeBudget.Components.Operations.Extensions
                 .ToList();
 
             return validAndMostUpToDateOperations
-                .OrderBy(ev => ev.Payload.OperationDay)
-                .ThenBy(ev => ev.Payload.OperationUnixTime)
-                .ThenBy(ev => ev.Payload.Key)
+                .OrderByHistoryOrder()
                 .ToList();
         }
 
@@ -38,13 +36,14 @@ namespace HomeBudget.Components.Operations.Extensions
             var historyRecords = new List<PaymentOperationHistoryRecord>(operations.Count);
             var balance = 0m;
 
-            foreach (var operation in operations.Select(x => x.Payload))
+            foreach (var operation in operations.OrderByHistoryOrder())
             {
-                balance += operation.CalculateIncrement(categoryMap);
+                balance += operation.Payload.CalculateIncrement(categoryMap);
 
                 historyRecords.Add(new PaymentOperationHistoryRecord
                 {
-                    Record = operation,
+                    Record = operation.Payload,
+                    StreamRevision = operation.SequenceNumber,
                     Balance = balance
                 });
             }

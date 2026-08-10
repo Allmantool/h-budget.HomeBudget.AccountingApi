@@ -13,6 +13,7 @@ using HomeBudget.Components.Accounts.Commands.Models;
 using HomeBudget.Components.Accounts.Services.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
+using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
@@ -117,8 +118,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     .Select(d => d.Payload);
 
                 var syncedStateRecords = monthBalanceHistoryRecords
-                    .GroupBy(i => i.Record.Key)
-                    .Select(gr => gr.MaxBy(ev => (ev.Record.OperationDay, ev.Record.OperationUnixTime)));
+                    .GetMostRecentByOperationKey();
 
                 var totalBalanceForAccount = syncedStateRecords.Sum(r => r.Balance);
 
