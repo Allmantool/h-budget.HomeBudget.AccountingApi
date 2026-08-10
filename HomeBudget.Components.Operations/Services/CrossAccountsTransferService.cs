@@ -34,6 +34,8 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure(senderOperation.StatusMessage);
             }
 
+            senderOperation.Payload.ConversionMultiplier = payload.Multiplier;
+
             var recipientOperation = financialTransactionFactory
                 .CreateTransfer(
                     payload.Recipient,
@@ -43,6 +45,8 @@ namespace HomeBudget.Components.Operations.Services
             {
                 return Result<Guid>.Failure(recipientOperation.StatusMessage);
             }
+
+            recipientOperation.Payload.ConversionMultiplier = payload.Multiplier;
 
             var transferOperation = await crossAccountsTransferBuilder
                 .WithSender(senderOperation.Payload)

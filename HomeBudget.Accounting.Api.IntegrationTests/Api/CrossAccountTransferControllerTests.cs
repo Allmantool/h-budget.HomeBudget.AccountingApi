@@ -94,6 +94,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 recipientOperationId.Should().Be(senderOperationId);
                 senderResponse.Record.RelatedPaymentAccountId.Should().Be(recipientAccountId);
                 recipientResponse.Record.RelatedPaymentAccountId.Should().Be(senderAccountId);
+                senderResponse.Record.ConversionMultiplier.Should().Be(requestBody.Multiplier);
+                recipientResponse.Record.ConversionMultiplier.Should().Be(requestBody.Multiplier);
             });
         }
 

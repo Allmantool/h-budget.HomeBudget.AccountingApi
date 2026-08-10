@@ -15,7 +15,11 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
                 .ForMember(
                     dest => dest.RelatedPaymentAccountId,
                     opt => opt.MapFrom(src =>
-                        src.TransactionType.Key == TransactionTypes.Transfer.Key ? src.ContractorId : (System.Guid?)null));
+                        src.TransactionType.Key == TransactionTypes.Transfer.Key ? src.ContractorId : (System.Guid?)null))
+                .ForMember(
+                    dest => dest.ConversionMultiplier,
+                    opt => opt.MapFrom(src =>
+                        src.TransactionType.Key == TransactionTypes.Transfer.Key ? src.ConversionMultiplier : null));
 
             CreateMap<PaymentOperationHistoryRecord, PaymentOperationHistoryRecordResponse>();
         }

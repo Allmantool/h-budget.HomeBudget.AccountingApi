@@ -12,6 +12,7 @@ namespace HomeBudget.Accounting.Domain.Models
         public Guid ContractorId { get; set; }
         public Guid CategoryId { get; set; }
         public Guid PaymentAccountId { get; set; }
+        public decimal? ConversionMultiplier { get; set; }
         public decimal Amount { get; set; }
         public int ScopedOperationId { get; set; }
     }
