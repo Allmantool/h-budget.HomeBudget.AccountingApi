@@ -8,6 +8,7 @@ namespace HomeBudget.Components.Operations.Models
         public Guid Recipient { get; set; }
         public decimal Amount { get; set; }
         public decimal Multiplier { get; set; }
+        public decimal? CustomConversionMultiplier { get; set; }
         public DateOnly OperationAt { get; set; }
     }
 }
