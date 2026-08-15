@@ -100,6 +100,44 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task ApplyTransfer_WithCustomConversionMultiplier_ThenPersistsTheCustomRateAsync()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Cash, CurrencyTypes.Byn)).Payload;
+            var requestBody = new CrossAccountsTransferRequest
+            {
+                Amount = 15m,
+                Recipient = recipientAccountId,
+                Sender = senderAccountId,
+                OperationAt = new DateOnly(2024, 05, 07),
+                Multiplier = 2.977m,
+                CustomConversionMultiplier = 3.1m
+            };
+
+            var transferOperationResponse = await _restClient.ExecuteWithDelayAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post).AddJsonBody(requestBody),
+                executionDelayAfterInMs: 20000);
+
+            transferOperationResponse.IsSuccessful.Should().BeTrue(DescribeResponse(transferOperationResponse));
+            transferOperationResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(transferOperationResponse));
+
+            var transferOperationId = transferOperationResponse.Data.Payload.PaymentOperationId;
+            var knownOperationIds = new[] { transferOperationId };
+            var recipientHistory = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == 1 && records.Single().Balance == 46.5m,
+                knownOperationIds);
+            var senderHistory = await WaitForHistoryAsync(senderAccountId, records => records.Count == 1, knownOperationIds);
+
+            Assert.Multiple(() =>
+            {
+                senderHistory.Single().Record.ConversionMultiplier.Should().Be(3.1m);
+                recipientHistory.Single().Record.ConversionMultiplier.Should().Be(3.1m);
+                recipientHistory.Single().Record.Amount.Should().Be(46.5m);
+            });
+        }
+
+        [Test]
         public async Task ApplyTransfer_WithOpeningBalances_ThenHistoryShowsEachAccountsResultingBalanceAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(34m, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;

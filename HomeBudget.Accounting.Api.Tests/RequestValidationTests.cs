@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System;
 using System.Linq;
 
 using FluentAssertions;
@@ -86,6 +87,25 @@ namespace HomeBudget.Accounting.Api.Tests
             var errors = Validate(request);
 
             errors.Should().Contain(error => error.MemberNames.Contains(nameof(CreateContractorRequest.NameNodes)));
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void CrossAccountsTransferRequest_WhenCustomMultiplierIsNotPositive_ShouldReturnValidationError(decimal multiplier)
+        {
+            var request = new CrossAccountsTransferRequest
+            {
+                Sender = Guid.NewGuid(),
+                Recipient = Guid.NewGuid(),
+                Amount = 1m,
+                Multiplier = 1m,
+                CustomConversionMultiplier = multiplier,
+                OperationAt = new(2026, 5, 11)
+            };
+
+            var errors = Validate(request);
+
+            errors.Should().Contain(error => error.MemberNames.Contains(nameof(CrossAccountsTransferRequest.CustomConversionMultiplier)));
         }
 
         private static IReadOnlyCollection<ValidationResult> Validate(object request)

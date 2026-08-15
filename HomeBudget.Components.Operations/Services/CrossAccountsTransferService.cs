@@ -7,6 +7,7 @@ using MediatR;
 
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Factories;
+using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
@@ -18,12 +19,33 @@ namespace HomeBudget.Components.Operations.Services
     internal class CrossAccountsTransferService(
         ISender mediator,
         IPaymentsHistoryDocumentsClient documentsClient,
+        IPaymentAccountDocumentClient paymentAccountDocumentClient,
         IFinancialTransactionFactory financialTransactionFactory,
         ICrossAccountsTransferBuilder crossAccountsTransferBuilder)
         : ICrossAccountsTransferService
     {
         public async Task<Result<Guid>> ApplyAsync(CrossAccountsTransferPayload payload, CancellationToken token)
         {
+            var multiplier = payload.CustomConversionMultiplier ?? payload.Multiplier;
+            if (multiplier <= 0m)
+            {
+                return Result<Guid>.Failure("Transfer multiplier must be greater than zero");
+            }
+
+            if (payload.CustomConversionMultiplier.HasValue)
+            {
+                var sameCurrencyResult = await IsSameCurrencyTransferAsync(payload.Sender, payload.Recipient);
+                if (!sameCurrencyResult.IsSucceeded)
+                {
+                    return Result<Guid>.Failure(sameCurrencyResult.StatusMessage);
+                }
+
+                if (sameCurrencyResult.Payload)
+                {
+                    return Result<Guid>.Failure("A custom conversion multiplier cannot be used for a same-currency transfer");
+                }
+            }
+
             var senderOperation = financialTransactionFactory
                 .CreateTransfer(
                     payload.Sender,
@@ -34,19 +56,19 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure(senderOperation.StatusMessage);
             }
 
-            senderOperation.Payload.ConversionMultiplier = payload.Multiplier;
+            senderOperation.Payload.ConversionMultiplier = multiplier;
 
             var recipientOperation = financialTransactionFactory
                 .CreateTransfer(
                     payload.Recipient,
-                    Math.Abs(payload.Amount * payload.Multiplier),
+                    Math.Abs(payload.Amount * multiplier),
                     payload.OperationAt);
             if (!recipientOperation.IsSucceeded)
             {
                 return Result<Guid>.Failure(recipientOperation.StatusMessage);
             }
 
-            recipientOperation.Payload.ConversionMultiplier = payload.Multiplier;
+            recipientOperation.Payload.ConversionMultiplier = multiplier;
 
             var transferOperation = await crossAccountsTransferBuilder
                 .WithSender(senderOperation.Payload)
@@ -58,6 +80,23 @@ namespace HomeBudget.Components.Operations.Services
             }
 
             return await mediator.Send(new ApplyTransferCommand(transferOperation.Payload), token);
+        }
+
+        private async Task<Result<bool>> IsSameCurrencyTransferAsync(Guid senderAccountId, Guid recipientAccountId)
+        {
+            var senderAccountResult = await paymentAccountDocumentClient.GetByIdAsync(senderAccountId.ToString());
+            if (!senderAccountResult.IsSucceeded)
+            {
+                return Result<bool>.Failure(senderAccountResult.StatusMessage);
+            }
+
+            var recipientAccountResult = await paymentAccountDocumentClient.GetByIdAsync(recipientAccountId.ToString());
+            if (!recipientAccountResult.IsSucceeded)
+            {
+                return Result<bool>.Failure(recipientAccountResult.StatusMessage);
+            }
+
+            return Result<bool>.Succeeded(senderAccountResult.Payload.Payload.Currency == recipientAccountResult.Payload.Payload.Currency);
         }
 
         public async Task<Result<IEnumerable<Guid>>> RemoveAsync(RemoveTransferPayload removeTransferPayload, CancellationToken token)

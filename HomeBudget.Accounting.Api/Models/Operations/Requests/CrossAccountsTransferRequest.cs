@@ -11,6 +11,7 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
         public Guid Recipient { get; set; }
         public decimal Amount { get; set; }
         public decimal Multiplier { get; set; }
+        public decimal? CustomConversionMultiplier { get; set; }
         public DateOnly OperationAt { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -38,6 +39,13 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
             if (Multiplier <= 0m)
             {
                 yield return new ValidationResult("Multiplier must be greater than zero", [nameof(Multiplier)]);
+            }
+
+            if (CustomConversionMultiplier is <= 0m)
+            {
+                yield return new ValidationResult(
+                    "Custom conversion multiplier must be greater than zero",
+                    [nameof(CustomConversionMultiplier)]);
             }
 
             if (OperationAt == default)
