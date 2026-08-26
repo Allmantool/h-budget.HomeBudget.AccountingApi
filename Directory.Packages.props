@@ -10,7 +10,7 @@
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="Dapper" Version="2.1.79" />
-    <PackageVersion Include="Elastic.Apm.NetCoreAll" Version="1.34.5" />
+    <PackageVersion Include="Elastic.Apm.NetCoreAll" Version="1.34.6" />
     <PackageVersion Include="Elastic.Apm.SerilogEnricher" Version="9.0.0" />
     <PackageVersion Include="Elastic.Clients.Elasticsearch" Version="9.5.0" />
     <PackageVersion Include="Elastic.Serilog.Sinks" Version="9.0.0" />
