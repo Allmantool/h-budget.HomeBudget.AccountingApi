@@ -25,6 +25,21 @@ When priorities compete, use this order:
 
 Prefer the smallest production-safe change that satisfies the request. Do not optimize, generalize, or redesign beyond the current problem unless the user explicitly asks for it or the existing code makes a narrow change unsafe.
 
+## Codex Engineering Harness
+
+Use the repository skills in `.codex/skills` for their matching workflows. Keep these root rules mandatory and the detailed procedure in the skills.
+
+- Classify work before editing. Tiny non-behavioral changes may use the lightweight path; default to full SDD when behavior, contracts, persistence, architecture, security, performance, or cross-project dependencies can change.
+- For full SDD, inspect the affected production code, tests, configuration, and CI first. Record confirmed facts, assumptions, and open questions in a task specification under `docs/specs/` using its template. The specification is the persistent task state for work that may span sessions.
+- A full specification must make the problem, goal, non-goals, observable requirements, acceptance criteria, affected boundaries, test strategy, verification plan, and requirement traceability explicit. Keep it proportional; do not add ceremony to a typo or formatting-only change.
+- Treat behavioral changes as TDD where technically practical: establish a focused RED test that fails for the expected missing behavior, implement the smallest GREEN change, then refactor with tests green. For bugs, reproduce the invariant failure and add a regression test before the fix. Tests added only after implementation are useful coverage, not retroactive TDD.
+- Never obtain green by weakening or skipping tests, broadening timeouts/retries without evidence, swallowing correctness-critical failures, or changing expectations to match a known defect. Correct a test only when the specification proves it wrong, and record why.
+- Before changing Kafka, EventStoreDB, MongoDB, SQL, outbox/inbox, projections, or payment balances, identify the source of truth, write/read models, transaction and acknowledgement boundaries, consistency model, idempotency/concurrency boundaries, and relevant failure/restart/replay behavior. A Mongo projection is not a write authority unless an explicit architecture decision says so.
+- Match verification to the invariant. Unit tests do not alone prove Kafka delivery, EventStore persistence, projection consistency, outbox recovery, restart, or duplicate-delivery guarantees. Reuse the existing Testcontainers infrastructure and condition-based `PaymentProjectionWaiter` where integration semantics matter.
+- For financial behavior, explicitly consider amount, sign/direction, account and operation identity, balance delta, duplicate effect, and reconciliation invariants where relevant.
+- Separate implementation from verification. Before reporting a non-trivial change complete, evaluate every acceptance criterion with linked test or runtime evidence, review the focused diff, record remaining risks, and update the specification status/progress so another session can resume safely.
+- Keep scope controlled: record unrelated improvements as follow-ups rather than silently including them. Preserve existing project-specific guidance unless an intentional replacement is documented.
+
 ## Repository Structure
 
 - `HomeBudget.Accounting.Api`: ASP.NET Core API entrypoint, controllers, middleware, Swagger, app wiring.
