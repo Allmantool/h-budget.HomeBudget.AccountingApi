@@ -110,7 +110,32 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     outboxActivity.SetTag("messaging.message_id", messageId);
                 }
 
-                await outboxPaymentStatusService.WriteRecordAsync(dbEntity);
+                if (request is IIdempotentPaymentCommand idempotentCommand &&
+                    idempotentCommand.CommandContext is not null)
+                {
+                    var commandContext = idempotentCommand.CommandContext;
+                    dbEntity = dbEntity with
+                    {
+                        IdempotencyKeyHash = commandContext.IdempotencyKeyHash,
+                        RequestFingerprint = commandContext.RequestFingerprint,
+                        CommandType = commandContext.CommandType
+                    };
+
+                    var registration = await outboxPaymentStatusService.WriteIdempotentRecordAsync(dbEntity);
+                    commandContext.SetRegistration(registration.CommandId, registration.WasAlreadyAccepted);
+
+                    if (registration.WasAlreadyAccepted &&
+                        !string.Equals(registration.RequestFingerprint, commandContext.RequestFingerprint, StringComparison.Ordinal))
+                    {
+                        return Result<Guid>.Failure("The idempotency key has already been used for a different payment command.");
+                    }
+
+                    paymentEvent.Payload.Key = registration.OperationId;
+                }
+                else
+                {
+                    await outboxPaymentStatusService.WriteRecordAsync(dbEntity);
+                }
                 outboxStopwatch.Stop();
                 TelemetryMetrics.OutboxWriteDurationMs.Record(
                     outboxStopwatch.Elapsed.TotalMilliseconds,

@@ -5,14 +5,17 @@ using MediatR;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Core.Commands;
 using HomeBudget.Core.Models;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Commands.Models
 {
     internal sealed class UpdatePaymentOperationCommand(FinancialTransaction operationForUpdate)
-        : IRequest<Result<Guid>>, ICorrelatedCommand
+        : IRequest<Result<Guid>>, ICorrelatedCommand, IIdempotentPaymentCommand
     {
         public string CorrelationId { get; set; }
 
         public FinancialTransaction OperationForUpdate { get; } = operationForUpdate;
+
+        public PaymentCommandContext CommandContext { get; init; }
     }
 }

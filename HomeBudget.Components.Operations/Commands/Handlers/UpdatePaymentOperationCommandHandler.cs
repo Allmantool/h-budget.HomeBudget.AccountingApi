@@ -9,6 +9,7 @@ using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
 
@@ -45,12 +46,39 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             if (ifFFinancialPeriodHasBeenChanged)
             {
-                var removeCommand = new RemovePaymentOperationCommand(operationBeforeUpdate.Payload.Record);
+                var removeCommand = new RemovePaymentOperationCommand(operationBeforeUpdate.Payload.Record)
+                {
+                    CommandContext = CreateRelocationRemoveContext(request, accountId, operationId)
+                };
 
                 await sender.Send(removeCommand, cancellationToken);
             }
 
             return await HandleAsync(request, cancellationToken);
+        }
+
+        private static PaymentCommandContext CreateRelocationRemoveContext(
+            UpdatePaymentOperationCommand request,
+            Guid paymentAccountId,
+            Guid operationId)
+        {
+            var context = request.CommandContext;
+            if (context is null)
+            {
+                return null;
+            }
+
+            return new PaymentCommandContext
+            {
+                IdempotencyKeyHash = PaymentCommandFingerprint.CreateDerivedIdempotencyKeyHash(
+                    context.IdempotencyKeyHash,
+                    "relocation-remove"),
+                RequestFingerprint = PaymentCommandFingerprint.CreateDelete(
+                    PaymentCommandTypes.Delete,
+                    paymentAccountId,
+                    operationId),
+                CommandType = PaymentCommandTypes.Delete
+            };
         }
     }
 }

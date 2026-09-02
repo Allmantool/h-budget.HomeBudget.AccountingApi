@@ -117,12 +117,22 @@ namespace HomeBudget.Components.Operations.Consumers
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var inboxService = scope.ServiceProvider.GetRequiredService<IPaymentMessageInboxService>();
 
-            await ProcessMessageAsync(payload, inboxService, cancellationToken);
+            var outboxService = scope.ServiceProvider.GetRequiredService<IOutboxPaymentStatusService>();
+            await ProcessMessageAsync(payload, inboxService, outboxService, cancellationToken);
         }
 
         private async Task ProcessMessageAsync(
             ConsumeResult<string, string> payload,
             IPaymentMessageInboxService inboxService,
+            CancellationToken cancellationToken)
+        {
+            await ProcessMessageAsync(payload, inboxService, null, cancellationToken);
+        }
+
+        private async Task ProcessMessageAsync(
+            ConsumeResult<string, string> payload,
+            IPaymentMessageInboxService inboxService,
+            IOutboxPaymentStatusService outboxService,
             CancellationToken cancellationToken)
         {
             var message = payload.Message;
@@ -310,7 +320,16 @@ namespace HomeBudget.Components.Operations.Consumers
 
                 _logger.PoisonMessageReachedDeadLetter(messageId, failure.RetryCount, ex.Message, ex);
                 await SendPoisonMessageToDeadLetterQueueAsync(payload, ex, cancellationToken);
+                if (outboxService is not null)
+                {
+                    await outboxService.MarkDeadLetteredAsync(messageId, ex.Message, _dateTimeProvider.GetNowUtc());
+                }
                 return;
+            }
+
+            if (outboxService is not null)
+            {
+                await outboxService.MarkPersistedAsync(messageId, _dateTimeProvider.GetNowUtc());
             }
 
             await inboxService.MarkProcessedAsync(messageId, _dateTimeProvider.GetNowUtc());

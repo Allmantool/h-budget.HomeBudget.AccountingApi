@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -13,6 +14,7 @@ namespace HomeBudget.Accounting.Api.Filters
             ResultExecutionDelegate next)
         {
             if (context.Result is ObjectResult objectResult
+                && (objectResult.StatusCode is null || objectResult.StatusCode == StatusCodes.Status200OK)
                 && TryGetFailureMessage(objectResult.Value, out var statusMessage))
             {
                 objectResult.StatusCode = ApiErrorStatusCodeClassifier.FromFailureMessage(statusMessage);
