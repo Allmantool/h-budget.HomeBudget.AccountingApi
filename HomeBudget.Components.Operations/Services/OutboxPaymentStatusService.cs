@@ -234,7 +234,10 @@ namespace HomeBudget.Components.Operations.Services
         {
             const string sql = @"
                 UPDATE dbo.OutboxAccountPayments
-                   SET Status = @PublishedStatus,
+                   SET Status = CASE
+                            WHEN Status IN (@PersistedStatus, @ProjectedStatus, @DeadLetterStatus) THEN Status
+                            ELSE @PublishedStatus
+                        END,
                        UpdatedAt = @PublishedUtc,
                        UpdatedUtc = @PublishedUtc,
                        PublishedAt = COALESCE(PublishedAt, @PublishedUtc),
@@ -250,6 +253,9 @@ namespace HomeBudget.Components.Operations.Services
                 MessageId = messageId,
                 LockedBy = lockedBy,
                 PublishedStatus = OutboxStatus.Published.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
+                ProjectedStatus = OutboxStatus.Projected.Key,
+                DeadLetterStatus = OutboxStatus.DeadLettered.Key,
                 PublishedUtc = publishedUtc
             });
 
@@ -276,7 +282,8 @@ namespace HomeBudget.Components.Operations.Services
                        LockedBy = NULL,
                        LockedUntilUtc = NULL
                  WHERE MessageId = @MessageId
-                   AND LockedBy = @LockedBy;";
+                   AND LockedBy = @LockedBy
+                   AND Status < @PersistedStatus;";
 
             await cdcWriter.ExecuteAsync(sql, new OutboxFailureUpdateEntity
             {
@@ -286,6 +293,7 @@ namespace HomeBudget.Components.Operations.Services
                 MaxRetryAttempts = maxRetryAttempts,
                 FailedStatus = OutboxStatus.Failed.Key,
                 DeadLetterStatus = OutboxStatus.DeadLettered.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
                 UpdatedUtc = updatedUtc
             });
 
@@ -296,15 +304,21 @@ namespace HomeBudget.Components.Operations.Services
         {
             const string updateSql = @"
                 UPDATE dbo.OutboxAccountPayments
-                   SET Status = @Status,
+                   SET Status = CASE
+                            WHEN Status = @DeadLetterStatus THEN Status
+                            WHEN Status IN (@PersistedStatus, @ProjectedStatus) THEN Status
+                            WHEN @Status = @DeadLetterStatus THEN @DeadLetterStatus
+                            WHEN @Status > Status THEN @Status
+                            ELSE Status
+                        END,
                        UpdatedAt = @UpdatedAt,
                        UpdatedUtc = @UpdatedAt,
                        PublishedAt = CASE
-                           WHEN @Status = 1 AND PublishedAt IS NULL THEN @UpdatedAt
+                            WHEN @Status = 1 AND Status = 0 AND PublishedAt IS NULL THEN @UpdatedAt
                            ELSE PublishedAt
                        END,
                        PublishedUtc = CASE
-                           WHEN @Status = 1 AND PublishedUtc IS NULL THEN @UpdatedAt
+                            WHEN @Status = 1 AND Status = 0 AND PublishedUtc IS NULL THEN @UpdatedAt
                            ELSE PublishedUtc
                        END
                  WHERE MessageId = @MessageId;";
@@ -315,6 +329,9 @@ namespace HomeBudget.Components.Operations.Services
                 await cdcWriter.ExecuteAsync(updateSql, new OutboxStatusUpdateEntity
                 {
                     Status = status.Key,
+                    PersistedStatus = OutboxStatus.Persisted.Key,
+                    ProjectedStatus = OutboxStatus.Projected.Key,
+                    DeadLetterStatus = OutboxStatus.DeadLettered.Key,
                     UpdatedAt = updatedAt,
                     MessageId = messageId
                 });
@@ -352,12 +369,13 @@ namespace HomeBudget.Components.Operations.Services
                        UpdatedAt = @UpdatedUtc,
                        UpdatedUtc = @UpdatedUtc
                  WHERE MessageId = @MessageId
-                   AND Status <> @Status;";
+                   AND Status < @PersistedStatus;";
 
             await cdcWriter.ExecuteAsync(sql, new OutboxCommandLifecycleUpdateEntity
             {
                 MessageId = messageId,
                 Status = OutboxStatus.DeadLettered.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
                 LastError = Truncate(lastError, LastErrorMaxLength),
                 UpdatedUtc = updatedUtc
             });
@@ -383,8 +401,14 @@ namespace HomeBudget.Components.Operations.Services
         {
             var sql = $@"
                 UPDATE dbo.OutboxAccountPayments
-                   SET Status = @Status,
-                       {completedAtColumn} = COALESCE({completedAtColumn}, @UpdatedUtc),
+                   SET Status = CASE
+                            WHEN Status = @DeadLetterStatus OR Status > @Status THEN Status
+                            ELSE @Status
+                        END,
+                        {completedAtColumn} = CASE
+                            WHEN Status = @DeadLetterStatus OR Status > @Status THEN {completedAtColumn}
+                            ELSE COALESCE({completedAtColumn}, @UpdatedUtc)
+                        END,
                        UpdatedAt = @UpdatedUtc,
                        UpdatedUtc = @UpdatedUtc
                  WHERE MessageId = @MessageId

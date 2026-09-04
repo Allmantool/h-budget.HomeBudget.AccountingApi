@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
@@ -16,6 +18,7 @@ using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Clients;
 using HomeBudget.Components.Accounts.Commands.Models;
+using HomeBudget.Components.Accounts.Commands.Handlers;
 using HomeBudget.Components.Accounts.Services;
 using HomeBudget.Components.Categories.Clients;
 using HomeBudget.Components.Operations.Clients;
@@ -184,6 +187,77 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Commands.Handlers
             capturedCommand.Should().NotBeNull();
             capturedCommand.PaymentAccountId.Should().Be(accountId);
             capturedCommand.Balance.Should().Be(140m);
+        }
+
+        [Test]
+        public async Task ProjectionHandler_WhenAddedUpdatedAndRemovedEventsAreRedelivered_ShouldApplyEachLogicalStateOnce()
+        {
+            var suffix = Guid.NewGuid().ToString("N");
+            var dbOptions = new MongoDbOptions
+            {
+                LedgerDatabase = $"projection_duplicate_ledger_{suffix}",
+                PaymentAccounts = $"projection_duplicate_accounts_{suffix}",
+                PaymentsHistory = $"projection_duplicate_history_{suffix}",
+                HandBooks = $"projection_duplicate_handbooks_{suffix}",
+                BulkInsertChunkSize = 100,
+                ConnectionString = TestContainers.MongoDbContainer.GetConnectionString()
+            };
+            var mongoOptions = Options.Create(dbOptions);
+            using var paymentAccountDocumentsClient = new PaymentAccountDocumentClient(mongoOptions);
+            using var paymentsHistoryDocumentsClient = new PaymentsHistoryDocumentsClient(mongoOptions);
+            using var categoryDocumentsClient = new CategoryDocumentsClient(mongoOptions);
+            var accountId = Guid.NewGuid();
+            var operationId = Guid.NewGuid();
+            var operationDay = new DateOnly(2025, 3, 12);
+            await paymentAccountDocumentsClient.InsertOneAsync(new PaymentAccount
+            {
+                Key = accountId,
+                Agent = "projection-test",
+                InitialBalance = 100m,
+                Balance = 100m,
+                Currency = "BYN",
+                Description = "duplicate projection test",
+                Type = AccountTypes.Deposit
+            });
+            var balanceHandler = new UpdatePaymentAccountBalanceCommandHandler(
+                paymentAccountDocumentsClient,
+                Mock.Of<HomeBudget.Accounting.Notifications.Services.INotificationPublisher>(),
+                NullLogger<UpdatePaymentAccountBalanceCommandHandler>.Instance);
+            _sender
+                .Setup(x => x.Send(It.IsAny<UpdatePaymentAccountBalanceCommand>(), It.IsAny<CancellationToken>()))
+                .Returns<UpdatePaymentAccountBalanceCommand, CancellationToken>((command, cancellationToken) =>
+                    balanceHandler.Handle(command, cancellationToken));
+            var projectionHandler = new SyncOperationsHistoryCommandHandler(
+                _sender.Object,
+                _logger.Object,
+                new PaymentAccountService(paymentAccountDocumentsClient),
+                paymentsHistoryDocumentsClient,
+                new PaymentOperationsHistoryService(paymentsHistoryDocumentsClient, categoryDocumentsClient));
+            var added = BuildPaymentEvent(accountId, operationId, 10m, operationDay, PaymentEventTypes.Added, 1);
+            var updated = BuildPaymentEvent(accountId, operationId, 15m, operationDay, PaymentEventTypes.Updated, 2);
+            var removed = BuildPaymentEvent(accountId, operationId, 15m, operationDay, PaymentEventTypes.Removed, 3);
+
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [added]), _ct);
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [added]), _ct);
+
+            var afterAdded = await paymentsHistoryDocumentsClient.GetAsync(accountId);
+            afterAdded.Should().ContainSingle();
+            afterAdded.Single().Payload.Record.Amount.Should().Be(10m);
+            (await paymentAccountDocumentsClient.GetByIdAsync(accountId.ToString())).Payload.Payload.Balance.Should().Be(110m);
+
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [updated]), _ct);
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [updated]), _ct);
+
+            var afterUpdated = await paymentsHistoryDocumentsClient.GetAsync(accountId);
+            afterUpdated.Should().ContainSingle();
+            afterUpdated.Single().Payload.Record.Amount.Should().Be(15m);
+            (await paymentAccountDocumentsClient.GetByIdAsync(accountId.ToString())).Payload.Payload.Balance.Should().Be(115m);
+
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [removed]), _ct);
+            await projectionHandler.Handle(new SyncOperationsHistoryCommand(accountId, [removed]), _ct);
+
+            (await paymentsHistoryDocumentsClient.GetAsync(accountId)).Should().BeEmpty();
+            (await paymentAccountDocumentsClient.GetByIdAsync(accountId.ToString())).Payload.Payload.Balance.Should().Be(100m);
         }
 
         private static PaymentOperationEvent BuildPaymentEvent(
