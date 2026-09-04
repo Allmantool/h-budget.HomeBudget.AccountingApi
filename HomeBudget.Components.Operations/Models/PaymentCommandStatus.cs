@@ -1,4 +1,4 @@
-namespace HomeBudget.Components.Operations.Models
+﻿namespace HomeBudget.Components.Operations.Models
 {
     public enum PaymentCommandStatus
     {

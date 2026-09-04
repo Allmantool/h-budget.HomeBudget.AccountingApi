@@ -136,6 +136,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                 {
                     await outboxPaymentStatusService.WriteRecordAsync(dbEntity);
                 }
+
                 outboxStopwatch.Stop();
                 TelemetryMetrics.OutboxWriteDurationMs.Record(
                     outboxStopwatch.Elapsed.TotalMilliseconds,

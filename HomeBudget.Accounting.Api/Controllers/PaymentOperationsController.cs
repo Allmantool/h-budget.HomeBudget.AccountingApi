@@ -19,7 +19,8 @@ namespace HomeBudget.Accounting.Api.Controllers
     public class PaymentOperationsController(
         IMapper mapper,
         IPaymentOperationsService paymentOperationsService,
-        IOutboxPaymentStatusService outboxPaymentStatusService
+        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IIdempotencyPreflightService idempotencyPreflightService
         ) : ControllerBase
     {
         [HttpPost]
@@ -34,10 +35,11 @@ namespace HomeBudget.Accounting.Api.Controllers
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
-            var preflight = await GetIdempotencyPreflightAsync(
+            var preflight = await idempotencyPreflightService.GetIdempotencyPreflightAsync(
                 targetAccountGuid,
                 PaymentCommandTypes.Create,
-                PaymentCommandFingerprint.Create(PaymentCommandTypes.Create, targetAccountGuid, null, operationPayload));
+                PaymentCommandFingerprint.Create(PaymentCommandTypes.Create, targetAccountGuid, null, operationPayload),
+                Request.Headers["Idempotency-Key"].ToString());
 
             if (preflight.IsConflict)
             {
@@ -46,7 +48,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<CreateOperationResponse>.Succeeded(CreateResponse(paymentAccountId, preflight.ExistingCommand, true));
+                return Result<CreateOperationResponse>.Succeeded(CreateOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true));
             }
 
             var createResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, preflight.Context, token);
@@ -89,10 +91,11 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<RemoveOperationResponse>.Failure($"Invalid payment operation '{operationId}' has been provided");
             }
 
-            var preflight = await GetIdempotencyPreflightAsync(
+            var preflight = await idempotencyPreflightService.GetIdempotencyPreflightAsync(
                 targetAccountGuid,
                 PaymentCommandTypes.Delete,
-                PaymentCommandFingerprint.CreateDelete(PaymentCommandTypes.Delete, targetAccountGuid, targetOperationGuid));
+                PaymentCommandFingerprint.CreateDelete(PaymentCommandTypes.Delete, targetAccountGuid, targetOperationGuid),
+                Request.Headers["Idempotency-Key"].ToString());
 
             if (preflight.IsConflict)
             {
@@ -101,7 +104,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<RemoveOperationResponse>.Succeeded(CreateRemoveResponse(paymentAccountId, preflight.ExistingCommand, true));
+                return Result<RemoveOperationResponse>.Succeeded(RemoveOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true));
             }
 
             var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, targetOperationGuid, preflight.Context, token);
@@ -141,10 +144,11 @@ namespace HomeBudget.Accounting.Api.Controllers
             }
 
             var operationPayload = mapper.Map<PaymentOperationPayload>(request);
-            var preflight = await GetIdempotencyPreflightAsync(
+            var preflight = await idempotencyPreflightService.GetIdempotencyPreflightAsync(
                 targetAccountGuid,
                 PaymentCommandTypes.Update,
-                PaymentCommandFingerprint.Create(PaymentCommandTypes.Update, targetAccountGuid, targetOperationGuid, operationPayload));
+                PaymentCommandFingerprint.Create(PaymentCommandTypes.Update, targetAccountGuid, targetOperationGuid, operationPayload),
+                Request.Headers["Idempotency-Key"].ToString());
 
             if (preflight.IsConflict)
             {
@@ -153,7 +157,7 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<UpdateOperationResponse>.Succeeded(CreateUpdateResponse(paymentAccountId, operationId, preflight.ExistingCommand, true));
+                return Result<UpdateOperationResponse>.Succeeded(UpdateOperationResponse.From(paymentAccountId, operationId, preflight.ExistingCommand, true));
             }
 
             var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, targetOperationGuid, operationPayload, preflight.Context, token);
@@ -201,87 +205,6 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PersistedAt = command.PersistedUtc,
                 ProjectedAt = command.ProjectedUtc
             });
-        }
-
-        private async Task<IdempotencyPreflight> GetIdempotencyPreflightAsync(
-            Guid paymentAccountId,
-            string commandType,
-            string requestFingerprint)
-        {
-            var idempotencyKey = Request.Headers["Idempotency-Key"].ToString();
-            if (string.IsNullOrWhiteSpace(idempotencyKey))
-            {
-                return new IdempotencyPreflight();
-            }
-
-            if (idempotencyKey.Length > 200)
-            {
-                return new IdempotencyPreflight { IsConflict = true };
-            }
-
-            var keyHash = PaymentCommandFingerprint.HashIdempotencyKey(idempotencyKey);
-            var existingCommand = await outboxPaymentStatusService.GetCommandByIdempotencyKeyAsync(paymentAccountId, keyHash);
-            if (existingCommand is not null)
-            {
-                return new IdempotencyPreflight
-                {
-                    ExistingCommand = existingCommand,
-                    IsConflict = !string.Equals(existingCommand.RequestFingerprint, requestFingerprint, StringComparison.Ordinal)
-                };
-            }
-
-            return new IdempotencyPreflight
-            {
-                Context = new PaymentCommandContext
-                {
-                    IdempotencyKeyHash = keyHash,
-                    RequestFingerprint = requestFingerprint,
-                    CommandType = commandType
-                }
-            };
-        }
-
-        private static CreateOperationResponse CreateResponse(string paymentAccountId, PaymentCommandRecord command, bool duplicate)
-        {
-            return new CreateOperationResponse
-            {
-                PaymentAccountId = paymentAccountId,
-                PaymentOperationId = command.PaymentOperationId.ToString(),
-                CommandId = command.CommandId,
-                Status = command.Status.ToString(),
-                IsDuplicate = duplicate
-            };
-        }
-
-        private static RemoveOperationResponse CreateRemoveResponse(string paymentAccountId, PaymentCommandRecord command, bool duplicate)
-        {
-            return new RemoveOperationResponse
-            {
-                PaymentAccountId = paymentAccountId,
-                PaymentOperationId = command.PaymentOperationId.ToString(),
-                CommandId = command.CommandId,
-                Status = command.Status.ToString(),
-                IsDuplicate = duplicate
-            };
-        }
-
-        private static UpdateOperationResponse CreateUpdateResponse(string paymentAccountId, string operationId, PaymentCommandRecord command, bool duplicate)
-        {
-            return new UpdateOperationResponse
-            {
-                PaymentAccountId = paymentAccountId,
-                PaymentOperationId = command.PaymentOperationId == Guid.Empty ? operationId : command.PaymentOperationId.ToString(),
-                CommandId = command.CommandId,
-                Status = command.Status.ToString(),
-                IsDuplicate = duplicate
-            };
-        }
-
-        private sealed record IdempotencyPreflight
-        {
-            public PaymentCommandContext Context { get; init; }
-            public PaymentCommandRecord ExistingCommand { get; init; }
-            public bool IsConflict { get; init; }
         }
     }
 }

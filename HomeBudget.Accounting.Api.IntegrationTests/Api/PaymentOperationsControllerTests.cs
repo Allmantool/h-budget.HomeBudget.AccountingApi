@@ -596,7 +596,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             var idempotencyKey = Guid.NewGuid().ToString("N");
 
             Func<Task> firstAttempt = () => _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
-                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post)
                     .AddJsonBody(requestBody)
                     .AddHeader(DiscardResponseAfterAcceptedPaymentCommandFilter.HeaderName, "true"), idempotencyKey));
 

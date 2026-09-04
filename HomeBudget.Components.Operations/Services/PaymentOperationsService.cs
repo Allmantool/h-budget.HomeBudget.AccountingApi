@@ -66,7 +66,8 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure($"An 'operation' hasn't been created successfully. Details: '{operationForAddResult.StatusMessage}'");
             }
 
-            return await mediator.Send(new AddPaymentOperationCommand(operationForAddResult.Payload)
+            return await mediator.Send(
+                new AddPaymentOperationCommand(operationForAddResult.Payload)
             {
                 CommandContext = commandContext
             }, token);
@@ -184,7 +185,8 @@ namespace HomeBudget.Components.Operations.Services
                 TransactionType = TransactionTypes.Payment
             };
 
-            return await mediator.Send(new UpdatePaymentOperationCommand(operationForUpdate)
+            return await mediator.Send(
+                new UpdatePaymentOperationCommand(operationForUpdate)
             {
                 CommandContext = commandContext
             }, token);

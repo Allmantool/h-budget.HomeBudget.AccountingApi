@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace HomeBudget.Accounting.Api.Models.Operations.Responses
 {

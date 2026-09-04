@@ -324,6 +324,7 @@ namespace HomeBudget.Components.Operations.Consumers
                 {
                     await outboxService.MarkDeadLetteredAsync(messageId, ex.Message, _dateTimeProvider.GetNowUtc());
                 }
+
                 return;
             }
 
