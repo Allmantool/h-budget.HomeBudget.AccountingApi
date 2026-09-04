@@ -36,3 +36,35 @@ The fingerprint is UTF-8 SHA-256 of an ordinal, pipe-delimited representation. I
 ## Failure semantics
 
 If the outbox insert fails, the HTTP request fails and nothing is accepted. After acceptance, the existing outbox and inbox retry paths continue delivery. A timeout after acceptance may safely be retried only with the same key and payload; it returns the prior command identity and current status.
+
+## Verification record (2026-09-04)
+
+### Confirmed facts
+
+* The SQL Server Testcontainers factory no longer uses the global `integration-sql-server` container name. Fixtures use their generated container reference and connection string.
+* The idempotency acceptance check and insert now run in one SQL transaction with `XACT_ABORT`, `UPDLOCK`, and `HOLDLOCK`. This was necessary to make overlapping HTTP retries resolve to the stored command rather than a SQL infrastructure error.
+* Explicit MVC error statuses are preserved by the result-status filter. Ordinary legacy `Result<T>` failures with implicit `200 OK` status still receive their classified HTTP status.
+
+### Final verification matrix
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| Clean-database V7 migration and idempotency schema | PASS | Payment API Testcontainers suite starts a clean SQL database and exercises V7 columns/index through idempotent command writes. |
+| Same-key create retry | PASS | `Create_WhenIdempotencyKeyIsRetried_ShouldReuseTheCommandAndProjectOneOperation`: same command/operation ID, one history record, `Projected` lifecycle. |
+| Same-key update retry | PASS | `UpdateAndDelete_WhenIdempotencyKeysAreRetried_ShouldReuseTheirOriginalCommands`. |
+| Same-key delete retry | PASS | `UpdateAndDelete_WhenIdempotencyKeysAreRetried_ShouldReuseTheirOriginalCommands`. |
+| Different payload conflict | PASS | `Create_WhenIdempotencyKeyIsReusedForDifferentPayload_ShouldReturnConflictWithoutAnotherProjection`; HTTP 409 and one projected operation. |
+| Concurrent identical create | PASS | `Create_WhenConcurrentRetriesUseOneIdempotencyKey_ShouldAcceptOneCommandWithoutServerErrors`: eight overlapping requests, one command, one operation, one projection, no 5xx. |
+| Timeout after durable acceptance | PARTIAL | The create-retry test discards the first response semantics and proves the same-key retry; an actual HTTP response-loss/fault-injection seam is not present. |
+| Kafka redelivery | PARTIAL | `PaymentOperationsEventStoreIdempotencyTests.SendBatchAsync_WhenKafkaRedeliversSameMessage_ThenDoesNotDuplicate` exercises duplicate logical delivery against real EventStoreDB; a real Kafka consumer redelivery is not orchestrated. |
+| EventStore duplicate | PASS | `PaymentOperationsEventStoreIdempotencyTests` writes identical message/event identities twice to real EventStoreDB and asserts one stored event. |
+| Projection duplicate | PARTIAL | HTTP idempotency tests prove one projected history operation and one balance effect; direct repeated projection-delivery coverage is not yet present. |
+| Status endpoint | PARTIAL | Create retry proves account-scoped status reaches `Projected` with accepted/published/persisted/projected timestamps. Unknown-command and wrong-account cases are not covered. |
+| Status monotonicity | NOT TESTED | No deterministic late-transition test currently proves a newer lifecycle state cannot be overwritten by an older update. |
+| Worker restart/redelivery | PARTIAL | Component consumer tests cover retry/restart decision paths with mocks; a process restart using Kafka and EventStoreDB is not orchestrated. |
+| Missing idempotency header compatibility | PARTIAL | Existing API creation tests continue to pass without the header; this is not yet an explicit regression assertion. |
+| Integration harness repeatability | PASS | Payment API integration suite passed twice without manual Docker cleanup: 14/14 in 1m51s and 14/14 in 1m58s. A Docker Desktop restart was required between attempts because its daemon stopped externally; no container was manually removed. |
+
+### Release state
+
+**NOT READY**. The acceptance, concurrency, HTTP conflict, EventStore duplicate, and repeatable-harness invariants have evidence. End-to-end Kafka consumer redelivery, direct repeated projection delivery, lifecycle monotonicity, and a true response-loss timeout scenario still require deterministic distributed-boundary tests before a production safety claim.
