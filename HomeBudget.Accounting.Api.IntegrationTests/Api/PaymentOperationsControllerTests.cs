@@ -2,16 +2,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Confluent.Kafka;
 using FluentAssertions;
+using Microsoft.Data.SqlClient;
 using NUnit.Framework;
 using RestSharp;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
+using HomeBudget.Accounting.Api.IntegrationTests.Filters;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Api.Models.History;
@@ -19,6 +24,8 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Core.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Core.Models;
 
@@ -524,6 +531,357 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             balanceBefore.Should().BeLessThan(balanceAfter);
         }
 
+        [Test]
+        public async Task Create_WhenIdempotencyKeyIsRetried_ShouldReuseTheCommandAndProjectOneOperation()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenIdempotencyKeyIsRetried_ShouldReuseTheCommandAndProjectOneOperation))).Payload;
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 42.50m,
+                Comment = "idempotent-create",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 4)
+            };
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+
+            var firstResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(requestBody), idempotencyKey));
+            var retryResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(requestBody), idempotencyKey));
+
+            firstResponse.IsSuccessful.Should().BeTrue(DescribeResponse(firstResponse));
+            retryResponse.IsSuccessful.Should().BeTrue(DescribeResponse(retryResponse));
+            firstResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(firstResponse));
+            retryResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(retryResponse));
+            firstResponse.Data.Payload.IsDuplicate.Should().BeFalse();
+            retryResponse.Data.Payload.IsDuplicate.Should().BeTrue();
+            retryResponse.Data.Payload.CommandId.Should().Be(firstResponse.Data.Payload.CommandId);
+            retryResponse.Data.Payload.PaymentOperationId.Should().Be(firstResponse.Data.Payload.PaymentOperationId);
+
+            var operationId = Guid.Parse(firstResponse.Data.Payload.PaymentOperationId);
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "the idempotent create operation is projected exactly once",
+                [operationId]);
+
+            var statusResponse = await WaitForCommandStatusAsync(accountId, firstResponse.Data.Payload.CommandId);
+
+            statusResponse.IsSuccessful.Should().BeTrue(DescribeResponse(statusResponse));
+            statusResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(statusResponse));
+            statusResponse.Data.Payload.Status.Should().Be("Projected");
+            statusResponse.Data.Payload.AcceptedAt.Should().NotBe(default);
+            statusResponse.Data.Payload.PublishedAt.Should().NotBeNull();
+            statusResponse.Data.Payload.PersistedAt.Should().NotBeNull();
+            statusResponse.Data.Payload.ProjectedAt.Should().NotBeNull();
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+        }
+
+        [Test]
+        public async Task Create_WhenResponseIsLostAfterDurableAcceptance_ShouldRetryTheOriginalCommandAndProjectOnce()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenResponseIsLostAfterDurableAcceptance_ShouldRetryTheOriginalCommandAndProjectOnce))).Payload;
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 31m,
+                Comment = "response-loss-create",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 9)
+            };
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+
+            Func<Task> firstAttempt = () => _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                    .AddJsonBody(requestBody)
+                    .AddHeader(DiscardResponseAfterAcceptedPaymentCommandFilter.HeaderName, "true"), idempotencyKey));
+
+            await firstAttempt.Should().ThrowAsync<HttpRequestException>();
+
+            var retryResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(requestBody), idempotencyKey));
+
+            retryResponse.IsSuccessful.Should().BeTrue(DescribeResponse(retryResponse));
+            retryResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(retryResponse));
+            retryResponse.Data.Payload.IsDuplicate.Should().BeTrue();
+
+            var operationId = Guid.Parse(retryResponse.Data.Payload.PaymentOperationId);
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "the command accepted before response loss is projected exactly once",
+                [operationId]);
+            var account = await WaitForPaymentAccountAsync(
+                accountId,
+                paymentAccount => paymentAccount.Balance == balanceBefore + requestBody.Amount,
+                "the command accepted before response loss changes the balance exactly once",
+                [operationId]);
+            var status = await WaitForCommandStatusAsync(accountId, retryResponse.Data.Payload.CommandId);
+
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+            account.Balance.Should().Be(balanceBefore + requestBody.Amount);
+            status.Data.Payload.Status.Should().Be("Projected");
+        }
+
+        [Test]
+        public async Task Create_WhenIdempotencyKeyIsReusedForDifferentPayload_ShouldReturnConflictWithoutAnotherProjection()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenIdempotencyKeyIsReusedForDifferentPayload_ShouldReturnConflictWithoutAnotherProjection))).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var originalRequest = new CreateOperationRequest
+            {
+                Amount = 15m,
+                Comment = "original-command",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 5)
+            };
+
+            var firstResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(originalRequest), idempotencyKey));
+            firstResponse.IsSuccessful.Should().BeTrue(DescribeResponse(firstResponse));
+            firstResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(firstResponse));
+
+            var changedRequest = originalRequest with { Amount = 16m };
+            var conflictResponse = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(changedRequest), idempotencyKey),
+                [HttpStatusCode.Conflict]);
+
+            conflictResponse.StatusCode.Should().Be(HttpStatusCode.Conflict, DescribeResponse(conflictResponse));
+            conflictResponse.Data.IsSucceeded.Should().BeFalse(DescribeResponse(conflictResponse));
+
+            var operationId = Guid.Parse(firstResponse.Data.Payload.PaymentOperationId);
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "the conflicting retry does not create another operation",
+                [operationId]);
+
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+        }
+
+        [Test]
+        public async Task Create_WhenConcurrentRetriesUseOneIdempotencyKey_ShouldAcceptOneCommandWithoutServerErrors()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenConcurrentRetriesUseOneIdempotencyKey_ShouldAcceptOneCommandWithoutServerErrors))).Payload;
+            var requestBody = new CreateOperationRequest
+            {
+                Amount = 23m,
+                Comment = "concurrent-idempotent-create",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 7)
+            };
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+
+            var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(requestBody), idempotencyKey))));
+
+            responses.Should().OnlyContain(response => (int)response.StatusCode < 500);
+            responses.Should().OnlyContain(response => response.IsSuccessful && response.Data != null && response.Data.IsSucceeded);
+            responses.Select(response => response.Data.Payload.CommandId).Distinct().Should().ContainSingle();
+            responses.Select(response => response.Data.Payload.PaymentOperationId).Distinct().Should().ContainSingle();
+            responses.Count(response => !response.Data.Payload.IsDuplicate).Should().Be(1);
+
+            var operationId = Guid.Parse(responses[0].Data.Payload.PaymentOperationId);
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "concurrent retries are projected as one operation",
+                [operationId]);
+
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+        }
+
+        [Test]
+        public async Task UpdateAndDelete_WhenIdempotencyKeysAreRetried_ShouldReuseTheirOriginalCommands()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(UpdateAndDelete_WhenIdempotencyKeysAreRetried_ShouldReuseTheirOriginalCommands))).Payload;
+            var createRequest = new CreateOperationRequest
+            {
+                Amount = 10m,
+                Comment = "before-update",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 6)
+            };
+            var createResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(createRequest));
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+            var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+            await WaitForHistoryRecordAsync(accountId, operationId);
+            var updateRequest = new UpdateOperationRequest
+            {
+                Amount = 12m,
+                Comment = "after-update",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = createRequest.OperationDate
+            };
+            var updateKey = Guid.NewGuid().ToString("N");
+            var firstUpdate = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch).AddJsonBody(updateRequest), updateKey));
+            var retryUpdate = await _restClient.ExecuteAsync<Result<UpdateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Patch).AddJsonBody(updateRequest), updateKey));
+
+            firstUpdate.Data.IsSucceeded.Should().BeTrue(DescribeResponse(firstUpdate));
+            retryUpdate.Data.IsSucceeded.Should().BeTrue(DescribeResponse(retryUpdate));
+            retryUpdate.Data.Payload.IsDuplicate.Should().BeTrue();
+            retryUpdate.Data.Payload.CommandId.Should().Be(firstUpdate.Data.Payload.CommandId);
+            await WaitForHistoryRecordAsync(accountId, operationId, record => record.Record.Amount == updateRequest.Amount);
+
+            var deleteKey = Guid.NewGuid().ToString("N");
+            var firstDelete = await _restClient.ExecuteAsync<Result<RemoveOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete), deleteKey));
+            var retryDelete = await _restClient.ExecuteAsync<Result<RemoveOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}/{operationId}", Method.Delete), deleteKey));
+
+            firstDelete.Data.IsSucceeded.Should().BeTrue(DescribeResponse(firstDelete));
+            retryDelete.Data.IsSucceeded.Should().BeTrue(DescribeResponse(retryDelete));
+            retryDelete.Data.Payload.IsDuplicate.Should().BeTrue();
+            retryDelete.Data.Payload.CommandId.Should().Be(firstDelete.Data.Payload.CommandId);
+            await PaymentProjectionWaiter.WaitForHistoryRecordRemovedAsync(_restClient, accountId, operationId);
+        }
+
+        [Test]
+        public async Task CommandStatus_WhenCommandDoesNotExist_ShouldReturnNotFoundWithoutCommandMetadata()
+        {
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<PaymentCommandStatusResponse>>(
+                new RestRequest($"{ApiHost}/{Guid.NewGuid()}/commands/{Guid.NewGuid()}"),
+                [HttpStatusCode.NotFound]);
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound, DescribeResponse(response));
+            response.Data?.Payload.Should().BeNull();
+        }
+
+        [Test]
+        public async Task CommandStatus_WhenCommandBelongsToAnotherAccount_ShouldReturnNotFoundWithoutCommandMetadata()
+        {
+            var ownerAccountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(CommandStatus_WhenCommandBelongsToAnotherAccount_ShouldReturnNotFoundWithoutCommandMetadata))).Payload;
+            var createResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{ownerAccountId}", Method.Post).AddJsonBody(new CreateOperationRequest
+                    {
+                        Amount = 8m,
+                        Comment = "cross-account-status",
+                        CategoryId = categoryId,
+                        ContractorId = string.Empty,
+                        OperationDate = new DateOnly(2025, 3, 8)
+                    }),
+                    Guid.NewGuid().ToString("N")));
+
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<PaymentCommandStatusResponse>>(
+                new RestRequest($"{ApiHost}/{Guid.NewGuid()}/commands/{createResponse.Data.Payload.CommandId}"),
+                [HttpStatusCode.NotFound]);
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound, DescribeResponse(response));
+            response.Data?.Payload.Should().BeNull();
+        }
+
+        [Test]
+        public async Task Create_WhenWorkerIsRestartedAfterCommandAcceptance_ShouldProjectOneOperationAndPreserveLifecycle()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenWorkerIsRestartedAfterCommandAcceptance_ShouldProjectOneOperationAndPreserveLifecycle))).Payload;
+
+            await _sut.StopWorkersAsync();
+
+            var createResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(new CreateOperationRequest
+                    {
+                        Amount = 27m,
+                        Comment = "worker-restart-create",
+                        CategoryId = categoryId,
+                        ContractorId = string.Empty,
+                        OperationDate = new DateOnly(2025, 3, 10)
+                    }),
+                    Guid.NewGuid().ToString("N")));
+
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+            await _sut.RestartWorkersAsync();
+
+            var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "the command accepted before worker restart is projected exactly once",
+                [operationId]);
+            var account = await WaitForPaymentAccountAsync(
+                accountId,
+                paymentAccount => paymentAccount.Balance == balanceBefore + 27m,
+                "the command accepted before worker restart changes the balance exactly once",
+                [operationId]);
+            var status = await WaitForCommandStatusAsync(accountId, createResponse.Data.Payload.CommandId);
+
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+            account.Balance.Should().Be(balanceBefore + 27m);
+            status.Data.Payload.Status.Should().Be("Projected");
+        }
+
+        [Test]
+        public async Task Create_WhenKafkaRedeliversTheSameDurableMessage_ShouldCommitDuplicateWithoutAnotherBusinessEffect()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var balanceBefore = (await GetPaymentsAccountAsync(accountId)).Balance;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenKafkaRedeliversTheSameDurableMessage_ShouldCommitDuplicateWithoutAnotherBusinessEffect))).Payload;
+            var createResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(new CreateOperationRequest
+                    {
+                        Amount = 19m,
+                        Comment = "kafka-redelivery-create",
+                        CategoryId = categoryId,
+                        ContractorId = string.Empty,
+                        OperationDate = new DateOnly(2025, 3, 11)
+                    }),
+                    Guid.NewGuid().ToString("N")));
+
+            createResponse.IsSuccessful.Should().BeTrue(DescribeResponse(createResponse));
+            createResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(createResponse));
+
+            var commandId = createResponse.Data.Payload.CommandId;
+            var operationId = Guid.Parse(createResponse.Data.Payload.PaymentOperationId);
+            await WaitForCommandStatusAsync(accountId, commandId);
+            var payload = await GetOutboxPayloadAsync(commandId);
+            var duplicateDelivery = await ProduceDuplicateKafkaMessageAsync(accountId, commandId, payload);
+
+            await WaitForPaymentConsumerCommitAsync(duplicateDelivery.TopicPartitionOffset);
+
+            var records = await WaitForHistoryRecordsAsync(
+                accountId,
+                history => history.Count(record => record.Record.Key == operationId) == 1,
+                "Kafka redelivery has no second projected operation",
+                [operationId]);
+            var account = await WaitForPaymentAccountAsync(
+                accountId,
+                paymentAccount => paymentAccount.Balance == balanceBefore + 19m,
+                "Kafka redelivery has no second balance effect",
+                [operationId]);
+            var status = await WaitForCommandStatusAsync(accountId, commandId);
+
+            records.Count(record => record.Record.Key == operationId).Should().Be(1);
+            account.Balance.Should().Be(balanceBefore + 19m);
+            status.Data.Payload.Status.Should().Be("Projected");
+        }
+
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> GetHistoryRecordsAsync(Guid paymentAccountId)
         {
             var getPaymentHistoryRecordsRequest = new RestRequest($"{Endpoints.PaymentsHistory}/{paymentAccountId}");
@@ -631,6 +989,31 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             return response.Data.Payload;
         }
 
+        private async Task<RestResponse<Result<PaymentCommandStatusResponse>>> WaitForCommandStatusAsync(
+            Guid paymentAccountId,
+            string commandId)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            RestResponse<Result<PaymentCommandStatusResponse>> response = null;
+
+            do
+            {
+                response = await _restClient.ExecuteAsync<Result<PaymentCommandStatusResponse>>(
+                    new RestRequest($"{ApiHost}/{paymentAccountId}/commands/{commandId}"));
+
+                if (response.Data?.Payload?.Status == "Projected")
+                {
+                    return response;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
+            while (DateTime.UtcNow < deadline);
+
+            Assert.Fail($"Payment command '{commandId}' did not reach the Projected status. {DescribeResponse(response)}");
+            return response;
+        }
+
         private static string DescribeResponse<T>(RestResponse<Result<T>> response)
         {
             if (response == null)
@@ -680,6 +1063,80 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteWithDelayAsync<Result<Guid>>(saveCategoryRequest, executionDelayAfterInMs: 1000);
 
             return paymentsHistoryResponse.Data;
+        }
+
+        private static RestRequest WithIdempotencyKey(RestRequest request, string idempotencyKey)
+        {
+            return request.AddHeader("Idempotency-Key", idempotencyKey);
+        }
+
+        private async Task<string> GetOutboxPayloadAsync(string commandId)
+        {
+            await using var connection = new SqlConnection(TestContainers.AccountingDbConnectionString);
+            await connection.OpenAsync();
+            await using var command = new SqlCommand(
+                "SELECT Payload FROM dbo.OutboxAccountPayments WHERE MessageId = @MessageId;",
+                connection);
+            command.Parameters.AddWithValue("@MessageId", commandId);
+
+            var payload = await command.ExecuteScalarAsync();
+            payload.Should().BeOfType<string>($"outbox command '{commandId}' must be durably registered before Kafka redelivery");
+            return (string)payload;
+        }
+
+        private async Task<DeliveryResult<string, string>> ProduceDuplicateKafkaMessageAsync(
+            Guid accountId,
+            string commandId,
+            string payload)
+        {
+            var bootstrapServers = await TestContainers.KafkaContainer.GetReachableBootstrapAsync();
+            using var producer = new ProducerBuilder<string, string>(new ProducerConfig
+            {
+                BootstrapServers = bootstrapServers
+            }).Build();
+
+            return await producer.ProduceAsync(
+                BaseTopics.AccountingPayments,
+                new Message<string, string>
+                {
+                    Key = accountId.ToString(),
+                    Value = payload,
+                    Headers = new Headers
+                    {
+                        { KafkaMessageHeaders.MessageId, Encoding.UTF8.GetBytes(commandId) }
+                    }
+                });
+        }
+
+        private async Task WaitForPaymentConsumerCommitAsync(TopicPartitionOffset duplicateDelivery)
+        {
+            var bootstrapServers = await TestContainers.KafkaContainer.GetReachableBootstrapAsync();
+            using var consumer = new ConsumerBuilder<Ignore, Ignore>(new ConsumerConfig
+            {
+                BootstrapServers = bootstrapServers,
+                GroupId = "accounting.payments.group",
+                EnableAutoCommit = false
+            }).Build();
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            TopicPartitionOffset committedOffset = default;
+
+            do
+            {
+                committedOffset = consumer
+                    .Committed([duplicateDelivery.TopicPartition], TimeSpan.FromSeconds(2))
+                    .Single();
+                if (committedOffset.Offset > duplicateDelivery.Offset)
+                {
+                    return;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
+            while (DateTime.UtcNow < deadline);
+
+            Assert.Fail(
+                $"Payment consumer group did not commit Kafka redelivery at {duplicateDelivery}. " +
+                $"Last committed offset was {committedOffset}.");
         }
     }
 }

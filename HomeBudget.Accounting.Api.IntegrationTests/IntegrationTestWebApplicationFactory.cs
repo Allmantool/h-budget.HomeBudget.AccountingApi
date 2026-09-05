@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 
 using EventStore.Client;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Api.IntegrationTests.Models;
+using HomeBudget.Accounting.Api.IntegrationTests.Filters;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Core.Models;
 using HomeBudget.Core.Options;
@@ -86,6 +88,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
             builder.ConfigureServices(services =>
             {
+                services.Configure<MvcOptions>(options =>
+                    options.Filters.Add<DiscardResponseAfterAcceptedPaymentCommandFilter>());
+
                 services.Configure<DatabaseConnectionOptions>(opts =>
                 {
                     opts.ConnectionString = _containersConnections?.MsSqlDbContainer;

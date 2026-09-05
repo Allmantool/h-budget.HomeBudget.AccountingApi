@@ -11,6 +11,7 @@ using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Services;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Services
 {
@@ -93,6 +94,35 @@ namespace HomeBudget.Components.Operations.Tests.Services
             capturedParameters.MaxRetryAttempts.Should().Be(3);
         }
 
+        [Test]
+        public async Task WriteIdempotentRecordAsync_WhenConcurrentRequestUsesTheSameKey_ThenReadsOrWritesUnderAnExclusiveKeyLock()
+        {
+            var dependencies = BuildDependencies();
+            string capturedSql = null;
+            dependencies.ReadRepository
+                .Setup(x => x.SingleAsync<PaymentCommandRegistration>(It.IsAny<string>(), It.IsAny<object>()))
+                .Callback<string, object>((sql, _) => capturedSql = sql)
+                .ReturnsAsync(new PaymentCommandRegistration
+                {
+                    CommandId = Guid.NewGuid().ToString(),
+                    OperationId = Guid.NewGuid(),
+                    RequestFingerprint = "fingerprint"
+                });
+            var sut = dependencies.BuildService();
+            var row = BuildOutboxRow() with
+            {
+                IdempotencyKeyHash = "key-hash",
+                RequestFingerprint = "fingerprint",
+                CommandType = PaymentCommandTypes.Create
+            };
+
+            await sut.WriteIdempotentRecordAsync(row);
+
+            capturedSql.Should().Contain("WITH (UPDLOCK, HOLDLOCK)");
+            capturedSql.Should().Contain("IdempotencyKeyHash = @IdempotencyKeyHash");
+            capturedSql.Should().Contain("WasAlreadyAccepted");
+        }
+
         private static OutboxStatusServiceDependencies BuildDependencies()
         {
             var dateTimeProvider = new Mock<IDateTimeProvider>();
@@ -131,6 +161,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             Mock<IDateTimeProvider> dateTimeProvider)
         {
             public Mock<IBaseWriteRepository> WriteRepository { get; } = writeRepository;
+            public Mock<IBaseReadRepository> ReadRepository { get; } = readRepository;
 
             public OutboxPaymentStatusService BuildService()
             {

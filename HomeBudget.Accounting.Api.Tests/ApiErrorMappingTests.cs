@@ -55,6 +55,37 @@ namespace HomeBudget.Accounting.Api.Tests
         }
 
         [Test]
+        public async Task ResultToHttpStatusFilter_WhenFailureResultHasImplicitOkStatus_ShouldSetNonSuccessStatus()
+        {
+            var filter = new ResultToHttpStatusFilter();
+            var objectResult = new ObjectResult(Result<Guid>.Failure("Invalid payment account 'invalid' has been provided"))
+            {
+                StatusCode = StatusCodes.Status200OK
+            };
+            var context = FilterTestContextFactory.CreateResultExecutingContext(objectResult);
+
+            await filter.OnResultExecutionAsync(
+                context,
+                () => Task.FromResult(FilterTestContextFactory.CreateResultExecutedContext(context)));
+
+            objectResult.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        }
+
+        [Test]
+        public async Task ResultToHttpStatusFilter_WhenFailureResultHasExplicitConflict_ShouldPreserveConflict()
+        {
+            var filter = new ResultToHttpStatusFilter();
+            var objectResult = new ConflictObjectResult(Result<Guid>.Failure("The idempotency key has already been used for a different payment command."));
+            var context = FilterTestContextFactory.CreateResultExecutingContext(objectResult);
+
+            await filter.OnResultExecutionAsync(
+                context,
+                () => Task.FromResult(FilterTestContextFactory.CreateResultExecutedContext(context)));
+
+            objectResult.StatusCode.Should().Be(StatusCodes.Status409Conflict);
+        }
+
+        [Test]
         public async Task ApiExceptionHandlingMiddleware_WhenOutboxWriteThrows_ShouldReturnFailureResponse()
         {
             var httpContext = new DefaultHttpContext

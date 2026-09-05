@@ -95,6 +95,53 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
             metadata.GetProperty(EventMetadataKeys.SourceSystem).GetString().Should().Be(PaymentOperationEventIdentity.DefaultSourceSystem);
         }
 
+        [Test]
+        public async Task Handle_WhenIdempotentCommandIsRepeated_ThenReturnsTheOriginalOperationIdWithoutAnotherRecord()
+        {
+            var originalOperationId = Guid.NewGuid();
+            var commandId = Guid.NewGuid().ToString();
+            var outbox = new Mock<IOutboxPaymentStatusService>();
+            outbox
+                .Setup(x => x.WriteIdempotentRecordAsync(It.IsAny<OutboxAccountPaymentsEntity>()))
+                .ReturnsAsync(new PaymentCommandRegistration
+                {
+                    CommandId = commandId,
+                    OperationId = originalOperationId,
+                    WasAlreadyAccepted = true,
+                    RequestFingerprint = "fingerprint"
+                });
+
+            var commandContext = new PaymentCommandContext
+            {
+                IdempotencyKeyHash = "key-hash",
+                RequestFingerprint = "fingerprint",
+                CommandType = PaymentCommandTypes.Create
+            };
+            var handler = new AddPaymentOperationCommandHandler(BuildMapper(), BuildDateTimeProvider().Object, outbox.Object);
+            var command = new AddPaymentOperationCommand(new FinancialTransaction
+            {
+                Key = Guid.NewGuid(),
+                PaymentAccountId = Guid.NewGuid(),
+                OperationDay = new DateOnly(2026, 05, 09),
+                Amount = 25m
+            })
+            {
+                CorrelationId = Guid.NewGuid().ToString(),
+                CommandContext = commandContext
+            };
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            Assert.Multiple(() =>
+            {
+                result.IsSucceeded.Should().BeTrue();
+                result.Payload.Should().Be(originalOperationId);
+                commandContext.CommandId.Should().Be(commandId);
+                commandContext.WasAlreadyAccepted.Should().BeTrue();
+            });
+            outbox.Verify(x => x.WriteRecordAsync(It.IsAny<OutboxAccountPaymentsEntity>()), Times.Never);
+        }
+
         private static IMapper BuildMapper()
         {
             var configurationExpression = new MapperConfigurationExpression();

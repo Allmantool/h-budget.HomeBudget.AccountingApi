@@ -19,6 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         where TProgram : class
     {
         private readonly Func<TestContainersConnections> _workerHostInitializationCallback;
+        private readonly string _paymentHistoryProjectionGroup = $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
         private TestContainersConnections _containersConnections;
 
         public IConfiguration Configuration { get; private set; }
@@ -70,7 +71,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
                     services.Configure<EventStoreDbOptions>(options =>
                     {
-                        options.PaymentHistoryProjectionGroup = $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+                        options.PaymentHistoryProjectionGroup = _paymentHistoryProjectionGroup;
                         options.PaymentHistoryProjectionStartFromCurrent = true;
                     });
 

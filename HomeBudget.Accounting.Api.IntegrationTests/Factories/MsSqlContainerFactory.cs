@@ -13,7 +13,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
         {
             return new MsSqlBuilder()
                   .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-                  .WithName("integration-sql-server")
                   .WithPassword("Passw0rd!")
                   .WithEnvironment("ACCEPT_EULA", "Y")
                   .WithEnvironment("SA_PASSWORD", "Passw0rd!")

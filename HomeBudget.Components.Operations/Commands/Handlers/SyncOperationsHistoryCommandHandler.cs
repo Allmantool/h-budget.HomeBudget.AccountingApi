@@ -14,6 +14,7 @@ using HomeBudget.Components.Accounts.Services.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Extensions;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core;
 using HomeBudget.Core.Constants;
@@ -28,7 +29,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         ILogger<SyncOperationsHistoryCommandHandler> logger,
         IPaymentAccountService paymentAccountService,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IPaymentOperationsHistoryService operationsHistoryService)
+        IPaymentOperationsHistoryService operationsHistoryService,
+        IOutboxPaymentStatusService outboxPaymentStatusService = null)
     : IRequestHandler<SyncOperationsHistoryCommand, Result<decimal>>
     {
         public async Task<Result<decimal>> Handle(SyncOperationsHistoryCommand request, CancellationToken cancellationToken)
@@ -109,8 +111,11 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
                 if (periodBalancesPaymentDocuments.IsNullOrEmpty())
                 {
+                    var initialBalance = await paymentAccountService.GetInitialBalanceAsync(accountId.ToString());
+                    await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, initialBalance), cancellationToken);
+                    await MarkCommandsProjectedAsync(events);
                     activity?.SetStatus(ActivityStatusCode.Ok);
-                    return default;
+                    return Result<decimal>.Succeeded(initialBalance);
                 }
 
                 var monthBalanceHistoryRecords = periodBalancesPaymentDocuments
@@ -140,11 +145,32 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     logger,
                     new { PaymentAccountId = accountId });
 
+                await MarkCommandsProjectedAsync(events);
+
                 activity?.SetStatus(ActivityStatusCode.Ok);
                 activity?.SetTag(ActivityTags.MongoCollection, "payments_projection");
                 activity?.AddEvent(ActivityEvents.ProjectionUpdated);
 
                 return Result<decimal>.Succeeded(finalBalance);
+            }
+        }
+
+        private async Task MarkCommandsProjectedAsync(IEnumerable<PaymentOperationEvent> events)
+        {
+            if (outboxPaymentStatusService is null)
+            {
+                return;
+            }
+
+            var commandIds = events
+                .Select(x => x.Metadata.Get(EventMetadataKeys.CommandId))
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(System.StringComparer.Ordinal)
+                .ToArray();
+
+            foreach (var commandId in commandIds)
+            {
+                await outboxPaymentStatusService.MarkProjectedAsync(commandId, System.DateTime.UtcNow);
             }
         }
     }

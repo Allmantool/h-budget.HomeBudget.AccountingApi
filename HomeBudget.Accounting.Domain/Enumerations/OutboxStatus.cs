@@ -9,6 +9,8 @@
         public static readonly OutboxStatus Retrying = new(3, nameof(Retrying));
         public static readonly OutboxStatus Failed = new(4, nameof(Failed));
         public static readonly OutboxStatus DeadLettered = new(5, nameof(DeadLettered));
+        public static readonly OutboxStatus Persisted = new(6, nameof(Persisted));
+        public static readonly OutboxStatus Projected = new(7, nameof(Projected));
 
         public static OutboxStatus DeadLetter => DeadLettered;
 

@@ -248,6 +248,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.ResetContainersAsync();
         }
 
+        internal async Task RestartWorkersAsync()
+        {
+            await StopWorkersAsync();
+            await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
+            await WaitForPaymentWorkerReadyAsync();
+        }
+
+        internal Task StopWorkersAsync()
+        {
+            return Task.WhenAll(WorkerFactories.Select(w => w.StopAsync()));
+        }
+
         protected override async ValueTask DisposeAsyncCoreAsync()
         {
             await StopHostsAsync();

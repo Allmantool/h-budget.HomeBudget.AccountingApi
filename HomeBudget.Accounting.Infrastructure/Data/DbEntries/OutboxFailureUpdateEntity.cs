@@ -16,6 +16,8 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public byte DeadLetterStatus { get; init; }
 
+        public byte PersistedStatus { get; init; }
+
         public DateTime UpdatedUtc { get; init; }
     }
 }

@@ -22,6 +22,12 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 
         public string MessageId { get; init; }
 
+        public string IdempotencyKeyHash { get; init; }
+
+        public string RequestFingerprint { get; init; }
+
+        public string CommandType { get; init; }
+
         public string CausationId { get; init; }
 
         public string TraceParent { get; init; }
@@ -41,6 +47,10 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
         public DateTime? PublishedUtc { get; set; }
 
         public DateTime? ProcessedAt { get; set; }
+
+        public DateTime? PersistedUtc { get; set; }
+
+        public DateTime? ProjectedUtc { get; set; }
 
         public string LockedBy { get; init; }
 

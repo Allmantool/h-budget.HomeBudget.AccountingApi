@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Observability;
 
@@ -95,6 +97,98 @@ namespace HomeBudget.Components.Operations.Services
             }
         }
 
+        public async Task<PaymentCommandRegistration> WriteIdempotentRecordAsync(OutboxAccountPaymentsEntity record)
+        {
+            const string sql = @"
+                SET XACT_ABORT ON;
+
+                BEGIN TRANSACTION;
+
+                DECLARE @WasAlreadyAccepted bit = 0;
+
+                IF EXISTS (
+                    SELECT 1
+                    FROM dbo.OutboxAccountPayments WITH (UPDLOCK, HOLDLOCK)
+                    WHERE AggregateId = @AggregateId
+                      AND IdempotencyKeyHash = @IdempotencyKeyHash
+                )
+                BEGIN
+                    SET @WasAlreadyAccepted = 1;
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO dbo.OutboxAccountPayments
+                    (
+                        EventType, AggregateId, OperationId, PartitionKey, CorrelationId,
+                        MessageId, IdempotencyKeyHash, RequestFingerprint, CommandType,
+                        CausationId, TraceParent, TraceState, Payload, CreatedAt, UpdatedAt,
+                        CreatedUtc, UpdatedUtc, Status, RetryCount
+                    )
+                    VALUES
+                    (
+                        @EventType, @AggregateId, @OperationId, @PartitionKey, @CorrelationId,
+                        @MessageId, @IdempotencyKeyHash, @RequestFingerprint, @CommandType,
+                        @CausationId, @TraceParent, @TraceState, @Payload, @CreatedAt, @UpdatedAt,
+                        @CreatedUtc, @UpdatedUtc, @Status, @RetryCount
+                    );
+                END
+
+                COMMIT TRANSACTION;
+
+                SELECT
+                    MessageId AS CommandId,
+                    CAST(OperationId AS uniqueidentifier) AS OperationId,
+                    @WasAlreadyAccepted AS WasAlreadyAccepted,
+                    RequestFingerprint
+                FROM dbo.OutboxAccountPayments
+                WHERE AggregateId = @AggregateId
+                  AND IdempotencyKeyHash = @IdempotencyKeyHash;";
+
+            return await cdcReader.SingleAsync<PaymentCommandRegistration>(sql, record);
+        }
+
+        public async Task<PaymentCommandRecord> GetCommandAsync(Guid paymentAccountId, string commandId)
+        {
+            const string sql = @"
+                SELECT TOP (1)
+                    MessageId AS CommandId,
+                    CAST(AggregateId AS uniqueidentifier) AS PaymentAccountId,
+                    CAST(OperationId AS uniqueidentifier) AS PaymentOperationId,
+                    CommandType,
+                    RequestFingerprint,
+                    Status,
+                    CreatedUtc AS AcceptedUtc,
+                    PublishedUtc,
+                    PersistedUtc,
+                    ProjectedUtc
+                FROM dbo.OutboxAccountPayments
+                WHERE AggregateId = @PaymentAccountId
+                  AND MessageId = @CommandId;";
+
+            return await GetCommandAsync(sql, new { PaymentAccountId = paymentAccountId.ToString(), CommandId = commandId });
+        }
+
+        public async Task<PaymentCommandRecord> GetCommandByIdempotencyKeyAsync(Guid paymentAccountId, string idempotencyKeyHash)
+        {
+            const string sql = @"
+                SELECT TOP (1)
+                    MessageId AS CommandId,
+                    CAST(AggregateId AS uniqueidentifier) AS PaymentAccountId,
+                    CAST(OperationId AS uniqueidentifier) AS PaymentOperationId,
+                    CommandType,
+                    Status,
+                    CreatedUtc AS AcceptedUtc,
+                    PublishedUtc,
+                    PersistedUtc,
+                    ProjectedUtc,
+                    RequestFingerprint
+                FROM dbo.OutboxAccountPayments
+                WHERE AggregateId = @PaymentAccountId
+                  AND IdempotencyKeyHash = @IdempotencyKeyHash;";
+
+            return await GetCommandAsync(sql, new { PaymentAccountId = paymentAccountId.ToString(), IdempotencyKeyHash = idempotencyKeyHash });
+        }
+
         public async Task<IReadOnlyCollection<OutboxAccountPaymentsEntity>> LockRetryableRowsAsync(
             string lockedBy,
             DateTime nowUtc,
@@ -140,7 +234,10 @@ namespace HomeBudget.Components.Operations.Services
         {
             const string sql = @"
                 UPDATE dbo.OutboxAccountPayments
-                   SET Status = @PublishedStatus,
+                   SET Status = CASE
+                            WHEN Status IN (@PersistedStatus, @ProjectedStatus, @DeadLetterStatus) THEN Status
+                            ELSE @PublishedStatus
+                        END,
                        UpdatedAt = @PublishedUtc,
                        UpdatedUtc = @PublishedUtc,
                        PublishedAt = COALESCE(PublishedAt, @PublishedUtc),
@@ -156,6 +253,9 @@ namespace HomeBudget.Components.Operations.Services
                 MessageId = messageId,
                 LockedBy = lockedBy,
                 PublishedStatus = OutboxStatus.Published.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
+                ProjectedStatus = OutboxStatus.Projected.Key,
+                DeadLetterStatus = OutboxStatus.DeadLettered.Key,
                 PublishedUtc = publishedUtc
             });
 
@@ -182,7 +282,8 @@ namespace HomeBudget.Components.Operations.Services
                        LockedBy = NULL,
                        LockedUntilUtc = NULL
                  WHERE MessageId = @MessageId
-                   AND LockedBy = @LockedBy;";
+                   AND LockedBy = @LockedBy
+                   AND Status < @PersistedStatus;";
 
             await cdcWriter.ExecuteAsync(sql, new OutboxFailureUpdateEntity
             {
@@ -192,6 +293,7 @@ namespace HomeBudget.Components.Operations.Services
                 MaxRetryAttempts = maxRetryAttempts,
                 FailedStatus = OutboxStatus.Failed.Key,
                 DeadLetterStatus = OutboxStatus.DeadLettered.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
                 UpdatedUtc = updatedUtc
             });
 
@@ -202,15 +304,21 @@ namespace HomeBudget.Components.Operations.Services
         {
             const string updateSql = @"
                 UPDATE dbo.OutboxAccountPayments
-                   SET Status = @Status,
+                   SET Status = CASE
+                            WHEN Status = @DeadLetterStatus THEN Status
+                            WHEN Status IN (@PersistedStatus, @ProjectedStatus) THEN Status
+                            WHEN @Status = @DeadLetterStatus THEN @DeadLetterStatus
+                            WHEN @Status > Status THEN @Status
+                            ELSE Status
+                        END,
                        UpdatedAt = @UpdatedAt,
                        UpdatedUtc = @UpdatedAt,
                        PublishedAt = CASE
-                           WHEN @Status = 1 AND PublishedAt IS NULL THEN @UpdatedAt
+                            WHEN @Status = 1 AND Status = 0 AND PublishedAt IS NULL THEN @UpdatedAt
                            ELSE PublishedAt
                        END,
                        PublishedUtc = CASE
-                           WHEN @Status = 1 AND PublishedUtc IS NULL THEN @UpdatedAt
+                            WHEN @Status = 1 AND Status = 0 AND PublishedUtc IS NULL THEN @UpdatedAt
                            ELSE PublishedUtc
                        END
                  WHERE MessageId = @MessageId;";
@@ -221,6 +329,9 @@ namespace HomeBudget.Components.Operations.Services
                 await cdcWriter.ExecuteAsync(updateSql, new OutboxStatusUpdateEntity
                 {
                     Status = status.Key,
+                    PersistedStatus = OutboxStatus.Persisted.Key,
+                    ProjectedStatus = OutboxStatus.Projected.Key,
+                    DeadLetterStatus = OutboxStatus.DeadLettered.Key,
                     UpdatedAt = updatedAt,
                     MessageId = messageId
                 });
@@ -237,6 +348,91 @@ namespace HomeBudget.Components.Operations.Services
 
                 throw;
             }
+        }
+
+        public Task MarkPersistedAsync(string messageId, DateTime persistedUtc)
+        {
+            return SetLifecycleStatusAsync(messageId, OutboxStatus.Persisted, persistedUtc, "PersistedUtc");
+        }
+
+        public Task MarkProjectedAsync(string messageId, DateTime projectedUtc)
+        {
+            return SetLifecycleStatusAsync(messageId, OutboxStatus.Projected, projectedUtc, "ProjectedUtc");
+        }
+
+        public async Task MarkDeadLetteredAsync(string messageId, string lastError, DateTime updatedUtc)
+        {
+            const string sql = @"
+                UPDATE dbo.OutboxAccountPayments
+                   SET Status = @Status,
+                       LastError = @LastError,
+                       UpdatedAt = @UpdatedUtc,
+                       UpdatedUtc = @UpdatedUtc
+                 WHERE MessageId = @MessageId
+                   AND Status < @PersistedStatus;";
+
+            await cdcWriter.ExecuteAsync(sql, new OutboxCommandLifecycleUpdateEntity
+            {
+                MessageId = messageId,
+                Status = OutboxStatus.DeadLettered.Key,
+                PersistedStatus = OutboxStatus.Persisted.Key,
+                LastError = Truncate(lastError, LastErrorMaxLength),
+                UpdatedUtc = updatedUtc
+            });
+        }
+
+        private async Task<PaymentCommandRecord> GetCommandAsync(string sql, object parameters)
+        {
+            var result = await cdcReader.GetAsync<PaymentCommandRecord>(sql, parameters);
+            var row = result.FirstOrDefault();
+            if (row is null)
+            {
+                return null;
+            }
+
+            return row with { Status = ToCommandStatus((byte)row.Status) };
+        }
+
+        private async Task SetLifecycleStatusAsync(
+            string messageId,
+            OutboxStatus status,
+            DateTime updatedUtc,
+            string completedAtColumn)
+        {
+            var sql = $@"
+                UPDATE dbo.OutboxAccountPayments
+                   SET Status = CASE
+                            WHEN Status = @DeadLetterStatus OR Status > @Status THEN Status
+                            ELSE @Status
+                        END,
+                        {completedAtColumn} = CASE
+                            WHEN Status = @DeadLetterStatus OR Status > @Status THEN {completedAtColumn}
+                            ELSE COALESCE({completedAtColumn}, @UpdatedUtc)
+                        END,
+                       UpdatedAt = @UpdatedUtc,
+                       UpdatedUtc = @UpdatedUtc
+                 WHERE MessageId = @MessageId
+                   AND Status <> @DeadLetterStatus;";
+
+            await cdcWriter.ExecuteAsync(sql, new OutboxCommandLifecycleUpdateEntity
+            {
+                MessageId = messageId,
+                Status = status.Key,
+                DeadLetterStatus = OutboxStatus.DeadLettered.Key,
+                UpdatedUtc = updatedUtc
+            });
+        }
+
+        private static PaymentCommandStatus ToCommandStatus(byte status)
+        {
+            return status switch
+            {
+                1 => PaymentCommandStatus.Published,
+                5 => PaymentCommandStatus.Failed,
+                6 => PaymentCommandStatus.Persisted,
+                7 => PaymentCommandStatus.Projected,
+                _ => PaymentCommandStatus.Accepted
+            };
         }
 
         private static string Truncate(string value, int maxLength)
