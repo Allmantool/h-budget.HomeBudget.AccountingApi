@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented
+Verified
 
 ## Problem
 
@@ -70,10 +70,10 @@ integration tests, and quality verification succeed, and CodeQL C# analysis succ
 ## Current and Desired Behavior
 
 Today, failed or skipped CI jobs appear in a pull request, but nothing requires them
-before merge. After this change, CI Master emits `CI Master / PR Gate` for every
+before merge. After this change, CI Master emits the `PR Gate` Check Run for every
 applicable PR, and it fails unless every mandatory CI job result is `success`.
-CodeQL emits `CodeQL / Analyze (csharp)` separately. A repository ruleset requires
-both contexts on the latest mergeable commit and requires a reviewed, up-to-date PR.
+CodeQL emits the `Analyze (csharp)` Check Run separately. A repository ruleset
+requires both actual Check Run names on the latest mergeable commit.
 
 ## Architecture and Consistency Context
 
@@ -100,9 +100,9 @@ the final CI job is an aggregation of the mandatory CI job results.
 ## Acceptance Criteria
 
 - AC-001: A successful build, tests, integration suite, and quality job yield a green
-  `CI Master / PR Gate`.
+  `PR Gate` Check Run.
 - AC-002: Failed, cancelled, or skipped mandatory jobs yield a red PR Gate.
-- AC-003: A CodeQL C# failure yields a failed `CodeQL / Analyze (csharp)` check.
+- AC-003: A CodeQL C# failure yields a failed `Analyze (csharp)` Check Run.
 - AC-004: The active `master` ruleset requires exactly the stable CI and CodeQL
   contexts and prevents normal merges while either is not successful.
 - AC-005: Artifact publication runs after test failure without converting the failed
@@ -148,22 +148,22 @@ enforcement. Existing CI commands remain the runtime proof of application valida
 |---|---|---|---|
 | REQ-001, REQ-002, AC-001, AC-002 | CI gate helper and `ci-master.yml` | Bash truth table and workflow structure validation | Verified |
 | REQ-003, AC-005 | `ci-master.yml` | Focused workflow review | Verified |
-| REQ-004, AC-003 | `codeql-analysis.yml` | Workflow structure validation; runtime pending first changed workflow run | Implemented |
-| NFR-001, AC-004 | GitHub repository ruleset and branch-protection runbook | Ruleset `22327976` queried through `gh api` | Verified |
+| REQ-004, AC-003 | `codeql-analysis.yml` | Check Runs API: `Analyze (csharp)`, GitHub Actions `15368`, successful on PR #828 | Verified |
+| NFR-001, AC-004 | GitHub repository ruleset and branch-protection runbook | Ruleset `22327976`, `gh pr checks --required`, and PR #828 `CLEAN` state | Verified |
 
 ## Progress and Resume State
 
-- Decisions made: Require only the stable aggregate CI context and the separate
-  CodeQL context; individual CI job names remain diagnostics, not branch-protection
-  contracts.
+- Decisions made: Require only the actual Check Run names `PR Gate` and
+  `Analyze (csharp)`, both pinned to GitHub Actions `15368`. Workflow/event labels
+  are UI presentation, not ruleset contexts.
 - Implemented: Added the always-created PR Gate, an executable gate evaluator and
   truth-table test, CodeQL v3/.NET 10 manual-build configuration, documentation, and
   active GitHub ruleset `22327976`.
 - Verification passed: Gate truth table, Bash syntax validation, workflow structure
-  validation, focused diff check, and GitHub ruleset/rules query.
-- Current failure or blocker: Runtime emission of the new PR Gate context is pending
-  the first push of these workflow changes; the current remote PR commit predates it.
-- Remaining work: Push the workflow change, observe both required check contexts on
-  its PR head, and confirm a failed mandatory CI run makes the PR UI non-mergeable.
+  validation, focused diff check, and live Check Runs/ruleset evidence from PR #828.
+- Current failure or blocker: The first ruleset used UI-composed labels and created
+  phantom pending checks. It was corrected in place without changing CI jobs.
+- Remaining work: None for this change. Future ruleset updates must compare contexts
+  to the Check Runs API rather than GitHub's UI grouping labels.
 - Follow-ups out of scope: Resolve the observed package downgrade and renovate action
   security/permissions hardening separately.

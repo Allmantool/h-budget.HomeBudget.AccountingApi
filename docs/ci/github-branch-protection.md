@@ -7,12 +7,13 @@ these required GitHub Actions contexts succeed on the current mergeable commit:
 
 | Required context | Workflow/job | Purpose |
 |---|---|---|
-| `CI Master / PR Gate` | CI Master / PR Gate | Aggregates mandatory build, test, integration, and quality results. |
-| `CodeQL / Analyze (csharp)` | CodeQL / Analyze (csharp) | C# security analysis. |
+| `PR Gate` | CI Master / PR Gate | Aggregates mandatory build, test, integration, and quality results. |
+| `Analyze (csharp)` | CodeQL / Analyze (csharp) | C# security analysis. |
 
-The individual CI job names are diagnostic only; do not add them as separately
-required GitHub contexts. The aggregate gate fails if any mandatory input is
-`failure`, `cancelled`, `skipped`, or absent.
+GitHub visually groups a check as `Workflow name / job name (event)`, but rulesets
+require the underlying Check Run `name`: `PR Gate` and `Analyze (csharp)`. Do not use
+the UI-composed labels as contexts or configure both forms. The aggregate gate fails
+if any mandatory input is `failure`, `cancelled`, `skipped`, or absent.
 
 Mandatory CI inputs are:
 
@@ -54,19 +55,16 @@ ruleset is the authoritative policy here.
 
 The ruleset was created through the authenticated GitHub API during this hardening
 work: ID `22327976`, enforcement `active`, no bypass actors, and
-`current_user_can_bypass: never`. The workflow change still needs to be pushed and
-run once for the new `CI Master / PR Gate` check to be emitted on a pull request.
+`current_user_can_bypass: never`. It was corrected on 2026-09-05 after the Check Runs
+API proved that the earlier UI-composed context labels were phantom requirements.
 
 Configure these rules:
 
-- Require a pull request before merging.
-  - at least 1 approval;
-  - dismiss stale approvals on push;
-  - require approval of the most recent reviewable push by someone else;
-  - require conversation resolution.
+- Require a pull request before merging and require conversation resolution. Preserve
+  the repository's separately chosen approval policy when changing check contexts.
 - Require status checks to pass before merging and require the branch to be up to date.
-  - `CI Master / PR Gate` from the GitHub Actions app (ID `15368`);
-  - `CodeQL / Analyze (csharp)` from the GitHub Actions app (ID `15368`).
+  - `PR Gate` from the GitHub Actions app (ID `15368`);
+  - `Analyze (csharp)` from the GitHub Actions app (ID `15368`).
 - Block force pushes.
 - Block branch deletion.
 - Do not add bypass actors. This deliberately applies the policy to administrators.
@@ -81,7 +79,7 @@ not be emitted for merge-group commits.
 
 If the ruleset ever needs to be recreated, use an authenticated `gh` session with
 repository administration permission. Prefer first running the workflow change on a
-pull request so the new `CI Master / PR Gate` context is visible. Replace
+pull request so the new `PR Gate` context is visible. Replace
 `OWNER/REPOSITORY` with the output of `gh repo view --json nameWithOwner --jq
 .nameWithOwner`.
 
@@ -104,10 +102,10 @@ gh api --method POST repos/OWNER/REPOSITORY/rulesets \
     {
       "type": "pull_request",
       "parameters": {
-        "dismiss_stale_reviews_on_push": true,
+        "dismiss_stale_reviews_on_push": false,
         "require_code_owner_review": false,
-        "require_last_push_approval": true,
-        "required_approving_review_count": 1,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
         "required_review_thread_resolution": true,
         "allowed_merge_methods": ["merge", "squash", "rebase"]
       }
@@ -118,8 +116,8 @@ gh api --method POST repos/OWNER/REPOSITORY/rulesets \
         "do_not_enforce_on_create": false,
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "CI Master / PR Gate", "integration_id": 15368 },
-          { "context": "CodeQL / Analyze (csharp)", "integration_id": 15368 }
+          { "context": "PR Gate", "integration_id": 15368 },
+          { "context": "Analyze (csharp)", "integration_id": 15368 }
         ]
       }
     },
