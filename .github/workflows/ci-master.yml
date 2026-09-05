@@ -51,6 +51,7 @@ jobs:
   validate-application-build:
     name: Validate Application Build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       restore_outcome: ${{ steps.collect-status.outputs.restore_outcome }}
       build_outcome: ${{ steps.collect-status.outputs.build_outcome }}
@@ -91,6 +92,7 @@ jobs:
   run-unit-and-component-tests:
     name: Run Unit And Component Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: validate-application-build
     outputs:
       tests_outcome: ${{ steps.collect-status.outputs.tests_outcome }}
@@ -175,6 +177,7 @@ jobs:
   run-api-integration-tests:
     name: Run API Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: validate-application-build
     outputs:
       tests_outcome: ${{ steps.collect-status.outputs.tests_outcome }}
@@ -203,8 +206,9 @@ jobs:
       - name: Prepare Docker host for integration tests
         shell: bash
         run: |
-          docker system prune -af || true
-          docker network prune -f || true
+          set -euo pipefail
+          docker system prune -af
+          docker network prune -f
 
       - name: Run integration tests with coverage
         id: run-tests
@@ -247,6 +251,7 @@ jobs:
   analyze-master-quality:
     name: Analyze Master Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs:
       - determine-sonar-mode
       - validate-application-build
@@ -501,3 +506,26 @@ jobs:
             echo "- Sonar build: ${{ needs.analyze-master-quality.outputs.sonar_build_outcome }}"
             echo "- Sonar end: ${{ needs.analyze-master-quality.outputs.sonar_end_outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  pr-gate:
+    name: PR Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ always() }}
+    needs:
+      - validate-application-build
+      - run-unit-and-component-tests
+      - run-api-integration-tests
+      - analyze-master-quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Enforce mandatory CI results
+        shell: bash
+        run: |
+          bash ./scripts/ci/evaluate-pr-gate.sh \
+            "${{ needs.validate-application-build.result }}" \
+            "${{ needs.run-unit-and-component-tests.result }}" \
+            "${{ needs.run-api-integration-tests.result }}" \
+            "${{ needs.analyze-master-quality.result }}"
