@@ -16,10 +16,10 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
-            if (Amount == 0m)
+            if (Amount <= 0m)
             {
                 yield return new ValidationResult(
-                    "Amount must not be zero",
+                    "Amount must be greater than zero",
                     [nameof(Amount)]);
             }
 

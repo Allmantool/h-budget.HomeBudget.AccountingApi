@@ -59,6 +59,31 @@ namespace HomeBudget.Components.Operations.Tests.Models
         }
 
         [Test]
+        public void Create_WhenRawPaymentAmountChangesSign_ThenProducesADifferentFingerprint()
+        {
+            var accountId = Guid.NewGuid();
+            var payload = new PaymentOperationPayload
+            {
+                Amount = 23m,
+                OperationDate = new DateOnly(2026, 9, 2),
+                Comment = "coffee"
+            };
+
+            var positiveFingerprint = PaymentCommandFingerprint.Create(
+                PaymentCommandTypes.Create,
+                accountId,
+                null,
+                payload);
+            var negativeFingerprint = PaymentCommandFingerprint.Create(
+                PaymentCommandTypes.Create,
+                accountId,
+                null,
+                payload with { Amount = -23m });
+
+            negativeFingerprint.Should().NotBe(positiveFingerprint);
+        }
+
+        [Test]
         public void Create_WhenCommentContainsCanonicalDelimiter_ThenDoesNotCollideWithAnotherFieldLayout()
         {
             var accountId = Guid.NewGuid();

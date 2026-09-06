@@ -31,6 +31,7 @@ namespace HomeBudget.Components.Operations.Tests.Factories
             Assert.Multiple(() =>
             {
                 result.Payload.TransactionType.Should().Be(TransactionTypes.Payment);
+                result.Payload.Amount.Should().Be(10m);
                 result.Payload.CategoryId.Should().Be(categoryId);
                 result.Payload.ContractorId.Should().Be(contractorId);
             });
@@ -53,6 +54,27 @@ namespace HomeBudget.Components.Operations.Tests.Factories
                 result.IsSucceeded.Should().BeTrue();
                 result.Payload.CategoryId.Should().Be(Guid.Empty);
                 result.Payload.ContractorId.Should().Be(Guid.Empty);
+            });
+        }
+
+        [TestCase(0)]
+        [TestCase(-10)]
+        public void CreatePayment_WhenAmountIsNotPositive_ThenFailureIsReturned(decimal amount)
+        {
+            var result = _sut.CreatePayment(
+                Guid.NewGuid(),
+                120,
+                amount,
+                "some comment",
+                Guid.NewGuid().ToString(),
+                Guid.NewGuid().ToString(),
+                new DateOnly(2024, 05, 13));
+
+            Assert.Multiple(() =>
+            {
+                result.IsSucceeded.Should().BeFalse();
+                result.StatusMessage.Should().Contain("Amount must be greater than zero");
+                result.Payload.Should().BeNull();
             });
         }
 

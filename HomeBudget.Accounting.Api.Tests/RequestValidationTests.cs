@@ -31,6 +31,61 @@ namespace HomeBudget.Accounting.Api.Tests
         }
 
         [Test]
+        public void CreateOperationRequest_WhenAmountIsPositive_ShouldNotReturnAmountValidationError()
+        {
+            var request = new CreateOperationRequest
+            {
+                Amount = 10m,
+                OperationDate = new(2026, 5, 11)
+            };
+
+            var errors = Validate(request);
+
+            errors.Should().NotContain(error => error.MemberNames.Contains(nameof(CreateOperationRequest.Amount)));
+        }
+
+        [Test]
+        public void CreateOperationRequest_WhenAmountIsNegative_ShouldReturnAmountValidationError()
+        {
+            var request = new CreateOperationRequest
+            {
+                Amount = -10m,
+                OperationDate = new(2026, 5, 11)
+            };
+
+            var errors = Validate(request);
+
+            errors.Should().Contain(error => error.MemberNames.Contains(nameof(CreateOperationRequest.Amount)));
+        }
+
+        [TestCase(0)]
+        [TestCase(-10)]
+        public void UpdateOperationRequest_WhenAmountIsNotPositive_ShouldReturnAmountValidationError(decimal amount)
+        {
+            var request = new UpdateOperationRequest
+            {
+                Amount = amount
+            };
+
+            var errors = Validate(request);
+
+            errors.Should().Contain(error => error.MemberNames.Contains(nameof(UpdateOperationRequest.Amount)));
+        }
+
+        [Test]
+        public void UpdateOperationRequest_WhenAmountIsPositive_ShouldNotReturnAmountValidationError()
+        {
+            var request = new UpdateOperationRequest
+            {
+                Amount = 10m
+            };
+
+            var errors = Validate(request);
+
+            errors.Should().NotContain(error => error.MemberNames.Contains(nameof(UpdateOperationRequest.Amount)));
+        }
+
+        [Test]
         public void CreateOperationRequest_WhenReferenceIdsInvalid_ShouldReturnValidationErrors()
         {
             var request = new CreateOperationRequest

@@ -11,7 +11,10 @@ namespace HomeBudget.Components.Operations.Validators
     {
         public IReadOnlyCollection<string> Validate(AddPaymentOperationCommand request)
         {
-            return ValidatePaymentOperation(request.OperationForAdd, "Payment operation");
+            return ValidatePaymentOperation(
+                request.OperationForAdd,
+                "Payment operation",
+                requirePositiveAmount: true);
         }
     }
 }
