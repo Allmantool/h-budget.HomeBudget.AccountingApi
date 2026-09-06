@@ -130,31 +130,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
             return new KafkaBuilder()
                         .WithImage("confluentinc/cp-kafka:7.9.0")
                         .WithName($"{nameof(TestContainersService)}-kafka-container-{Guid.NewGuid()}")
-                        .WithHostname(TestContainerHostNames.Kafka)
-                        .WithPortBinding(9092, 9092)
-                        .WithPortBinding(29092, 29092)
-                        .WithEnvironment("KAFKA_BROKER_ID", "1")
-                        .WithEnvironment(
-                            "KAFKA_ZOOKEEPER_CONNECT",
-                            $"{TestContainerHostNames.ZK}:2181")
-                        .WithEnvironment(
-                            "KAFKA_LISTENERS",
-                            "PLAINTEXT://0.0.0.0:9092," +
-                            "PLAINTEXT_INTERNAL://0.0.0.0:29092," +
-                            "BROKER://0.0.0.0:9093")
-                        .WithEnvironment(
-                            "KAFKA_ADVERTISED_LISTENERS",
-                            "PLAINTEXT://localhost:9092," +
-                            $"PLAINTEXT_INTERNAL://{TestContainerHostNames.Kafka}:29092," +
-                            $"BROKER://{TestContainerHostNames.Kafka}:9093")
-                        .WithEnvironment(
-                            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
-                            "PLAINTEXT:PLAINTEXT," +
-                            "PLAINTEXT_INTERNAL:PLAINTEXT," +
-                            "BROKER:PLAINTEXT")
-                        .WithEnvironment(
-                            "KAFKA_INTER_BROKER_LISTENER_NAME",
-                            "BROKER")
                         .WithEnvironment("KAFKA_LOG_RETENTION_BYTES", "1073741824")
                         .WithEnvironment("KAFKA_LOG_CLEANUP_POLICY", "delete")
                         .WithEnvironment("KAFKA_DELETE_TOPIC_ENABLE", "true")
@@ -166,7 +141,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
                         .WithEnvironment("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "0")
                         .WithEnvironment("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
                         .WithNetwork(network)
-                        .WithWaitStrategy(Wait.ForUnixContainer())
                         .WithCreateParameterModifier(config =>
                         {
                             config.HostConfig.Memory = BaseTestContainerOptions.Memory1Gb;

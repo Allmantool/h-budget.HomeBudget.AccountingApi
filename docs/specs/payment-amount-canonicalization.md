@@ -2,8 +2,7 @@
 
 ## Status
 
-Release verification blocked: the Testcontainers fixture returns `503` while
-creating its seed account, before the new HTTP/SQL assertions execute.
+Complete
 
 ## Problem
 
@@ -201,12 +200,14 @@ EventStore-to-Mongo pipeline; no new distributed behavior is introduced.
 
 | Criterion | Integration evidence | Status |
 |---|---|---|
-| REL-001 | `PaymentOperationsControllerTests` sends the request through the actual API host and asserts `400` for create/update `-23` and `0`; the Testcontainers fixture returned `503` while creating its seed account, before these requests ran | Blocked |
-| REL-002 | The same tests query `dbo.OutboxAccountPayments` by `AggregateId` and the SHA-256 idempotency-key hash before retrying `+23`; not reached because fixture account creation returned `503` | Blocked |
-| REL-003 | The valid-then-invalid same-key test retains the original SQL `MessageId` after the `400` response; not reached because fixture account creation returned `503` | Blocked |
-| REL-004 | `CrossAccountTransferControllerTests` verifies an accepted transfer projects `-23` for its sender operation; not run because the shared fixture could not create accounts | Blocked |
+| REL-001 | `PaymentOperationsControllerTests` reached the actual API host and asserted `400` for create/update `-23` and `0` | PASS (4 cases) |
+| REL-002 | The controller tests queried `dbo.OutboxAccountPayments` before retrying `+23`; invalid-then-valid idempotency ordering passed | PASS |
+| REL-003 | The valid-then-invalid same-key test retained the original SQL `MessageId` after `400` | PASS |
+| REL-004 | `CrossAccountTransferControllerTests` accepted the transfer and verified sender projection `-23` | PASS |
 
 TDD: Not Applicable — this addendum adds integration verification to an
-already-implemented behavior; no production behavior is changed. The test
-assembly builds successfully, but its required runtime dependencies must be
-healthy before the HTTP/SQL assertions can be released as verified.
+already-implemented behavior; no production behavior changed. The original
+fixture blocker was a fixed host Kafka binding on `0.0.0.0:9092`, not an API
+`503`. The Testcontainers factory now uses the supported dynamic mapped
+listener. With localhost port 9092 occupied, the focused runtime integration
+suite passed all 8 selected payment/idempotency/transfer cases.
