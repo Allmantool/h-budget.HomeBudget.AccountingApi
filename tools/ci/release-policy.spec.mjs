@@ -61,10 +61,29 @@ test('keeps deployable maintenance changes aligned with the SPA policy', async (
 	}
 });
 
-test('validates squash-safe PR title semantics without using branch names for release impact', () => {
-	assert.equal(validatePullRequest('feature/payment-status', 'feat(payments): add command status endpoint'), undefined);
-	assert.equal(validatePullRequest('hotfix/duplicate-payment', 'fix(payments): prevent duplicate payment'), undefined);
-	assert.match(validatePullRequest('feature/payment-status', 'fix(payments): prevent duplicate payment'), /expects a feat/);
+test('validates branch compatibility without inferring release impact from branch names', () => {
+	for (const [branch, title] of [
+		['tech/update-ci-cd-v3', 'ci(release): update semantic versioning'],
+		['tech/update-docker', 'build(container): add OCI metadata'],
+		['tech/update-dependencies', 'chore(deps): update dependencies'],
+		['tech/refactor-worker', 'refactor(worker): simplify processing'],
+		['tech/improve-consumer', 'perf(worker): reduce allocations'],
+		['tech/fix-release-script', 'fix(release): preserve release SHA'],
+		['tech/version-docs', 'docs(release): document semantic versioning'],
+		['tech/refactor-events', 'refactor(events)!: replace event metadata'],
+		['feature/payment-status', 'feat(payments): add command status endpoint'],
+		['hotfix/duplicate-payment', 'fix(payments): prevent duplicate payment'],
+		['fix/payment-balance', 'fix(payments): correct balance'],
+		['codex/accounting-cicd-traceability', 'ci(release): preserve release traceability'],
+		['tech/update-ci', 'ci: update release workflow'],
+	]) {
+		assert.equal(validatePullRequest(branch, title), undefined, `${branch}: ${title}`);
+	}
+
+	assert.match(validatePullRequest('tech/update-ci', 'tech: update CI'), /Unsupported PR type:\s+tech/);
+	assert.match(validatePullRequest('tech/update-payments', 'feat(payments): add new operation type'), /reserved for technical\/maintenance work/);
+	assert.match(validatePullRequest('feature/payment-status', 'chore: add payment recovery'), /Allowed types for feature\/\*:\s+feat/);
+	assert.match(validatePullRequest('fix/payment-balance', 'feat: correct balance'), /Allowed types for fix\/\*:\s+fix/);
 	assert.match(validatePullRequest('unsupported/payment-status', 'feat(payments): add command status endpoint'), /Unsupported branch name/);
 });
 

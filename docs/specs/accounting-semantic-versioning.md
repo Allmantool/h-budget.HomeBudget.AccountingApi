@@ -78,7 +78,11 @@ stable tag.
 - PRs must have a Conventional Commit title matching their supported branch
   intent. This preserves the semantic signal when GitHub squash merging uses
   the PR title as the squash commit subject. Branch names validate intent only;
-  they never select a version increment.
+  they never select a version increment. `feat`/`feature` are strict `feat`;
+  `bug`/`bugfix`/`fix`/`hotfix` are strict `fix`; `tech` and the active
+  `codex` maintenance family allow every supported type except `feat`.
+  Specialized and dependency-bot branch families retain their explicit
+  single-type constraints.
 - Feature, development, hotfix, and PR builds never create a stable tag or
   GitHub Release. A merged `hotfix/*` PR is represented by `fix:` and normally
   releases PATCH; a breaking marker still releases MAJOR.
@@ -118,6 +122,9 @@ stable tag.
   serialized `master` execution, and immutable-tag conflict checks.
 - REL-002: A successful release records one source SHA in the Git tag, GitHub
   Release, Docker labels/tags, and .NET artifact metadata.
+- REQ-003: PR branch validation treats a branch as a workstream constraint and
+  validates an allowed set of Conventional Commit types; it does not infer a
+  release type from a branch name.
 
 ## Acceptance Criteria
 
@@ -164,6 +171,7 @@ metadata changes compile without changing application code.
 | REL-001 / AC-003 | `update_semver.yml` | Policy workflow test, YAML parser, diff review | PASS |
 | REL-002 / AC-004 | Dockerfiles, `release-tag.yml` | Versioned API build and policy workflow test | PASS |
 | Metadata traceability | `release-tag.yml` | Regression test and remote failed-run audit | PASS |
+| REQ-003 | `tools/ci/release-policy.mjs` | Policy regression tests | PASS |
 
 ## Progress and Resume State
 
@@ -184,6 +192,12 @@ metadata changes compile without changing application code.
   covers explicit release identity propagation, secret-safe image-reference
   construction, required-input failures, and `gh --repo` usage without a
   checkout.
+- Policy-model remediation: `branchRules` now uses allowed type lists, not
+  exact branch-to-type mappings. The required
+  `tech/update-ci-cd-v3` / `ci(release): update semantic versioning` regression
+  passes; `tech/*` and active `codex/*` allow technical-maintenance types but
+  reject `feat`. Strict feature and fix/hotfix families are unchanged. No
+  active `release/*` family was found, so none was introduced.
 - Remaining verification: an unauthenticated local semantic-release dry run
   loaded both configured plugins but did not complete in the 30-second command
   window; the authenticated `master` GitHub Actions release and Docker/Testcontainers

@@ -27,37 +27,84 @@ export const RELEASE_RULES = Object.freeze([
 	{ type: 'test', release: false },
 ]);
 
+const technicalMaintenanceTypes = Object.freeze(CONVENTIONAL_TYPES.filter(type => type !== 'feat'));
 const branchRules = Object.freeze([
-	{ pattern: /^(?:feature|feat)\/.+/, type: 'feat' },
-	{ pattern: /^(?:bug|bugfix|fix|hotfix)\/.+/, type: 'fix' },
-	{ pattern: /^perf\/.+/, type: 'perf' },
-	{ pattern: /^refactor\/.+/, type: 'refactor' },
-	{ pattern: /^chore\/.+/, type: 'chore' },
-	{ pattern: /^docs\/.+/, type: 'docs' },
-	{ pattern: /^test\/.+/, type: 'test' },
-	{ pattern: /^ci\/.+/, type: 'ci' },
-	{ pattern: /^build\/.+/, type: 'build' },
-	{ pattern: /^tech\/.+/, type: 'chore' },
-	{ pattern: /^(?:automation\/deps|dependabot|renovate)\/.+/, type: 'chore' },
+	{ pattern: /^(?:feature|feat)\/.+/, allowedTypes: Object.freeze(['feat']) },
+	{ pattern: /^(?:bug|bugfix|fix|hotfix)\/.+/, allowedTypes: Object.freeze(['fix']) },
+	{ pattern: /^perf\/.+/, allowedTypes: Object.freeze(['perf']) },
+	{ pattern: /^refactor\/.+/, allowedTypes: Object.freeze(['refactor']) },
+	{ pattern: /^chore\/.+/, allowedTypes: Object.freeze(['chore']) },
+	{ pattern: /^docs\/.+/, allowedTypes: Object.freeze(['docs']) },
+	{ pattern: /^test\/.+/, allowedTypes: Object.freeze(['test']) },
+	{ pattern: /^ci\/.+/, allowedTypes: Object.freeze(['ci']) },
+	{ pattern: /^build\/.+/, allowedTypes: Object.freeze(['build']) },
+	{ pattern: /^(?:tech|codex)\/.+/, allowedTypes: technicalMaintenanceTypes },
+	{ pattern: /^(?:automation\/deps|dependabot|renovate)\/.+/, allowedTypes: Object.freeze(['chore']) },
 ]);
 const titlePattern = /^(?<type>[a-z]+)(?:\([^\)\r\n]+\))?(?<breaking>!)?: (?<description>[^\r\n]+)$/;
 const releaseWeight = Object.freeze({ patch: 1, minor: 2, major: 3 });
 
 export function parseConventionalTitle(title) {
 	const match = titlePattern.exec(title);
-	if (!match || !CONVENTIONAL_TYPES.includes(match.groups.type)) return undefined;
-	return { type: match.groups.type, breaking: Boolean(match.groups.breaking) };
+	if (!match) return undefined;
+	return {
+		type: match.groups.type,
+		breaking: Boolean(match.groups.breaking),
+		supported: CONVENTIONAL_TYPES.includes(match.groups.type),
+	};
 }
 
 export function validatePullRequest(branch, title) {
-	const expectedType = branchRules.find(rule => rule.pattern.test(branch))?.type;
-	if (!expectedType)
+	const branchRule = branchRules.find(rule => rule.pattern.test(branch));
+	if (!branchRule)
 		return `Unsupported branch name "${branch}". Use an approved prefix followed by a non-empty description.`;
 
 	const parsedTitle = parseConventionalTitle(title);
 	if (!parsedTitle) return `Invalid PR title "${title}". Use <type>(<scope>): <description>.`;
-	if (parsedTitle.type !== expectedType)
-		return `Branch "${branch}" expects a ${expectedType}: PR title, received ${parsedTitle.type}:`;
+	if (!parsedTitle.supported) {
+		return [
+			'Release-policy validation failed.',
+			'',
+			'Unsupported PR type:',
+			`  ${parsedTitle.type}`,
+			'',
+			'Supported Conventional Commit types:',
+			`  ${CONVENTIONAL_TYPES.join(', ')}`,
+			'',
+			'For branch:',
+			`  ${branch}`,
+		].join('\n');
+	}
+	if (!branchRule.allowedTypes.includes(parsedTitle.type)) {
+		const branchFamily = `${branch.split('/', 1)[0]}/*`;
+		const isTechnicalMaintenance = branchFamily === 'tech/*' || branchFamily === 'codex/*';
+		return [
+			'Release-policy validation failed.',
+			'',
+			'Branch:',
+			`  ${branch}`,
+			'',
+			'PR title:',
+			`  ${title}`,
+			'',
+			'Parsed Conventional Commit type:',
+			`  ${parsedTitle.type}`,
+			'',
+			`Allowed types for ${branchFamily}:`,
+			`  ${branchRule.allowedTypes.join(', ')}`,
+			...(isTechnicalMaintenance
+				? [
+					'',
+					'Reason:',
+					`  ${branchFamily} is reserved for technical/maintenance work.`,
+					'  Feature releases should normally use feat/* or feature/*.',
+					'',
+					'Example:',
+					'  ci(release): update semantic versioning',
+				]
+				: []),
+		].join('\n');
+	}
 	return undefined;
 }
 
