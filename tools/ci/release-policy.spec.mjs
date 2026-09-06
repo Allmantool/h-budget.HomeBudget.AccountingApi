@@ -112,3 +112,19 @@ test('propagates normalized SemVer and the release SHA into both release images'
 		assert.match(dockerfile, /\/p:InformationalVersion=\$BUILD_VERSION\+\$BUILD_SHA/);
 	}
 });
+
+test('records artifact-only deployment metadata from release outputs without Git discovery', async () => {
+	const workflow = await readFile(new URL('../../.github/workflows/release-tag.yml', import.meta.url), 'utf8');
+	const recordDeployment = workflow.slice(workflow.indexOf('  record-deployment:'));
+
+	assert.doesNotMatch(recordDeployment, /actions\/checkout/);
+	assert.match(recordDeployment, /RELEASE_VERSION: \$\{\{ needs\.verify-release\.outputs\.release_version \}\}/);
+	assert.match(recordDeployment, /DOCKERHUB_USERNAME: \$\{\{ secrets\.DOCKERHUB_USERNAME \}\}/);
+	assert.match(recordDeployment, /API_IMAGE="\$DOCKERHUB_USERNAME\/\$ACCOUNTING_API_IMAGE_NAME:\$RELEASE_VERSION"/);
+	assert.match(recordDeployment, /WORKER_IMAGE="\$DOCKERHUB_USERNAME\/\$ACCOUNTING_WORKER_IMAGE_NAME:\$RELEASE_VERSION"/);
+	assert.match(recordDeployment, /gh release view "\$RELEASE_TAG" --repo "\$GITHUB_REPOSITORY"/);
+	assert.match(recordDeployment, /gh release edit "\$RELEASE_TAG" --repo "\$GITHUB_REPOSITORY"/);
+	assert.match(recordDeployment, /:\s*"\$\{RELEASE_TAG:\?Release tag is required\}"/);
+	assert.match(recordDeployment, /:\s*"\$\{RELEASE_VERSION:\?Release version is required\}"/);
+	assert.match(recordDeployment, /:\s*"\$\{RELEASE_SHA:\?Release SHA is required\}"/);
+});

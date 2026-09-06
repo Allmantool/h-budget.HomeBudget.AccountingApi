@@ -346,17 +346,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
           RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
-          API_IMAGE: ${{ needs.push-api-image.outputs.image_ref }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           API_DIGEST: ${{ needs.push-api-image.outputs.image_digest }}
-          WORKER_IMAGE: ${{ needs.push-worker-image.outputs.image_ref }}
           WORKER_DIGEST: ${{ needs.push-worker-image.outputs.image_digest }}
         run: |
           set -euo pipefail
+          : "${RELEASE_TAG:?Release tag is required}"
+          : "${RELEASE_VERSION:?Release version is required}"
+          : "${RELEASE_SHA:?Release SHA is required}"
+          : "${DOCKERHUB_USERNAME:?Docker Hub username is required}"
+          : "${API_DIGEST:?API image digest is required}"
+          : "${WORKER_DIGEST:?Worker image digest is required}"
+          API_IMAGE="$DOCKERHUB_USERNAME/$ACCOUNTING_API_IMAGE_NAME:$RELEASE_VERSION"
+          WORKER_IMAGE="$DOCKERHUB_USERNAME/$ACCOUNTING_WORKER_IMAGE_NAME:$RELEASE_VERSION"
           mkdir -p release-artifacts
           cat > release-artifacts/release-metadata.json <<EOF
           {
             "release_tag": "$RELEASE_TAG",
+            "release_version": "$RELEASE_VERSION",
             "commit_sha": "$RELEASE_SHA",
             "source_ref": "refs/tags/$RELEASE_TAG",
             "workflow_run_url": "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
@@ -368,7 +377,7 @@ jobs:
           }
           EOF
 
-          gh release view "$RELEASE_TAG" --json body --jq '.body' > release-notes.md
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > release-notes.md
           sed '/<!-- accounting-release-trace:start -->/,/<!-- accounting-release-trace:end -->/d' release-notes.md > updated-release-notes.md
           cat >> updated-release-notes.md <<EOF
 
@@ -382,7 +391,7 @@ jobs:
           - Worker: \`$WORKER_IMAGE@$WORKER_DIGEST\`
           <!-- accounting-release-trace:end -->
           EOF
-          gh release edit "$RELEASE_TAG" --notes-file updated-release-notes.md
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file updated-release-notes.md
 
       - name: Upload release metadata
         if: ${{ needs.verify-release.result == 'success' && needs.push-api-image.result == 'success' && needs.push-worker-image.result == 'success' }}

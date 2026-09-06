@@ -37,9 +37,19 @@ stable tag.
 - Accounting's `update_semver.yml` runs only on a `master` push, serializes
   runs, reuses the complete verification workflow, and is the only workflow
   that invokes `semantic-release`.
-- The suspected missing-tag behavior is not confirmed by current remote state:
-  GitHub Actions run `34023412731` is actively verifying the latest `master`
-  SHA `95f3ad63835b2cd7acdf0cd15fa70cb0f3c75fb3` before it can publish a tag.
+- The suspected missing-tag behavior is refuted by current remote state:
+  GitHub Actions release run `34023412731` verified the latest `master` SHA
+  `95f3ad63835b2cd7acdf0cd15fa70cb0f3c75fb3` before publishing its tag.
+- Remote release run `34023412731` completed successfully: semantic-release
+  created `v0.1.0` for `95f3ad63835b2cd7acdf0cd15fa70cb0f3c75fb3`, created the
+  matching GitHub Release, and dispatched deployment run `34024958127`.
+- Deployment run `34024958127` built and published both versioned images but
+  failed in `record-deployment`. That job intentionally has no checkout. Its
+  `gh release view/edit` commands omitted `--repo`, causing GitHub CLI to run
+  local Git repository discovery and fail because no `.git` directory exists.
+- Image-reference outputs were blank in the failed metadata step because their
+  values included `DOCKERHUB_USERNAME`, a secret. GitHub Actions suppresses
+  outputs that may contain a secret; the digests were available.
 - Accounting PR verification has `contents: read`, checks out the PR head with
   `persist-credentials: false`, and has no tag or GitHub Release command.
 - Accounting's prior `.releaserc.json` only explicitly described `fix`,
@@ -80,6 +90,11 @@ stable tag.
   immutable version tag and SHA tag, OCI version/revision/source labels, and
   .NET `Version`/`InformationalVersion` build metadata derived from that
   identity.
+- Metadata recording is an artifact-only operation. It receives release tag,
+  normalized version, and SHA from `verify-release`, reconstructs exact image
+  references from the local image-name constants plus `DOCKERHUB_USERNAME`,
+  consumes image digests from publish jobs, and addresses GitHub Release APIs
+  with the explicit `GITHUB_REPOSITORY`. It never needs Git discovery.
 
 ## Release Decision Matrix
 
@@ -148,6 +163,7 @@ metadata changes compile without changing application code.
 | REQ-002 / AC-002 | `pr-release-policy.yml` | Policy workflow test and YAML parser | PASS |
 | REL-001 / AC-003 | `update_semver.yml` | Policy workflow test, YAML parser, diff review | PASS |
 | REL-002 / AC-004 | Dockerfiles, `release-tag.yml` | Versioned API build and policy workflow test | PASS |
+| Metadata traceability | `release-tag.yml` | Regression test and remote failed-run audit | PASS |
 
 ## Progress and Resume State
 
@@ -164,6 +180,10 @@ metadata changes compile without changing application code.
   parsed with Prettier; `git diff --check`; targeted API build with
   `/p:Version=0.0.702 /p:InformationalVersion=0.0.702+testsha`; and 38/38 API
   unit tests.
+- Metadata-failure remediation: `npm run test:release-policy` passes 9/9 and
+  covers explicit release identity propagation, secret-safe image-reference
+  construction, required-input failures, and `gh --repo` usage without a
+  checkout.
 - Remaining verification: an unauthenticated local semantic-release dry run
   loaded both configured plugins but did not complete in the 30-second command
   window; the authenticated `master` GitHub Actions release and Docker/Testcontainers
