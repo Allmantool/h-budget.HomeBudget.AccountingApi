@@ -1,19 +1,6 @@
 {
-  "branches": [
-    "master",
-    {
-      "name": "tech/*",
-      "prerelease": true
-    },
-    {
-      "name": "fix/*",
-      "prerelease": true
-    },
-    {
-      "name": "feature/*",
-      "prerelease": true
-    }
-  ],
+  "branches": ["master"],
+  "tagFormat": "v${version}",
   "plugins": [
     [
       "@semantic-release/commit-analyzer",

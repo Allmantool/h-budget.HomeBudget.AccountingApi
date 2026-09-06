@@ -1,115 +1,102 @@
-name: Release Tag
+name: Accounting Deployment
+run-name: ${{ inputs.redeploy && 'Redeploy' || 'Deploy' }} ${{ inputs.release_tag }}
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable vMAJOR.MINOR.PATCH tag to deploy.
+        required: true
+        type: string
+      release_sha:
+        description: Expected full commit SHA for an automatically dispatched release.
+        required: false
+        type: string
+      redeploy:
+        description: Distinguish a manual stable-tag redeploy from the initial deployment.
+        default: true
+        required: false
+        type: boolean
 
 permissions:
   contents: read
-  deployments: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: accounting-production
   cancel-in-progress: false
 
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   ACCOUNTING_API_IMAGE_NAME: homebudget-accounting-api
   ACCOUNTING_WORKER_IMAGE_NAME: homebudget-accounting-payments-consumer-worker
 
 jobs:
-  verify-tag-source:
-    name: Verify Tag Origin
+  verify-release:
+    name: Verify release identity
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      release_tag: ${{ steps.validate.outputs.release_tag }}
-      release_commit: ${{ steps.validate.outputs.release_commit }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@v5
+      - name: Check out immutable release tag
+        uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Validate tag is reachable from master
-        id: validate
+      - id: release
+        name: Validate tag, source, and GitHub Release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
-          git fetch origin master --depth=1
-
-          if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/master"; then
-            echo "::error::Tag ${GITHUB_REF_NAME} points to ${GITHUB_SHA}, which is not reachable from origin/master."
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use the stable vMAJOR.MINOR.PATCH format: $RELEASE_TAG" >&2
             exit 1
           fi
 
-          echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          echo "release_commit=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Validated tag ${GITHUB_REF_NAME} on commit ${GITHUB_SHA}."
+          git fetch --force --tags origin
+          git fetch origin master --depth=1
+          release_sha="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$release_sha" ]]; then
+            echo "Checked-out commit does not match release tag $RELEASE_TAG." >&2
+            exit 1
+          fi
+          if [[ -n "$EXPECTED_RELEASE_SHA" && "$EXPECTED_RELEASE_SHA" != "$release_sha" ]]; then
+            echo "Supplied release SHA does not match release tag $RELEASE_TAG." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$release_sha" origin/master; then
+            echo "Release tag $RELEASE_TAG is not reachable from master." >&2
+            exit 1
+          fi
 
-  validate-application-build:
-    name: Validate Application Build
-    runs-on: ubuntu-latest
-    needs: verify-tag-source
-    steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+          release_target="$(gh release view "$RELEASE_TAG" --json targetCommitish --jq '.targetCommitish')"
+          release_target_sha="$(git rev-parse "$release_target^{commit}" 2>/dev/null || true)"
+          if [[ "$release_target" != "$release_sha" && "$release_target_sha" != "$release_sha" ]]; then
+            echo "GitHub Release $RELEASE_TAG does not identify the tagged commit." >&2
+            exit 1
+          fi
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "10.0.x"
-          cache: true
-          cache-dependency-path: |
-            Directory.Packages.props
-            **/*.csproj
-
-      - name: Restore .NET packages
-        run: dotnet restore HomeBudgetAccountingApi.sln
-
-      - name: Build solution
-        run: dotnet build HomeBudgetAccountingApi.sln --configuration Release --no-restore --no-incremental
-
-  create-deployment:
-    name: Create GitHub Deployment
-    runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - validate-application-build
-    outputs:
-      deployment_id: ${{ steps.create.outputs.deployment_id }}
-    steps:
-      - name: Create deployment
-        id: create
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const deployment = await github.rest.repos.createDeployment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.ref,
-              auto_merge: false,
-              required_contexts: [],
-              environment: 'production',
-              transient_environment: false,
-              production_environment: true,
-              description: `Deploying HomeBudget Accounting release ${context.ref.replace('refs/tags/', '')}`
-            });
-
-            core.setOutput('deployment_id', deployment.data.id.toString());
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
   build-api-image:
-    name: Build Accounting API Image
+    name: Build Accounting API image
     runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - validate-application-build
+    timeout-minutes: 30
+    needs: verify-release
     steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@v5
+      - name: Check out immutable release tag
+        uses: actions/checkout@v6
         with:
+          ref: ${{ needs.verify-release.outputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -121,87 +108,115 @@ jobs:
           file: ./dockerfile
           target: final
           build-args: |
-            BUILD_VERSION=${{ needs.verify-tag-source.outputs.release_tag }}
+            BUILD_VERSION=${{ needs.verify-release.outputs.release_tag }}
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:${{ needs.verify-tag-source.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:sha-${{ needs.verify-release.outputs.release_sha }}
           labels: |
             org.opencontainers.image.title=${{ env.ACCOUNTING_API_IMAGE_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ needs.verify-tag-source.outputs.release_commit }}
-            org.opencontainers.image.version=${{ needs.verify-tag-source.outputs.release_tag }}
+            org.opencontainers.image.revision=${{ needs.verify-release.outputs.release_sha }}
+            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_tag }}
           outputs: type=docker,dest=/tmp/accounting-api-image.tar
           cache-from: type=gha,scope=accounting-api-release
           cache-to: type=gha,mode=max,scope=accounting-api-release
 
-      - name: Compress Accounting API image archive
-        shell: bash
-        run: gzip -c /tmp/accounting-api-image.tar > /tmp/accounting-api-image.tar.gz
-
       - name: Upload Accounting API image artifact
         uses: actions/upload-artifact@v5
         with:
-          name: accounting-api-image-${{ needs.verify-tag-source.outputs.release_tag }}
-          path: /tmp/accounting-api-image.tar.gz
+          name: accounting-api-image-${{ needs.verify-release.outputs.release_tag }}
+          path: /tmp/accounting-api-image.tar
           retention-days: 1
           if-no-files-found: error
 
   push-api-image:
-    name: Push Accounting API Image
+    name: Publish Accounting API image
     runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - create-deployment
-      - build-api-image
+    timeout-minutes: 20
+    needs: [verify-release, build-api-image]
     outputs:
-      image_ref: ${{ steps.push.outputs.image_ref }}
-      image_digest: ${{ steps.push.outputs.image_digest }}
+      image_ref: ${{ steps.publish.outputs.image_ref }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
     steps:
       - name: Download Accounting API image artifact
         uses: actions/download-artifact@v5
         with:
-          name: accounting-api-image-${{ needs.verify-tag-source.outputs.release_tag }}
+          name: accounting-api-image-${{ needs.verify-release.outputs.release_tag }}
           path: docker-artifacts/api
 
       - name: Load Accounting API image
         shell: bash
-        run: |
-          gunzip -c docker-artifacts/api/accounting-api-image.tar.gz | docker load
+        run: docker load --input docker-artifacts/api/accounting-api-image.tar
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Accounting API image
-        id: push
+      - id: publish
+        name: Validate and publish immutable API tags
         shell: bash
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}
+          RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
         run: |
-          image_ref="${DOCKERHUB_USERNAME}/${ACCOUNTING_API_IMAGE_NAME}:${{ needs.verify-tag-source.outputs.release_tag }}"
-          docker push "${image_ref}"
+          set -euo pipefail
+          version_ref="$IMAGE_NAME:$RELEASE_TAG"
+          sha_ref="$IMAGE_NAME:sha-$RELEASE_SHA"
 
-          digest="$(docker image inspect "${image_ref}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          inspect_tag() {
+            local image_ref="$1"
+            local inspection=''
+            if inspection="$(docker manifest inspect "$image_ref" 2>&1)"; then
+              docker pull "$image_ref" >/dev/null
+              local revision
+              local version
+              revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
+              version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image_ref")"
+              if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_TAG" ]]; then
+                echo "Existing image tag points to a different release: $image_ref" >&2
+                exit 1
+              fi
+              echo true
+            elif [[ "$inspection" == *'no such manifest'* || "$inspection" == *'manifest unknown'* ]]; then
+              echo false
+            else
+              echo "Unable to confirm Docker image tag $image_ref is unused: $inspection" >&2
+              exit 1
+            fi
+          }
 
-          if [[ -z "${digest}" ]]; then
-            echo "::error::Unable to determine pushed image digest for ${image_ref}."
+          version_exists="$(inspect_tag "$version_ref")"
+          sha_exists="$(inspect_tag "$sha_ref")"
+          if [[ "$version_exists" != "$sha_exists" ]]; then
+            echo 'Only one immutable image tag exists; refusing an inconsistent release.' >&2
             exit 1
           fi
+          if [[ "$version_exists" == false ]]; then
+            docker push "$version_ref"
+            docker push "$sha_ref"
+          fi
 
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
-          echo "image_digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "Pushed digest: ${digest}"
+          docker pull "$version_ref" >/dev/null
+          digest="$(docker image inspect "$version_ref" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          [[ -n "$digest" ]]
+          echo "image_ref=$version_ref" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$digest" >> "$GITHUB_OUTPUT"
 
   build-worker-image:
-    name: Build Accounting Worker Image
+    name: Build Accounting worker image
     runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - validate-application-build
+    timeout-minutes: 30
+    needs: verify-release
     steps:
-      - name: Checkout tagged commit
-        uses: actions/checkout@v5
+      - name: Check out immutable release tag
+        uses: actions/checkout@v6
         with:
+          ref: ${{ needs.verify-release.outputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -213,204 +228,188 @@ jobs:
           file: ./HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile
           target: final
           build-args: |
-            BUILD_VERSION=${{ needs.verify-tag-source.outputs.release_tag }}
+            BUILD_VERSION=${{ needs.verify-release.outputs.release_tag }}
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:${{ needs.verify-tag-source.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:sha-${{ needs.verify-release.outputs.release_sha }}
           labels: |
             org.opencontainers.image.title=${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ needs.verify-tag-source.outputs.release_commit }}
-            org.opencontainers.image.version=${{ needs.verify-tag-source.outputs.release_tag }}
+            org.opencontainers.image.revision=${{ needs.verify-release.outputs.release_sha }}
+            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_tag }}
           outputs: type=docker,dest=/tmp/accounting-worker-image.tar
           cache-from: type=gha,scope=accounting-worker-release
           cache-to: type=gha,mode=max,scope=accounting-worker-release
 
-      - name: Compress Accounting worker image archive
-        shell: bash
-        run: gzip -c /tmp/accounting-worker-image.tar > /tmp/accounting-worker-image.tar.gz
-
       - name: Upload Accounting worker image artifact
         uses: actions/upload-artifact@v5
         with:
-          name: accounting-worker-image-${{ needs.verify-tag-source.outputs.release_tag }}
-          path: /tmp/accounting-worker-image.tar.gz
+          name: accounting-worker-image-${{ needs.verify-release.outputs.release_tag }}
+          path: /tmp/accounting-worker-image.tar
           retention-days: 1
           if-no-files-found: error
 
   push-worker-image:
-    name: Push Accounting Worker Image
+    name: Publish Accounting worker image
     runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - create-deployment
-      - build-worker-image
+    timeout-minutes: 20
+    needs: [verify-release, build-worker-image]
     outputs:
-      image_ref: ${{ steps.push.outputs.image_ref }}
-      image_digest: ${{ steps.push.outputs.image_digest }}
+      image_ref: ${{ steps.publish.outputs.image_ref }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
     steps:
       - name: Download Accounting worker image artifact
         uses: actions/download-artifact@v5
         with:
-          name: accounting-worker-image-${{ needs.verify-tag-source.outputs.release_tag }}
+          name: accounting-worker-image-${{ needs.verify-release.outputs.release_tag }}
           path: docker-artifacts/worker
 
       - name: Load Accounting worker image
         shell: bash
-        run: |
-          gunzip -c docker-artifacts/worker/accounting-worker-image.tar.gz | docker load
+        run: docker load --input docker-artifacts/worker/accounting-worker-image.tar
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Accounting worker image
-        id: push
+      - id: publish
+        name: Validate and publish immutable worker tags
         shell: bash
+        env:
+          IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}
+          RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
         run: |
-          image_ref="${DOCKERHUB_USERNAME}/${ACCOUNTING_WORKER_IMAGE_NAME}:${{ needs.verify-tag-source.outputs.release_tag }}"
-          docker push "${image_ref}"
+          set -euo pipefail
+          version_ref="$IMAGE_NAME:$RELEASE_TAG"
+          sha_ref="$IMAGE_NAME:sha-$RELEASE_SHA"
 
-          digest="$(docker image inspect "${image_ref}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          inspect_tag() {
+            local image_ref="$1"
+            local inspection=''
+            if inspection="$(docker manifest inspect "$image_ref" 2>&1)"; then
+              docker pull "$image_ref" >/dev/null
+              local revision
+              local version
+              revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
+              version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image_ref")"
+              if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_TAG" ]]; then
+                echo "Existing image tag points to a different release: $image_ref" >&2
+                exit 1
+              fi
+              echo true
+            elif [[ "$inspection" == *'no such manifest'* || "$inspection" == *'manifest unknown'* ]]; then
+              echo false
+            else
+              echo "Unable to confirm Docker image tag $image_ref is unused: $inspection" >&2
+              exit 1
+            fi
+          }
 
-          if [[ -z "${digest}" ]]; then
-            echo "::error::Unable to determine pushed image digest for ${image_ref}."
+          version_exists="$(inspect_tag "$version_ref")"
+          sha_exists="$(inspect_tag "$sha_ref")"
+          if [[ "$version_exists" != "$sha_exists" ]]; then
+            echo 'Only one immutable image tag exists; refusing an inconsistent release.' >&2
             exit 1
           fi
+          if [[ "$version_exists" == false ]]; then
+            docker push "$version_ref"
+            docker push "$sha_ref"
+          fi
 
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
-          echo "image_digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "Pushed digest: ${digest}"
+          docker pull "$version_ref" >/dev/null
+          digest="$(docker image inspect "$version_ref" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+          [[ -n "$digest" ]]
+          echo "image_ref=$version_ref" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$digest" >> "$GITHUB_OUTPUT"
 
-  publish-release-metadata:
-    name: Publish Release Metadata
+  record-deployment:
+    name: ${{ inputs.redeploy && 'Redeploy' || 'Deploy' }} ${{ needs.verify-release.outputs.release_tag }}
     runs-on: ubuntu-latest
-    needs:
-      - verify-tag-source
-      - push-api-image
-      - push-worker-image
+    timeout-minutes: 10
+    if: ${{ always() }}
+    needs: [verify-release, build-api-image, push-api-image, build-worker-image, push-worker-image]
+    environment:
+      name: production
+    permissions:
+      contents: write
     steps:
-      - name: Create release metadata
+      - name: Record deployed release metadata
+        if: ${{ needs.verify-release.result == 'success' && needs.push-api-image.result == 'success' && needs.push-worker-image.result == 'success' }}
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
+          API_IMAGE: ${{ needs.push-api-image.outputs.image_ref }}
+          API_DIGEST: ${{ needs.push-api-image.outputs.image_digest }}
+          WORKER_IMAGE: ${{ needs.push-worker-image.outputs.image_ref }}
+          WORKER_DIGEST: ${{ needs.push-worker-image.outputs.image_digest }}
         run: |
+          set -euo pipefail
           mkdir -p release-artifacts
-          cat <<EOF > release-artifacts/release-metadata.json
+          cat > release-artifacts/release-metadata.json <<EOF
           {
-            "release_tag": "${{ needs.verify-tag-source.outputs.release_tag }}",
-            "commit_sha": "${{ needs.verify-tag-source.outputs.release_commit }}",
-            "source_ref": "${GITHUB_REF}",
-            "workflow_run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+            "release_tag": "$RELEASE_TAG",
+            "commit_sha": "$RELEASE_SHA",
+            "source_ref": "refs/tags/$RELEASE_TAG",
+            "workflow_run_url": "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
+            "environment": "production",
             "images": [
-              {
-                "name": "${{ env.ACCOUNTING_API_IMAGE_NAME }}",
-                "image_ref": "${{ needs.push-api-image.outputs.image_ref }}",
-                "digest": "${{ needs.push-api-image.outputs.image_digest }}"
-              },
-              {
-                "name": "${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}",
-                "image_ref": "${{ needs.push-worker-image.outputs.image_ref }}",
-                "digest": "${{ needs.push-worker-image.outputs.image_digest }}"
-              }
+              { "name": "api", "image_ref": "$API_IMAGE", "digest": "$API_DIGEST" },
+              { "name": "worker", "image_ref": "$WORKER_IMAGE", "digest": "$WORKER_DIGEST" }
             ]
           }
           EOF
 
+          gh release view "$RELEASE_TAG" --json body --jq '.body' > release-notes.md
+          sed '/<!-- accounting-release-trace:start -->/,/<!-- accounting-release-trace:end -->/d' release-notes.md > updated-release-notes.md
+          cat >> updated-release-notes.md <<EOF
+
+          <!-- accounting-release-trace:start -->
+          ## Accounting deployment traceability
+
+          - Commit: \`$RELEASE_SHA\`
+          - Environment: \`production\`
+          - Workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - API: \`$API_IMAGE@$API_DIGEST\`
+          - Worker: \`$WORKER_IMAGE@$WORKER_DIGEST\`
+          <!-- accounting-release-trace:end -->
+          EOF
+          gh release edit "$RELEASE_TAG" --notes-file updated-release-notes.md
+
       - name: Upload release metadata
+        if: ${{ needs.verify-release.result == 'success' && needs.push-api-image.result == 'success' && needs.push-worker-image.result == 'success' }}
         uses: actions/upload-artifact@v5
         with:
-          name: release-${{ needs.verify-tag-source.outputs.release_tag }}
+          name: release-${{ needs.verify-release.outputs.release_tag }}
           path: release-artifacts/release-metadata.json
           retention-days: 30
           if-no-files-found: error
 
-  finalize-deployment:
-    name: Finalize Deployment
-    runs-on: ubuntu-latest
-    if: ${{ always() && needs.create-deployment.result == 'success' }}
-    needs:
-      - verify-tag-source
-      - create-deployment
-      - push-api-image
-      - push-worker-image
-      - publish-release-metadata
-    steps:
-      - name: Set deployment status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const releaseTag = '${{ needs.verify-tag-source.outputs.release_tag }}';
-            const apiPushResult = '${{ needs.push-api-image.result }}';
-            const workerPushResult = '${{ needs.push-worker-image.result }}';
-            const metadataResult = '${{ needs.publish-release-metadata.result }}';
-
-            const isSuccess =
-              apiPushResult === 'success' &&
-              workerPushResult === 'success' &&
-              metadataResult === 'success';
-
-            const state = isSuccess ? 'success' : 'failure';
-            let failureStage = 'metadata publication';
-
-            if (apiPushResult !== 'success') {
-              failureStage = 'accounting api image push';
-            } else if (workerPushResult !== 'success') {
-              failureStage = 'accounting worker image push';
-            }
-
-            const description = isSuccess
-              ? `Released ${releaseTag}: API and worker images published`
-              : `Release ${releaseTag} failed during ${failureStage}`;
-
-            const payload = {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: Number('${{ needs.create-deployment.outputs.deployment_id }}'),
-              state,
-              description,
-              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            };
-
-            if (isSuccess) {
-              payload.environment_url = `https://hub.docker.com/u/${process.env.DOCKERHUB_USERNAME}`;
-            }
-
-            await github.rest.repos.createDeploymentStatus(payload);
-
-  publish-release-summary:
-    name: Publish Release Summary
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs:
-      - verify-tag-source
-      - validate-application-build
-      - create-deployment
-      - build-api-image
-      - push-api-image
-      - build-worker-image
-      - push-worker-image
-      - publish-release-metadata
-      - finalize-deployment
-    steps:
-      - name: Write release summary
+      - name: Write deployment summary
+        if: always()
         shell: bash
         run: |
           {
-            echo "## Release Tag Summary"
+            echo "# ${{ inputs.redeploy && 'Redeploy' || 'Deploy' }} ${{ needs.verify-release.outputs.release_tag || inputs.release_tag }}"
             echo
-            echo "- Release tag: ${{ needs.verify-tag-source.outputs.release_tag }}"
-            echo "- Release commit: ${{ needs.verify-tag-source.outputs.release_commit }}"
-            echo "- Tag validation: ${{ needs.verify-tag-source.result }}"
-            echo "- Build validation: ${{ needs.validate-application-build.result }}"
-            echo "- Deployment creation: ${{ needs.create-deployment.result }}"
-            echo "- Accounting API image build: ${{ needs.build-api-image.result }}"
-            echo "- Accounting API image push: ${{ needs.push-api-image.result }}"
-            echo "- Accounting API image ref: ${{ needs.push-api-image.outputs.image_ref }}"
-            echo "- Accounting API image digest: ${{ needs.push-api-image.outputs.image_digest }}"
-            echo "- Accounting worker image build: ${{ needs.build-worker-image.result }}"
-            echo "- Accounting worker image push: ${{ needs.push-worker-image.result }}"
-            echo "- Accounting worker image ref: ${{ needs.push-worker-image.outputs.image_ref }}"
-            echo "- Accounting worker image digest: ${{ needs.push-worker-image.outputs.image_digest }}"
-            echo "- Metadata publication: ${{ needs.publish-release-metadata.result }}"
-            echo "- Deployment finalization: ${{ needs.finalize-deployment.result }}"
+            echo '| Property | Value |'
+            echo '|---|---|'
+            echo "| Commit | \`${{ needs.verify-release.outputs.release_sha }}\` |"
+            echo '| Environment | `production` |'
+            echo "| API image | \`${{ needs.push-api-image.outputs.image_ref }}@${{ needs.push-api-image.outputs.image_digest }}\` |"
+            echo "| Worker image | \`${{ needs.push-worker-image.outputs.image_ref }}@${{ needs.push-worker-image.outputs.image_digest }}\` |"
+            echo "| Release validation | \`${{ needs.verify-release.result }}\` |"
+            echo "| API publication | \`${{ needs.push-api-image.result }}\` |"
+            echo "| Worker publication | \`${{ needs.push-worker-image.result }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail deployment when a mandatory stage failed
+        if: ${{ needs.verify-release.result != 'success' || needs.push-api-image.result != 'success' || needs.push-worker-image.result != 'success' }}
+        shell: bash
+        run: |
+          echo 'A mandatory release stage failed; production deployment is not successful.' >&2
+          exit 1

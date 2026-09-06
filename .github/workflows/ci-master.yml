@@ -1,10 +1,12 @@
-name: CI Master
+name: Accounting PR Verification
+run-name: ${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || 'Accounting verification' }}
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
+  workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: false
   pull_request:
     branches:
       - master
@@ -12,18 +14,16 @@ on:
       - opened
       - synchronize
       - reopened
+      - ready_for_review
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
-  group: ci-master-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
   SONAR_PROJECT_KEY: Allmantool_h-budget-accounting
   SONAR_PROJECT_NAME: h-budget-accounting
   SONAR_GITHUB_REPOSITORY: Allmantool/h-budget.HomeBudget.AccountingApi
@@ -32,12 +32,15 @@ jobs:
   determine-sonar-mode:
     name: Determine Sonar Mode
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       sonar_enabled: ${{ steps.mode.outputs.sonar_enabled }}
       sonar_reason: ${{ steps.mode.outputs.sonar_reason }}
     steps:
       - name: Resolve Sonar availability
         id: mode
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
         run: |
           if [[ -n "${SONAR_TOKEN:-}" ]]; then
@@ -49,7 +52,7 @@ jobs:
           fi
 
   validate-application-build:
-    name: Validate Application Build
+    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -57,9 +60,11 @@ jobs:
       build_outcome: ${{ steps.collect-status.outputs.build_outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -90,7 +95,7 @@ jobs:
           echo "build_outcome=${BUILD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
 
   run-unit-and-component-tests:
-    name: Run Unit And Component Tests
+    name: Unit And Component Tests
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: validate-application-build
@@ -99,9 +104,11 @@ jobs:
       diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -175,7 +182,7 @@ jobs:
           echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
 
   run-api-integration-tests:
-    name: Run API Integration Tests
+    name: Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: validate-application-build
@@ -184,9 +191,11 @@ jobs:
       diagnostics_upload_outcome: ${{ steps.collect-status.outputs.diagnostics_upload_outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -249,7 +258,7 @@ jobs:
           echo "diagnostics_upload_outcome=${DIAGNOSTICS_UPLOAD_OUTCOME:-skipped}" >> "$GITHUB_OUTPUT"
 
   analyze-master-quality:
-    name: Analyze Master Quality
+    name: Quality And Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
@@ -270,9 +279,11 @@ jobs:
       sonar_end_outcome: ${{ steps.collect-status.outputs.sonar_end_outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Download unit and component test diagnostics
         uses: actions/download-artifact@v5
@@ -329,6 +340,7 @@ jobs:
         id: sonar-begin
         if: ${{ needs.determine-sonar-mode.outputs.sonar_enabled == 'true' }}
         env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           PULL_REQUEST_ID: ${{ github.event.pull_request.number }}
@@ -433,6 +445,8 @@ jobs:
       - name: End Sonar scan
         id: sonar-end
         if: ${{ always() && steps.sonar-begin.outcome == 'success' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: bash
         run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
 
@@ -485,7 +499,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## CI Master Summary"
+            echo "## Accounting Verification Summary"
             echo
             echo "- Sonar enabled: ${{ needs.determine-sonar-mode.outputs.sonar_enabled }}"
             echo "- Sonar reason: ${{ needs.determine-sonar-mode.outputs.sonar_reason }}"
@@ -519,7 +533,10 @@ jobs:
       - analyze-master-quality
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Enforce mandatory CI results
         shell: bash
