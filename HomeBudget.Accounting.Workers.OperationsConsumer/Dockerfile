@@ -8,7 +8,9 @@ WORKDIR /src
 
 ARG BUILD_CONFIGURATION=Release
 ARG BUILD_VERSION=local
+ARG BUILD_SHA=local
 ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_SHA=${BUILD_SHA}
 
 # -------------------------
 # Install dependencies
@@ -53,13 +55,17 @@ RUN dotnet restore "HomeBudget.Accounting.Workers.OperationsConsumer/HomeBudget.
 COPY . .
 
 WORKDIR "/src/HomeBudget.Accounting.Workers.OperationsConsumer"
-RUN dotnet build "HomeBudget.Accounting.Workers.OperationsConsumer.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "HomeBudget.Accounting.Workers.OperationsConsumer.csproj" -c $BUILD_CONFIGURATION -o /app/build \
+    /p:Version=$BUILD_VERSION \
+    /p:InformationalVersion=$BUILD_VERSION+$BUILD_SHA
 
 FROM build AS publish
 WORKDIR "/src/HomeBudget.Accounting.Workers.OperationsConsumer"
 RUN dotnet publish "HomeBudget.Accounting.Workers.OperationsConsumer.csproj" \
     -c $BUILD_CONFIGURATION \
     -o /app/publish \
+    /p:Version=$BUILD_VERSION \
+    /p:InformationalVersion=$BUILD_VERSION+$BUILD_SHA \
     /p:UseAppHost=false
 
 FROM base AS final

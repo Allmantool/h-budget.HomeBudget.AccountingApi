@@ -8,8 +8,10 @@ WORKDIR /scr
 
 COPY --from=mcr.microsoft.com/dotnet/sdk:10.0 /usr/share/dotnet/shared /usr/share/dotnet/shared
 
-ARG BUILD_VERSION
+ARG BUILD_VERSION=0.0.0
+ARG BUILD_SHA=local
 ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_SHA=${BUILD_SHA}
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
@@ -70,6 +72,8 @@ RUN dotnet build HomeBudgetAccountingApi.sln \
     -c Release \
     --no-incremental \
     --framework:net10.0 \
+    /p:Version=$BUILD_VERSION \
+    /p:InformationalVersion=$BUILD_VERSION+$BUILD_SHA \
     -maxcpucount:1 \
     -o /app/build
 
@@ -83,6 +87,8 @@ RUN dotnet publish "HomeBudgetAccountingApi.sln" \
     --no-restore \
     /maxcpucount:1 \
     --framework net10.0 \
+    /p:Version=$BUILD_VERSION \
+    /p:InformationalVersion=$BUILD_VERSION+$BUILD_SHA \
     -c Release \
     -v Diagnostic \
     -o /app/publish

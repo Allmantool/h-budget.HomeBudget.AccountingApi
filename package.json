@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test:release-policy": "node --test tools/ci/release-policy.spec.mjs"
+  },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/commit-analyzer": "^13.0.1",

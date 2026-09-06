@@ -36,10 +36,11 @@ jobs:
     timeout-minutes: 10
     outputs:
       release_tag: ${{ steps.release.outputs.release_tag }}
+      release_version: ${{ steps.release.outputs.release_version }}
       release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
       - name: Check out immutable release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 0
@@ -83,6 +84,7 @@ jobs:
           fi
 
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
           echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
   build-api-image:
@@ -92,37 +94,38 @@ jobs:
     needs: verify-release
     steps:
       - name: Check out immutable release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.verify-release.outputs.release_tag }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build Accounting API image archive
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: ./dockerfile
           target: final
           build-args: |
-            BUILD_VERSION=${{ needs.verify-release.outputs.release_tag }}
+            BUILD_VERSION=${{ needs.verify-release.outputs.release_version }}
+            BUILD_SHA=${{ needs.verify-release.outputs.release_sha }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}:sha-${{ needs.verify-release.outputs.release_sha }}
           labels: |
             org.opencontainers.image.title=${{ env.ACCOUNTING_API_IMAGE_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.verify-release.outputs.release_sha }}
-            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_tag }}
+            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_version }}
           outputs: type=docker,dest=/tmp/accounting-api-image.tar
           cache-from: type=gha,scope=accounting-api-release
           cache-to: type=gha,mode=max,scope=accounting-api-release
 
       - name: Upload Accounting API image artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: accounting-api-image-${{ needs.verify-release.outputs.release_tag }}
           path: /tmp/accounting-api-image.tar
@@ -139,7 +142,7 @@ jobs:
       image_digest: ${{ steps.publish.outputs.image_digest }}
     steps:
       - name: Download Accounting API image artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: accounting-api-image-${{ needs.verify-release.outputs.release_tag }}
           path: docker-artifacts/api
@@ -149,7 +152,7 @@ jobs:
         run: docker load --input docker-artifacts/api/accounting-api-image.tar
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -159,11 +162,11 @@ jobs:
         shell: bash
         env:
           IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_API_IMAGE_NAME }}
-          RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
           RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
         run: |
           set -euo pipefail
-          version_ref="$IMAGE_NAME:$RELEASE_TAG"
+          version_ref="$IMAGE_NAME:$RELEASE_VERSION"
           sha_ref="$IMAGE_NAME:sha-$RELEASE_SHA"
 
           inspect_tag() {
@@ -175,7 +178,7 @@ jobs:
               local version
               revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
               version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image_ref")"
-              if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_TAG" ]]; then
+            if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_VERSION" ]]; then
                 echo "Existing image tag points to a different release: $image_ref" >&2
                 exit 1
               fi
@@ -212,37 +215,38 @@ jobs:
     needs: verify-release
     steps:
       - name: Check out immutable release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ needs.verify-release.outputs.release_tag }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build Accounting worker image archive
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: ./HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile
           target: final
           build-args: |
-            BUILD_VERSION=${{ needs.verify-release.outputs.release_tag }}
+            BUILD_VERSION=${{ needs.verify-release.outputs.release_version }}
+            BUILD_SHA=${{ needs.verify-release.outputs.release_sha }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:${{ needs.verify-release.outputs.release_version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}:sha-${{ needs.verify-release.outputs.release_sha }}
           labels: |
             org.opencontainers.image.title=${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.verify-release.outputs.release_sha }}
-            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_tag }}
+            org.opencontainers.image.version=${{ needs.verify-release.outputs.release_version }}
           outputs: type=docker,dest=/tmp/accounting-worker-image.tar
           cache-from: type=gha,scope=accounting-worker-release
           cache-to: type=gha,mode=max,scope=accounting-worker-release
 
       - name: Upload Accounting worker image artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: accounting-worker-image-${{ needs.verify-release.outputs.release_tag }}
           path: /tmp/accounting-worker-image.tar
@@ -259,7 +263,7 @@ jobs:
       image_digest: ${{ steps.publish.outputs.image_digest }}
     steps:
       - name: Download Accounting worker image artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: accounting-worker-image-${{ needs.verify-release.outputs.release_tag }}
           path: docker-artifacts/worker
@@ -269,7 +273,7 @@ jobs:
         run: docker load --input docker-artifacts/worker/accounting-worker-image.tar
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -279,11 +283,11 @@ jobs:
         shell: bash
         env:
           IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.ACCOUNTING_WORKER_IMAGE_NAME }}
-          RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
           RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
         run: |
           set -euo pipefail
-          version_ref="$IMAGE_NAME:$RELEASE_TAG"
+          version_ref="$IMAGE_NAME:$RELEASE_VERSION"
           sha_ref="$IMAGE_NAME:sha-$RELEASE_SHA"
 
           inspect_tag() {
@@ -295,7 +299,7 @@ jobs:
               local version
               revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
               version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image_ref")"
-              if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_TAG" ]]; then
+            if [[ "$revision" != "$RELEASE_SHA" || "$version" != "$RELEASE_VERSION" ]]; then
                 echo "Existing image tag points to a different release: $image_ref" >&2
                 exit 1
               fi
@@ -342,17 +346,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.verify-release.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.verify-release.outputs.release_version }}
           RELEASE_SHA: ${{ needs.verify-release.outputs.release_sha }}
-          API_IMAGE: ${{ needs.push-api-image.outputs.image_ref }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           API_DIGEST: ${{ needs.push-api-image.outputs.image_digest }}
-          WORKER_IMAGE: ${{ needs.push-worker-image.outputs.image_ref }}
           WORKER_DIGEST: ${{ needs.push-worker-image.outputs.image_digest }}
         run: |
           set -euo pipefail
+          : "${RELEASE_TAG:?Release tag is required}"
+          : "${RELEASE_VERSION:?Release version is required}"
+          : "${RELEASE_SHA:?Release SHA is required}"
+          : "${DOCKERHUB_USERNAME:?Docker Hub username is required}"
+          : "${API_DIGEST:?API image digest is required}"
+          : "${WORKER_DIGEST:?Worker image digest is required}"
+          API_IMAGE="$DOCKERHUB_USERNAME/$ACCOUNTING_API_IMAGE_NAME:$RELEASE_VERSION"
+          WORKER_IMAGE="$DOCKERHUB_USERNAME/$ACCOUNTING_WORKER_IMAGE_NAME:$RELEASE_VERSION"
           mkdir -p release-artifacts
           cat > release-artifacts/release-metadata.json <<EOF
           {
             "release_tag": "$RELEASE_TAG",
+            "release_version": "$RELEASE_VERSION",
             "commit_sha": "$RELEASE_SHA",
             "source_ref": "refs/tags/$RELEASE_TAG",
             "workflow_run_url": "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID",
@@ -364,7 +377,7 @@ jobs:
           }
           EOF
 
-          gh release view "$RELEASE_TAG" --json body --jq '.body' > release-notes.md
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > release-notes.md
           sed '/<!-- accounting-release-trace:start -->/,/<!-- accounting-release-trace:end -->/d' release-notes.md > updated-release-notes.md
           cat >> updated-release-notes.md <<EOF
 
@@ -378,11 +391,11 @@ jobs:
           - Worker: \`$WORKER_IMAGE@$WORKER_DIGEST\`
           <!-- accounting-release-trace:end -->
           EOF
-          gh release edit "$RELEASE_TAG" --notes-file updated-release-notes.md
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file updated-release-notes.md
 
       - name: Upload release metadata
         if: ${{ needs.verify-release.result == 'success' && needs.push-api-image.result == 'success' && needs.push-worker-image.result == 'success' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: release-${{ needs.verify-release.outputs.release_tag }}
           path: release-artifacts/release-metadata.json
