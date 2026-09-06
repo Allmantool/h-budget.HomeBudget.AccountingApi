@@ -100,6 +100,43 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task ApplyTransfer_WhenSenderProjectionUsesNegativeSignedAmount_ShouldAcceptTheTransfer()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
+            var request = new CrossAccountsTransferRequest
+            {
+                Amount = 23m,
+                Sender = senderAccountId,
+                Recipient = recipientAccountId,
+                Multiplier = 1m,
+                OperationAt = new DateOnly(2025, 3, 12)
+            };
+
+            var response = await _restClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post).AddJsonBody(request));
+
+            response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+            response.Data.IsSucceeded.Should().BeTrue(DescribeResponse(response));
+            var operationId = response.Data.Payload.PaymentOperationId;
+            var senderHistory = await WaitForHistoryAsync(
+                senderAccountId,
+                records => records.Count == 1 && records.Single().Record.Key == operationId,
+                [operationId]);
+            var recipientHistory = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count == 1 && records.Single().Record.Key == operationId,
+                [operationId]);
+
+            senderHistory.Single().Record.Amount.Should().Be(
+                -23m,
+                "the transfer write contract creates a signed sender operation after accepting its positive transfer magnitude");
+            recipientHistory.Single().Record.Amount.Should().Be(
+                23m,
+                "the transfer write contract creates the corresponding positive recipient operation");
+        }
+
+        [Test]
         public async Task ApplyTransfer_WithCustomConversionMultiplier_ThenPersistsTheCustomRateAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;

@@ -25,6 +25,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Core.Models;
@@ -529,6 +530,150 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 [justCreatedOperationId])).Balance;
 
             balanceBefore.Should().BeLessThan(balanceAfter);
+        }
+
+        [TestCase(-23d)]
+        [TestCase(0d)]
+        public async Task Create_WhenAmountIsNonPositive_ShouldReturnBadRequestWithoutCreatingAnOutboxOrIdempotencyRecord(decimal amount)
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var request = new CreateOperationRequest
+            {
+                Amount = amount,
+                Comment = "invalid-payment-create",
+                CategoryId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 12)
+            };
+
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(request), idempotencyKey),
+                [HttpStatusCode.BadRequest]);
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest, DescribeResponse(response));
+            response.Content.Should().Contain("Amount", DescribeResponse(response));
+            (await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey)).Should().BeEmpty(
+                "an API-validation failure must not register an idempotency key or write a payment command");
+        }
+
+        [TestCase(-23d)]
+        [TestCase(0d)]
+        public async Task Update_WhenAmountIsNonPositive_ShouldReturnBadRequestWithoutCreatingAnOutboxOrIdempotencyRecord(decimal amount)
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var request = new UpdateOperationRequest
+            {
+                Amount = amount,
+                Comment = "invalid-payment-update",
+                CategoryId = Guid.NewGuid().ToString(),
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 12)
+            };
+
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<UpdateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}/{Guid.NewGuid()}", Method.Patch).AddJsonBody(request),
+                    idempotencyKey),
+                [HttpStatusCode.BadRequest]);
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest, DescribeResponse(response));
+            response.Content.Should().Contain("Amount", DescribeResponse(response));
+            (await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey)).Should().BeEmpty(
+                "an API-validation failure must not register an idempotency key or write a payment command");
+        }
+
+        [Test]
+        public async Task Create_WhenAmountIsPositive_ShouldAcceptThePaymentCommand()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenAmountIsPositive_ShouldAcceptThePaymentCommand))).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var request = new CreateOperationRequest
+            {
+                Amount = 23m,
+                Comment = "positive-payment",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 12)
+            };
+
+            var response = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(request), idempotencyKey));
+
+            response.IsSuccessful.Should().BeTrue(DescribeResponse(response));
+            response.Data.IsSucceeded.Should().BeTrue(DescribeResponse(response));
+            (await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey)).Should().ContainSingle()
+                .Which.Should().Be(response.Data.Payload.CommandId);
+        }
+
+        [Test]
+        public async Task Create_WhenInvalidRequestPrecedesValidRequestWithTheSameIdempotencyKey_ShouldAcceptTheValidCommand()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenInvalidRequestPrecedesValidRequestWithTheSameIdempotencyKey_ShouldAcceptTheValidCommand))).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var validRequest = new CreateOperationRequest
+            {
+                Amount = 23m,
+                Comment = "invalid-then-valid",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 12)
+            };
+
+            var invalidResponse = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(validRequest with { Amount = -23m }),
+                    idempotencyKey),
+                [HttpStatusCode.BadRequest]);
+            var commandIdsAfterInvalidRequest = await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey);
+
+            var validResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(validRequest), idempotencyKey));
+
+            invalidResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest, DescribeResponse(invalidResponse));
+            commandIdsAfterInvalidRequest.Should().BeEmpty("the invalid request must not consume its idempotency key");
+            validResponse.IsSuccessful.Should().BeTrue(DescribeResponse(validResponse));
+            validResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(validResponse));
+            validResponse.Data.Payload.IsDuplicate.Should().BeFalse();
+            (await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey)).Should().ContainSingle()
+                .Which.Should().Be(validResponse.Data.Payload.CommandId);
+        }
+
+        [Test]
+        public async Task Create_WhenValidRequestPrecedesInvalidRequestWithTheSameIdempotencyKey_ShouldPreserveTheValidCommand()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(CategoryTypes.Income, nameof(Create_WhenValidRequestPrecedesInvalidRequestWithTheSameIdempotencyKey_ShouldPreserveTheValidCommand))).Payload;
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var validRequest = new CreateOperationRequest
+            {
+                Amount = 23m,
+                Comment = "valid-then-invalid",
+                CategoryId = categoryId,
+                ContractorId = string.Empty,
+                OperationDate = new DateOnly(2025, 3, 12)
+            };
+
+            var validResponse = await _restClient.ExecuteAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(validRequest), idempotencyKey));
+            var commandIdsAfterValidRequest = await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey);
+
+            var invalidResponse = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CreateOperationResponse>>(
+                WithIdempotencyKey(
+                    new RestRequest($"{ApiHost}/{accountId}", Method.Post).AddJsonBody(validRequest with { Amount = -23m }),
+                    idempotencyKey),
+                [HttpStatusCode.BadRequest]);
+
+            validResponse.IsSuccessful.Should().BeTrue(DescribeResponse(validResponse));
+            validResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(validResponse));
+            commandIdsAfterValidRequest.Should().ContainSingle().Which.Should().Be(validResponse.Data.Payload.CommandId);
+            invalidResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest, DescribeResponse(invalidResponse));
+            (await GetOutboxCommandIdsByIdempotencyKeyAsync(accountId, idempotencyKey)).Should().BeEquivalentTo(
+                commandIdsAfterValidRequest,
+                "a later invalid request must not replace or corrupt the accepted command registration");
         }
 
         [Test]
@@ -1068,6 +1213,34 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         private static RestRequest WithIdempotencyKey(RestRequest request, string idempotencyKey)
         {
             return request.AddHeader("Idempotency-Key", idempotencyKey);
+        }
+
+        private async Task<IReadOnlyCollection<string>> GetOutboxCommandIdsByIdempotencyKeyAsync(
+            Guid paymentAccountId,
+            string idempotencyKey)
+        {
+            await using var connection = new SqlConnection(TestContainers.AccountingDbConnectionString);
+            await connection.OpenAsync();
+            await using var command = new SqlCommand(
+                @"SELECT MessageId
+                  FROM dbo.OutboxAccountPayments
+                  WHERE AggregateId = @PaymentAccountId
+                    AND IdempotencyKeyHash = @IdempotencyKeyHash
+                  ORDER BY MessageId;",
+                connection);
+            command.Parameters.AddWithValue("@PaymentAccountId", paymentAccountId.ToString());
+            command.Parameters.AddWithValue(
+                "@IdempotencyKeyHash",
+                PaymentCommandFingerprint.HashIdempotencyKey(idempotencyKey));
+
+            var commandIds = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                commandIds.Add(reader.GetString(0));
+            }
+
+            return commandIds;
         }
 
         private async Task<string> GetOutboxPayloadAsync(string commandId)

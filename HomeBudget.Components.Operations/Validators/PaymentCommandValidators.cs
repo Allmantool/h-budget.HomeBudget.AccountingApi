@@ -11,7 +11,8 @@ namespace HomeBudget.Components.Operations.Validators
     {
         protected static IReadOnlyCollection<string> ValidatePaymentOperation(
             FinancialTransaction operation,
-            string operationName)
+            string operationName,
+            bool requirePositiveAmount = false)
         {
             var failures = new List<string>();
 
@@ -32,7 +33,13 @@ namespace HomeBudget.Components.Operations.Validators
 
             if (operation.Amount == 0m)
             {
-                failures.Add("Amount must not be zero");
+                failures.Add(requirePositiveAmount
+                    ? "Amount must be greater than zero"
+                    : "Amount must not be zero");
+            }
+            else if (requirePositiveAmount && operation.Amount < 0m)
+            {
+                failures.Add("Amount must be greater than zero");
             }
 
             if (operation.OperationDay == default)

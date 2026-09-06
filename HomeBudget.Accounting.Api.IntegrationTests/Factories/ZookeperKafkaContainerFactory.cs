@@ -13,11 +13,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Factories
     {
         public static async Task<IContainer> BuildAsync(INetwork network)
         {
+            var containerName = $"{nameof(TestContainersService)}-test-zookeper-{System.Guid.NewGuid():N}";
+
             return await DockerContainerFactory.GetOrCreateDockerContainerAsync(
-                    $"{nameof(TestContainersService)}-test-zookeper",
+                    containerName,
                     cb => cb
                     .WithImage("confluentinc/cp-zookeeper:7.9.0")
-                    .WithName($"{nameof(TestContainersService)}-test-zookeper")
+                    .WithName(containerName)
                     .WithHostname(TestContainerHostNames.ZK)
                     .WithEnvironment("ZOOKEEPER_CLIENT_PORT", "2181")
                     .WithEnvironment("ZOOKEEPER_TICK_TIME", "2000")

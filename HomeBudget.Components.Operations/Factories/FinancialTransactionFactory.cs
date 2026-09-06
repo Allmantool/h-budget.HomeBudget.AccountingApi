@@ -18,6 +18,11 @@ namespace HomeBudget.Components.Operations.Factories
             string contractorId,
             DateOnly operationDay)
         {
+            if (amount <= 0m)
+            {
+                return Result<FinancialTransaction>.Failure("Amount must be greater than zero");
+            }
+
             var categoryIdResult = ParseOptionalReferenceId(categoryId, nameof(categoryId));
             if (!categoryIdResult.IsSucceeded)
             {
