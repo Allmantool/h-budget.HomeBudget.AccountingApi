@@ -126,6 +126,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                 await KafkaUIContainer.DisposeAsync();
             }
 
+            if (ZkContainer != null)
+            {
+                await ZkContainer.DisposeAsync();
+            }
+
             if (KafkaNetwork != null)
             {
                 await KafkaNetwork.DisposeAsync();

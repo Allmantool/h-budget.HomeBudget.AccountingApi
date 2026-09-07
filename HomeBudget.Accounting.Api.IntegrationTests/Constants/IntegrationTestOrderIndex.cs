@@ -14,16 +14,18 @@
 
         public const int PaymentsHistoryControllerTests = 5;
 
-        public const int CrossAccountTransferControllerTests = 6;
+        public const int PaymentsHistoryQueryMongoIntegrationTests = 6;
 
-        public const int OperationsHistoryProviderTests = 7;
+        public const int CrossAccountTransferControllerTests = 7;
 
-        public const int CategoryDocumentsClientTests = 8;
+        public const int OperationsHistoryProviderTests = 8;
 
-        public const int MongoDocumentUniquenessTests = 9;
+        public const int CategoryDocumentsClientTests = 9;
 
-        public const int PaymentOperationsEventStoreClientTests = 10;
+        public const int MongoDocumentUniquenessTests = 10;
 
-        public const int PaymentOperationsProducerTests = 11;
+        public const int PaymentOperationsEventStoreClientTests = 11;
+
+        public const int PaymentOperationsProducerTests = 12;
     }
 }

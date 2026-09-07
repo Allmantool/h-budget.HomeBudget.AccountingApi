@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
@@ -13,6 +14,11 @@ namespace HomeBudget.Components.Operations.Clients.Interfaces
         Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier);
 
         Task<IReadOnlyCollection<PaymentHistoryDocument>> GetAsync(Guid accountId, FinancialPeriod period = null);
+
+        Task<PaymentHistoryQueryResult> QueryAsync(
+            Guid accountId,
+            PaymentHistoryQuery query,
+            CancellationToken cancellationToken);
 
         Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId);
 
