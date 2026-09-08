@@ -29,6 +29,8 @@ namespace HomeBudget.Components.Operations.Configuration
         public static IServiceCollection RegisterOperationsDependencies(this IServiceCollection services, string webHostEnvironment)
         {
             return services
+                .AddScoped<IPaymentOperationHistoryService, PaymentOperationHistoryService>()
+                .AddScoped<IPaymentHistoryQueryService, PaymentHistoryQueryService>()
                 .AddScoped<IIdempotencyPreflightService, IdempotencyPreflightService>()
                 .AddScoped<IFinancialTransactionFactory, FinancialTransactionFactory>()
                 .AddScoped<ICrossAccountsTransferBuilder, CrossAccountsTransferBuilder>()

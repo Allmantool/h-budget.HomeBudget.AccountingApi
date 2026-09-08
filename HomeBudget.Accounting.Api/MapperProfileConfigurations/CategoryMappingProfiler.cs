@@ -5,7 +5,7 @@ using HomeBudget.Accounting.Domain.Models;
 
 namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
 {
-    public class CategoryMappingProfiler : Profile
+    internal class CategoryMappingProfiler : Profile
     {
         public CategoryMappingProfiler()
         {
