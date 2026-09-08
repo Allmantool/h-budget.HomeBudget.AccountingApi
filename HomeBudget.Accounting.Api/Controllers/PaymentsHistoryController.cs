@@ -9,8 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.History;
-using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Domain.Enumerations;
+using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Components.Accounts.Services.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Models;
