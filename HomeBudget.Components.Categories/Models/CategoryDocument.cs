@@ -3,7 +3,7 @@ using HomeBudget.Accounting.Infrastructure;
 
 namespace HomeBudget.Components.Categories.Models
 {
-    public class CategoryDocument : DocumentEntity<Category>
+    public sealed class CategoryDocument : DocumentEntity<Category>
     {
     }
 }

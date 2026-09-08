@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
@@ -24,6 +25,8 @@ namespace HomeBudget.Components.Operations.Clients
         private const string ProjectionAuditCollectionName = "_projection_audit";
         private const string ProjectionRunIdIndexName = "ix_payments_history_projection_run_id";
         private const string ProjectionAuditRunIdIndexName = "ux_projection_audit_run_id";
+        private const string TimelineDateIndexName = "ix_payments_history_timeline_date";
+        private const string TimelineAmountIndexName = "ix_payments_history_timeline_amount";
 
         public MongoDbOptions DbOptions { get; } = dbOptions?.Value;
 
@@ -56,6 +59,36 @@ namespace HomeBudget.Components.Operations.Clients
                 accountId);
         }
 
+        public async Task<PaymentHistoryQueryResult> QueryAsync(
+            Guid accountId,
+            PaymentHistoryQuery query,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(query);
+
+            return await TraceMongoAsync(
+                "query_timeline",
+                "payments_history",
+                async () =>
+                {
+                    var collections = (await GetPaymentAccountCollectionsAsync(accountId)).ToArray();
+                    if (collections.Length == 0)
+                    {
+                        return new PaymentHistoryQueryResult(Array.Empty<PaymentHistoryDocument>(), 0);
+                    }
+
+                    var filter = CreateQueryFilter(query);
+                    var totalCounts = await Task.WhenAll(collections.Select(collection =>
+                        collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken)));
+                    var totalCount = totalCounts.Sum();
+                    var skip = checked((query.Page - 1) * query.PageSize);
+                    var items = await MergePageAsync(collections, filter, query, skip, cancellationToken);
+
+                    return new PaymentHistoryQueryResult(items, totalCount);
+                },
+                accountId);
+        }
+
         public async Task<PaymentHistoryDocument> GetLastForPeriodAsync(string financialPeriodIdentifier)
         {
             return await TraceMongoAsync(
@@ -80,8 +113,15 @@ namespace HomeBudget.Components.Operations.Clients
                     var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
                     var tasks = targetCollections.Select(async collection =>
                     {
-                        var documents = await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty).ToListAsync();
-                        return OrderHistoryDocuments(documents).LastOrDefault();
+                        var sort = Builders<PaymentHistoryDocument>.Sort
+                            .Descending(d => d.Payload.Record.OperationDay)
+                            .Descending(d => d.Payload.Record.OperationUnixTime)
+                            .Descending(d => d.Payload.StreamRevision)
+                            .Descending(d => d.Payload.Record.Key);
+                        return await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                            .Sort(sort)
+                            .Limit(1)
+                            .FirstOrDefaultAsync();
                     });
 
                     return await Task.WhenAll(tasks);
@@ -292,9 +332,15 @@ namespace HomeBudget.Components.Operations.Clients
         {
             var databaseCollectionNames = await MongoDatabase.ListCollectionNamesAsync();
             var dbCollections = await databaseCollectionNames.ToListAsync();
-            var paymentAccountCollections = dbCollections.Where(name => name.StartsWith(accountId.ToString()));
+            var paymentAccountCollections = dbCollections.Where(name => name.StartsWith(accountId.ToString(), StringComparison.OrdinalIgnoreCase));
 
-            return paymentAccountCollections.Select(collectionName => MongoDatabase.GetCollection<PaymentHistoryDocument>(collectionName));
+            var collections = paymentAccountCollections
+                .Select(collectionName => MongoDatabase.GetCollection<PaymentHistoryDocument>(collectionName))
+                .ToArray();
+
+            await Task.WhenAll(collections.Select(EnsureTimelineIndexesAsync));
+
+            return collections;
         }
 
         private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionForPeriodAsync(string financialPeriodIdentifier)
@@ -302,6 +348,7 @@ namespace HomeBudget.Components.Operations.Clients
             var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(financialPeriodIdentifier);
             await EnsureUniqueIndexAsync(collection, "Payload.Record.Key", "ux_payments_history_record_key");
             await EnsureNonUniqueIndexAsync(collection, "ProjectionRunId", ProjectionRunIdIndexName);
+            await EnsureTimelineIndexesAsync(collection);
 
             return collection;
         }
@@ -330,6 +377,172 @@ namespace HomeBudget.Components.Operations.Clients
                 .Where(static document => document?.Payload?.Record != null)
                 .OrderByHistoryOrder()
                 .ToList();
+        }
+
+        private static FilterDefinition<PaymentHistoryDocument> CreateQueryFilter(PaymentHistoryQuery query)
+        {
+            var filter = Builders<PaymentHistoryDocument>.Filter;
+            var filters = new List<FilterDefinition<PaymentHistoryDocument>>();
+
+            if (query.DateFrom.HasValue)
+            {
+                filters.Add(filter.Gte(document => document.Payload.Record.OperationDay, query.DateFrom.Value));
+            }
+
+            if (query.DateTo.HasValue)
+            {
+                filters.Add(filter.Lte(document => document.Payload.Record.OperationDay, query.DateTo.Value));
+            }
+
+            if (query.HasCategoryFilter)
+            {
+                filters.Add(query.CategoryIds.Count > 0
+                    ? filter.In(document => document.Payload.Record.CategoryId, query.CategoryIds)
+                    : filter.Eq(document => document.Payload.Record.Key, Guid.Empty));
+            }
+
+            if (query.ContractorId.HasValue)
+            {
+                filters.Add(filter.Eq(document => document.Payload.Record.ContractorId, query.ContractorId.Value));
+            }
+
+            if (query.AmountMin.HasValue)
+            {
+                filters.Add(filter.Gte(document => document.Payload.Record.Amount, query.AmountMin.Value));
+            }
+
+            if (query.AmountMax.HasValue)
+            {
+                filters.Add(filter.Lte(document => document.Payload.Record.Amount, query.AmountMax.Value));
+            }
+
+            return filters.Count == 0 ? FilterDefinition<PaymentHistoryDocument>.Empty : filter.And(filters);
+        }
+
+        private static async Task<IReadOnlyCollection<PaymentHistoryDocument>> MergePageAsync(
+            IEnumerable<IMongoCollection<PaymentHistoryDocument>> collections,
+            FilterDefinition<PaymentHistoryDocument> filter,
+            PaymentHistoryQuery query,
+            int skip,
+            CancellationToken cancellationToken)
+        {
+            var cursors = new List<IAsyncCursor<PaymentHistoryDocument>>();
+            var heads = new List<HistoryCursorHead>();
+
+            try
+            {
+                var sort = CreateQuerySort(query);
+                foreach (var collection in collections)
+                {
+                    var cursor = await collection.FindAsync(
+                        filter,
+                        new FindOptions<PaymentHistoryDocument>
+                        {
+                            Sort = sort,
+                            BatchSize = query.PageSize
+                        },
+                        cancellationToken);
+                    cursors.Add(cursor);
+                    var head = new HistoryCursorHead(cursor);
+                    if (await head.MoveNextAsync(cancellationToken))
+                    {
+                        heads.Add(head);
+                    }
+                }
+
+                var comparer = new HistoryCursorHeadComparer(query);
+                var queue = new PriorityQueue<HistoryCursorHead, HistoryCursorHead>(comparer);
+                foreach (var head in heads)
+                {
+                    queue.Enqueue(head, head);
+                }
+
+                var items = new List<PaymentHistoryDocument>(query.PageSize);
+                var seen = 0;
+                while (queue.TryDequeue(out var head, out _))
+                {
+                    if (seen >= skip && items.Count < query.PageSize)
+                    {
+                        items.Add(head.Current);
+                    }
+
+                    seen++;
+                    if (items.Count == query.PageSize)
+                    {
+                        break;
+                    }
+
+                    if (await head.MoveNextAsync(cancellationToken))
+                    {
+                        queue.Enqueue(head, head);
+                    }
+                }
+
+                return items.AsReadOnly();
+            }
+            finally
+            {
+                foreach (var cursor in cursors)
+                {
+                    cursor.Dispose();
+                }
+            }
+        }
+
+        private static SortDefinition<PaymentHistoryDocument> CreateQuerySort(PaymentHistoryQuery query)
+        {
+            var sort = Builders<PaymentHistoryDocument>.Sort;
+            var descending = query.SortDirection == PaymentHistorySortDirection.Desc;
+
+            return query.SortBy switch
+            {
+                PaymentHistorySortField.Amount => descending
+                    ? sort.Descending(document => document.Payload.Record.Amount).Descending(document => document.Payload.Record.Key)
+                    : sort.Ascending(document => document.Payload.Record.Amount).Ascending(document => document.Payload.Record.Key),
+                _ => descending
+                    ? sort.Descending(document => document.Payload.Record.OperationDay).Descending(document => document.Payload.Record.Key)
+                    : sort.Ascending(document => document.Payload.Record.OperationDay).Ascending(document => document.Payload.Record.Key)
+            };
+        }
+
+        private sealed class HistoryCursorHead(IAsyncCursor<PaymentHistoryDocument> cursor)
+        {
+            private IEnumerator<PaymentHistoryDocument> _batchEnumerator;
+
+            public PaymentHistoryDocument Current { get; private set; }
+
+            public async Task<bool> MoveNextAsync(CancellationToken cancellationToken)
+            {
+                while (_batchEnumerator is null || !_batchEnumerator.MoveNext())
+                {
+                    _batchEnumerator?.Dispose();
+                    if (!await cursor.MoveNextAsync(cancellationToken))
+                    {
+                        return false;
+                    }
+
+                    _batchEnumerator = cursor.Current.GetEnumerator();
+                }
+
+                Current = _batchEnumerator.Current;
+                return true;
+            }
+        }
+
+        private sealed class HistoryCursorHeadComparer(PaymentHistoryQuery query) : IComparer<HistoryCursorHead>
+        {
+            public int Compare(HistoryCursorHead left, HistoryCursorHead right)
+            {
+                var leftRecord = left.Current.Payload.Record;
+                var rightRecord = right.Current.Payload.Record;
+                var first = query.SortBy == PaymentHistorySortField.Amount
+                    ? leftRecord.Amount.CompareTo(rightRecord.Amount)
+                    : leftRecord.OperationDay.CompareTo(rightRecord.OperationDay);
+                var tieBreak = leftRecord.Key.CompareTo(rightRecord.Key);
+                var comparison = first != 0 ? first : tieBreak;
+
+                return query.SortDirection == PaymentHistorySortDirection.Desc ? -comparison : comparison;
+            }
         }
 
         private static async Task<T> TraceMongoAsync<T>(
@@ -381,6 +594,28 @@ namespace HomeBudget.Components.Operations.Clients
                     [new KeyValuePair<string, object>("operation", operation)]);
                 activity?.RecordException(ex);
                 throw;
+            }
+        }
+
+        private static async Task EnsureTimelineIndexesAsync(IMongoCollection<PaymentHistoryDocument> collection)
+        {
+            var indexes = await collection.Indexes.List().ToListAsync();
+            var keys = Builders<PaymentHistoryDocument>.IndexKeys;
+
+            if (!indexes.Any(index => index.GetValue("name", string.Empty).AsString == TimelineDateIndexName))
+            {
+                await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(
+                    keys.Ascending(document => document.Payload.Record.OperationDay)
+                        .Ascending(document => document.Payload.Record.Key),
+                    new CreateIndexOptions { Name = TimelineDateIndexName }));
+            }
+
+            if (!indexes.Any(index => index.GetValue("name", string.Empty).AsString == TimelineAmountIndexName))
+            {
+                await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(
+                    keys.Ascending(document => document.Payload.Record.Amount)
+                        .Ascending(document => document.Payload.Record.Key),
+                    new CreateIndexOptions { Name = TimelineAmountIndexName }));
             }
         }
     }

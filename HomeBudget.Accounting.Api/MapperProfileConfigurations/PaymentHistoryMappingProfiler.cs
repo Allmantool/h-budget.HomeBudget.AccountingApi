@@ -3,6 +3,7 @@
 using HomeBudget.Accounting.Api.Models.History;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
 {
@@ -22,6 +23,8 @@ namespace HomeBudget.Accounting.Api.MapperProfileConfigurations
                         src.TransactionType.Key == TransactionTypes.Transfer.Key ? src.ConversionMultiplier : null));
 
             CreateMap<PaymentOperationHistoryRecord, PaymentOperationHistoryRecordResponse>();
+
+            CreateMap<PaymentHistoryQueryRequest, PaymentHistoryQueryPayload>();
         }
     }
 }
