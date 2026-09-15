@@ -25,7 +25,7 @@ namespace HomeBudget.Components.Operations.Clients
         private const string ProjectionAuditCollectionName = "_projection_audit";
         private const string ProjectionRunIdIndexName = "ix_payments_history_projection_run_id";
         private const string ProjectionAuditRunIdIndexName = "ux_projection_audit_run_id";
-        private const string TimelineDateIndexName = "ix_payments_history_timeline_date";
+        private const string TimelineDateIndexName = "ix_payments_history_timeline_date_order";
         private const string TimelineAmountIndexName = "ix_payments_history_timeline_amount";
 
         public MongoDbOptions DbOptions { get; } = dbOptions?.Value;
@@ -500,8 +500,14 @@ namespace HomeBudget.Components.Operations.Clients
                     ? sort.Descending(document => document.Payload.Record.Amount).Descending(document => document.Payload.Record.Key)
                     : sort.Ascending(document => document.Payload.Record.Amount).Ascending(document => document.Payload.Record.Key),
                 _ => descending
-                    ? sort.Descending(document => document.Payload.Record.OperationDay).Descending(document => document.Payload.Record.Key)
-                    : sort.Ascending(document => document.Payload.Record.OperationDay).Ascending(document => document.Payload.Record.Key)
+                    ? sort.Descending(document => document.Payload.Record.OperationDay)
+                        .Descending(document => document.Payload.Record.OperationUnixTime)
+                        .Descending(document => document.Payload.StreamRevision)
+                        .Descending(document => document.Payload.Record.Key)
+                    : sort.Ascending(document => document.Payload.Record.OperationDay)
+                        .Ascending(document => document.Payload.Record.OperationUnixTime)
+                        .Ascending(document => document.Payload.StreamRevision)
+                        .Ascending(document => document.Payload.Record.Key)
             };
         }
 
@@ -535,13 +541,39 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 var leftRecord = left.Current.Payload.Record;
                 var rightRecord = right.Current.Payload.Record;
-                var first = query.SortBy == PaymentHistorySortField.Amount
+                var comparison = query.SortBy == PaymentHistorySortField.Amount
                     ? leftRecord.Amount.CompareTo(rightRecord.Amount)
-                    : leftRecord.OperationDay.CompareTo(rightRecord.OperationDay);
-                var tieBreak = leftRecord.Key.CompareTo(rightRecord.Key);
-                var comparison = first != 0 ? first : tieBreak;
+                    : CompareCanonicalHistoryOrder(left, right);
+                if (comparison == 0 && query.SortBy == PaymentHistorySortField.Amount)
+                {
+                    comparison = leftRecord.Key.CompareTo(rightRecord.Key);
+                }
 
                 return query.SortDirection == PaymentHistorySortDirection.Desc ? -comparison : comparison;
+            }
+
+            private static int CompareCanonicalHistoryOrder(HistoryCursorHead left, HistoryCursorHead right)
+            {
+                var leftRecord = left.Current.Payload.Record;
+                var rightRecord = right.Current.Payload.Record;
+                var dayComparison = leftRecord.OperationDay.CompareTo(rightRecord.OperationDay);
+                if (dayComparison != 0)
+                {
+                    return dayComparison;
+                }
+
+                var timestampComparison = leftRecord.OperationUnixTime.CompareTo(rightRecord.OperationUnixTime);
+                if (timestampComparison != 0)
+                {
+                    return timestampComparison;
+                }
+
+                var revisionComparison = Nullable.Compare(
+                    left.Current.Payload.StreamRevision,
+                    right.Current.Payload.StreamRevision);
+                return revisionComparison != 0
+                    ? revisionComparison
+                    : leftRecord.Key.CompareTo(rightRecord.Key);
             }
         }
 
@@ -606,6 +638,8 @@ namespace HomeBudget.Components.Operations.Clients
             {
                 await collection.Indexes.CreateOneAsync(new CreateIndexModel<PaymentHistoryDocument>(
                     keys.Ascending(document => document.Payload.Record.OperationDay)
+                        .Ascending(document => document.Payload.Record.OperationUnixTime)
+                        .Ascending(document => document.Payload.StreamRevision)
                         .Ascending(document => document.Payload.Record.Key),
                     new CreateIndexOptions { Name = TimelineDateIndexName }));
             }
