@@ -113,6 +113,33 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task QueryHistory_WithSameDayOperations_OrdersByCanonicalSequenceInsteadOfOperationGuidAsync()
+        {
+            var accountId = await CreatePaymentAccountAsync(617m);
+            var expenseCategoryId = await CreateCategoryAsync(CategoryTypes.Expense, "query-same-day-expense");
+            var operationDay = new DateOnly(2026, 9, 15);
+            var records = new[]
+            {
+                CreateRecord("00000000-0000-0000-0000-00000000ffff", accountId, expenseCategoryId, Guid.Empty, operationDay, 1234m, -1234m, 10, 1_789_430_401_000),
+                CreateRecord("00000000-0000-0000-0000-000000000001", accountId, expenseCategoryId, Guid.Empty, operationDay, 343m, -1577m, 11, 1_789_430_402_000),
+                CreateRecord("00000000-0000-0000-0000-000000000002", accountId, Guid.Empty, Guid.Empty, operationDay, -12m, -1589m, 12, 1_789_430_403_000)
+            };
+            records[2].Record.TransactionType = TransactionTypes.Transfer;
+            await SeedAsync(accountId, records);
+
+            var firstQuery = await QueryAsync(accountId, pageSize: 10, sortDirection: "desc");
+            var repeatedQueries = await Task.WhenAll(
+                QueryAsync(accountId, pageSize: 10, sortDirection: "desc"),
+                QueryAsync(accountId, pageSize: 10, sortDirection: "desc"));
+
+            var expectedOrder = new[] { records[2].Record.Key, records[1].Record.Key, records[0].Record.Key };
+            firstQuery.Items.Select(record => record.Record.Key).Should().Equal(expectedOrder);
+            firstQuery.Items.Select(record => record.Balance).Should().Equal(-972m, -960m, -617m);
+            repeatedQueries.Should().OnlyContain(query =>
+                query.Items.Select(record => record.Record.Key).SequenceEqual(expectedOrder));
+        }
+
+        [Test]
         public async Task QueryHistory_UsesMongoFiltersGlobalPagingAndStableTieBreakingAsync()
         {
             var accountId = await CreatePaymentAccountAsync(0m);
@@ -204,7 +231,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             {
                 var indexNames = (await _historyDatabase.GetCollection<PaymentHistoryDocument>(collectionName).Indexes.ListAsync()).ToList()
                     .Select(index => index["name"].AsString);
-                indexNames.Should().Contain("ix_payments_history_timeline_date");
+                indexNames.Should().Contain("ix_payments_history_timeline_date_order");
                 indexNames.Should().Contain("ix_payments_history_timeline_amount");
             }
         }
@@ -294,7 +321,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             }
         }
 
-        private static PaymentOperationHistoryRecord CreateRecord(string id, Guid accountId, Guid categoryId, Guid contractorId, DateOnly date, decimal amount, decimal periodBalance, long revision)
+        private static PaymentOperationHistoryRecord CreateRecord(
+            string id,
+            Guid accountId,
+            Guid categoryId,
+            Guid contractorId,
+            DateOnly date,
+            decimal amount,
+            decimal periodBalance,
+            long revision,
+            long? operationUnixTime = null)
         {
             return new PaymentOperationHistoryRecord
             {
@@ -309,7 +345,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                     TransactionType = TransactionTypes.Payment,
                     Amount = amount,
                     OperationDay = date,
-                    OperationUnixTime = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeMilliseconds() + revision
+                    OperationUnixTime = operationUnixTime ??
+                        new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).ToUnixTimeMilliseconds() + revision
                 }
             };
         }
