@@ -37,6 +37,8 @@ namespace HomeBudget.Components.Operations.Configuration
                 .AddScoped<IPaymentOperationsService, PaymentOperationsService>()
                 .AddScoped<IPaymentOperationsHistoryService, PaymentOperationsHistoryService>()
                 .AddScoped<ICrossAccountsTransferService, CrossAccountsTransferService>()
+                .AddScoped<ITransferCommandStore, TransferCommandStore>()
+                .AddScoped<ITransferOutboxRegistrationFactory, TransferOutboxRegistrationFactory>()
                 .AddScoped<IOutboxPaymentStatusService, OutboxPaymentStatusService>()
                 .AddScoped<IPaymentMessageInboxService, PaymentMessageInboxService>()
                 .AddScoped<IRequestValidator<Commands.Models.AddPaymentOperationCommand>, AddPaymentOperationCommandValidator>()

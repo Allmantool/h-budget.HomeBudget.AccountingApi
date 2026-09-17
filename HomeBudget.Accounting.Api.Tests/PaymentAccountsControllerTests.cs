@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -9,6 +10,7 @@ using HomeBudget.Accounting.Api.Controllers;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Core.Models;
@@ -193,6 +195,24 @@ namespace HomeBudget.Accounting.Api.Tests
                 };
 
                 return Task.FromResult(Result<Guid>.Succeeded(payload.Key));
+            }
+
+            public Task<IdempotentDocumentWriteResult> InsertIdempotentAsync(
+                PaymentAccount payload,
+                IdempotentDocumentWriteContext context,
+                CancellationToken cancellationToken)
+            {
+                documents[payload.Key] = new PaymentAccountDocument
+                {
+                    Payload = payload,
+                    IdempotencyKeyHash = context.IdempotencyKeyHash,
+                    RequestFingerprint = context.RequestFingerprint,
+                    SourceReference = context.SourceReference
+                };
+
+                return Task.FromResult(new IdempotentDocumentWriteResult(
+                    payload.Key,
+                    IdempotentDocumentWriteState.Created));
             }
 
             public Task<Result<Guid>> RemoveAsync(string paymentAccountId)

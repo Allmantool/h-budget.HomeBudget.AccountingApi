@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.Idempotency;
 using HomeBudget.Accounting.Api.Models.Contractor;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
@@ -61,9 +63,32 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateContractorRequest request)
+        public async Task<ActionResult<Result<Guid>>> CreateNewAsync(
+            [FromBody] CreateContractorRequest request,
+            CancellationToken cancellationToken)
         {
             var newContractor = contractorFactory.Create(request.NameNodes);
+
+            var idempotencyKey = Request.Headers["Idempotency-Key"].ToString();
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                if (!ReferenceCreateContextFactory.TryCreate(
+                    idempotencyKey,
+                    ReferenceCreateFingerprint.Contractor(request),
+                    request.SourceReference,
+                    out var context))
+                {
+                    return BadRequest(Result<Guid>.Failure("A valid sourceReference and Idempotency-Key are required for an idempotent contractor create."));
+                }
+
+                var registration = await contractorDocumentsClient.InsertIdempotentAsync(
+                    newContractor,
+                    context,
+                    cancellationToken);
+                return registration.IsConflict
+                    ? Conflict(Result<Guid>.Failure("The idempotency key has already been used for a different contractor request."))
+                    : Result<Guid>.Succeeded(registration.TargetId);
+            }
 
             var saveResult = await contractorDocumentsClient.InsertOneAsync(newContractor);
 

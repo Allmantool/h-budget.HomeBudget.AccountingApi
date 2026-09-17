@@ -15,6 +15,7 @@ using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services;
+using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Components.Operations.Tests.Services
@@ -65,7 +66,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 Mock.Of<IPaymentsHistoryDocumentsClient>(),
                 paymentAccountDocumentClient.Object,
                 financialTransactionFactory.Object,
-                builder.Object);
+                builder.Object,
+                Mock.Of<ITransferCommandStore>(),
+                Mock.Of<ITransferOutboxRegistrationFactory>());
 
             var result = await sut.ApplyAsync(
                 new CrossAccountsTransferPayload
@@ -104,7 +107,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 Mock.Of<IPaymentsHistoryDocumentsClient>(),
                 paymentAccountDocumentClient.Object,
                 Mock.Of<IFinancialTransactionFactory>(),
-                Mock.Of<ICrossAccountsTransferBuilder>());
+                Mock.Of<ICrossAccountsTransferBuilder>(),
+                Mock.Of<ITransferCommandStore>(),
+                Mock.Of<ITransferOutboxRegistrationFactory>());
 
             var result = await sut.ApplyAsync(
                 new CrossAccountsTransferPayload

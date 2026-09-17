@@ -12,6 +12,8 @@ namespace HomeBudget.Accounting.Api.Models.Category
 
         public int CategoryType { get; set; }
 
+        public string SourceReference { get; set; }
+
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             if (NameNodes == null || !NameNodes.Any(node => !string.IsNullOrWhiteSpace(node)))

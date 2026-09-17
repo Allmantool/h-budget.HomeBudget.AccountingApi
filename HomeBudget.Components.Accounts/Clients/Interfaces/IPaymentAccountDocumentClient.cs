@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Core.Models;
@@ -16,6 +18,11 @@ namespace HomeBudget.Components.Accounts.Clients.Interfaces
         Task<Result<PaymentAccountDocument>> GetByIdAsync(string paymentAccountId);
 
         Task<Result<Guid>> InsertOneAsync(PaymentAccount payload);
+
+        Task<IdempotentDocumentWriteResult> InsertIdempotentAsync(
+            PaymentAccount payload,
+            IdempotentDocumentWriteContext context,
+            CancellationToken cancellationToken);
 
         Task<Result<Guid>> RemoveAsync(string paymentAccountId);
 

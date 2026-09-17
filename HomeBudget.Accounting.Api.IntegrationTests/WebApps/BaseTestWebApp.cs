@@ -44,6 +44,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         internal RestClient RestHttpClient { get; set; }
         internal RestClient RestHttpClientAllowingHttpErrors { get; set; }
+        internal Uri BaseAddress { get; private set; }
 
         public async Task<bool> InitAsync(int workersMaxAmount = 1)
         {
@@ -105,6 +106,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     var baseAddress = realAddress is null ?
                         WebFactory.ClientOptions.BaseAddress
                         : new Uri(realAddress);
+                    BaseAddress = baseAddress;
 
                     var clientOptions = new WebApplicationFactoryClientOptions
                     {

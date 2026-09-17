@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
@@ -21,6 +22,7 @@ namespace HomeBudget.Components.Accounts.Clients
     {
         private const string PayloadKeyIndexName = "ux_payment_accounts_payload_key";
         private const string TypeIndexName = "ix_payment_accounts_payload_type";
+        private const string IdempotencyIndexName = "ux_payment_accounts_idempotency_key_hash";
 
         public async Task<Result<IReadOnlyCollection<PaymentAccountDocument>>> GetAsync()
         {
@@ -73,6 +75,20 @@ namespace HomeBudget.Components.Accounts.Clients
             }
         }
 
+        public async Task<IdempotentDocumentWriteResult> InsertIdempotentAsync(
+            PaymentAccount payload,
+            IdempotentDocumentWriteContext context,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetPaymentAccountsCollectionAsync();
+            return await UpsertIdempotentAsync(
+                collection,
+                payload,
+                static account => account.Key,
+                context,
+                cancellationToken);
+        }
+
         public async Task<Result<Guid>> RemoveAsync(string paymentAccountId)
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
@@ -106,6 +122,10 @@ namespace HomeBudget.Components.Accounts.Clients
                 SourceSystem = documentResult.Payload.SourceSystem,
                 LegacyId = documentResult.Payload.LegacyId,
                 ImportBatchId = documentResult.Payload.ImportBatchId,
+                IdempotencyKeyHash = documentResult.Payload.IdempotencyKeyHash,
+                RequestFingerprint = documentResult.Payload.RequestFingerprint,
+                SourceReference = documentResult.Payload.SourceReference,
+                LastSeenUtc = documentResult.Payload.LastSeenUtc,
                 CreatedUtc = documentResult.Payload.CreatedUtc,
                 UpdatedUtc = DateTime.UtcNow
             };
@@ -123,6 +143,7 @@ namespace HomeBudget.Components.Accounts.Clients
 
             await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
             await EnsureNonUniqueIndexAsync(collection, "Payload.Type", TypeIndexName);
+            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
         }
