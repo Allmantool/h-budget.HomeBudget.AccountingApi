@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
@@ -22,6 +23,7 @@ namespace HomeBudget.Components.Categories.Clients
     {
         private const string PayloadKeyIndexName = "ux_categories_payload_key";
         private const string CategoryKeyIndexName = "ux_categories_payload_category_key";
+        private const string IdempotencyIndexName = "ux_categories_idempotency_key_hash";
 
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync()
         {
@@ -69,6 +71,20 @@ namespace HomeBudget.Components.Categories.Clients
             }
         }
 
+        public async Task<IdempotentDocumentWriteResult> InsertIdempotentAsync(
+            Category payload,
+            IdempotentDocumentWriteContext context,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetCategoriesCollectionAsync();
+            return await UpsertIdempotentAsync(
+                collection,
+                payload,
+                static category => category.Key,
+                context,
+                cancellationToken);
+        }
+
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
         {
             var filter = Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, contractorKey);
@@ -97,6 +113,7 @@ namespace HomeBudget.Components.Categories.Clients
 
             await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
             await EnsureUniqueIndexAsync(collection, "Payload.CategoryKey", CategoryKeyIndexName);
+            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
         }

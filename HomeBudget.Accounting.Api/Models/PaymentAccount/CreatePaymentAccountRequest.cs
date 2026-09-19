@@ -12,6 +12,7 @@ namespace HomeBudget.Accounting.Api.Models.PaymentAccount
         public string Currency { get; set; }
         public string Description { get; set; }
         public int AccountType { get; set; }
+        public string SourceReference { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

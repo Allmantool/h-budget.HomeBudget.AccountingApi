@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -165,21 +166,33 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 // Call the handler
                                 if (handler is null)
                                 {
+                                    var subscriptionContext = new EventStoreSubscriptionContext
+                                    {
+                                        StreamId = resolvedEvent.EventStreamId,
+                                        Revision = resolvedEvent.EventNumber.ToString(),
+                                        Position = resolvedEvent.Position.ToString(),
+                                        Acknowledge = () => sub.Ack(evt),
+                                        Retry = reason => sub.Nack(
+                                            PersistentSubscriptionNakEventAction.Retry,
+                                            reason,
+                                            evt)
+                                    };
+
                                     await OnEventAppearedAsync(
                                         eventData,
-                                        new EventStoreSubscriptionContext
-                                        {
-                                            StreamId = resolvedEvent.EventStreamId,
-                                            Revision = resolvedEvent.EventNumber.ToString(),
-                                            Position = resolvedEvent.Position.ToString()
-                                        });
+                                        subscriptionContext);
+
+                                    if (!DefersAcknowledgement)
+                                    {
+                                        await subscriptionContext.AcknowledgeAsync();
+                                    }
                                 }
                                 else
                                 {
                                     await handler(evt);
+                                    await sub.Ack(evt);
                                 }
 
-                                await sub.Ack(evt);
                                 consumeStopwatch.Stop();
                                 TelemetryMetrics.EventStoreConsumeDurationMs.Record(
                                     consumeStopwatch.Elapsed.TotalMilliseconds,
@@ -203,6 +216,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                         _logger.SubscriptionDropped(ex, reason);
                         droppedTcs.TrySetResult();
                     },
+                    bufferSize: Math.Max(1, _options.EventProcessingBatchSize),
                     cancellationToken: ct);
 
                 using (ct.Register(() => droppedTcs.TrySetCanceled(ct)))
@@ -216,6 +230,111 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             {
                 subscription?.Dispose();
                 throw;
+            }
+        }
+
+        protected async Task SubscribeStreamingAsync(string groupName, CancellationToken ct)
+        {
+            await using var subscription = _client.SubscribeToAll(
+                groupName,
+                bufferSize: Math.Max(1, _options.EventProcessingBatchSize),
+                cancellationToken: ct);
+
+            await using var enumerator = subscription.GetAsyncEnumerator(ct);
+            Task<bool> pendingMove = null;
+            var endOfSubscription = false;
+            var batchSize = Math.Max(1, _options.EventProcessingBatchSize);
+            var batchDelay = TimeSpan.FromMilliseconds(Math.Max(1, _options.EventBatchingDelayInMs));
+
+            while (!endOfSubscription)
+            {
+                var batch = new List<StreamingEvent>(batchSize);
+                var flushAt = DateTime.MaxValue;
+
+                while (batch.Count < batchSize && !endOfSubscription)
+                {
+                    pendingMove ??= enumerator.MoveNextAsync().AsTask();
+                    if (batch.Count > 0)
+                    {
+                        var remaining = flushAt - DateTime.UtcNow;
+                        if (remaining <= TimeSpan.Zero ||
+                            await Task.WhenAny(pendingMove, Task.Delay(remaining, ct)) != pendingMove)
+                        {
+                            break;
+                        }
+                    }
+
+                    var hasNext = await pendingMove;
+                    pendingMove = null;
+                    if (!hasNext)
+                    {
+                        endOfSubscription = true;
+                        break;
+                    }
+
+                    var evt = enumerator.Current;
+                    var resolvedEvent = evt.Event;
+                    if (resolvedEvent is null)
+                    {
+                        continue;
+                    }
+
+                    if (resolvedEvent.EventType.StartsWith('$') ||
+                        !resolvedEvent.EventStreamId.StartsWith(
+                            $"{EventDbEventStreams.PaymentAccountPrefix}{NameConventions.EventPrefixSeparator}",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        await subscription.Ack(evt);
+                        continue;
+                    }
+
+                    if (!SafeJsonSerializer.TryDeserialize<T>(resolvedEvent.Data.Span, out var eventData) || eventData is null)
+                    {
+                        await subscription.Nack(
+                            PersistentSubscriptionNakEventAction.Skip,
+                            "Deserialization failed",
+                            evt);
+                        continue;
+                    }
+
+                    MergeMetadata(resolvedEvent.Metadata.Span, eventData);
+                    ApplyEventStorePosition(resolvedEvent, eventData);
+                    batch.Add(new StreamingEvent(
+                        eventData,
+                        new EventStoreSubscriptionContext
+                        {
+                            StreamId = resolvedEvent.EventStreamId,
+                            Revision = resolvedEvent.EventNumber.ToString(),
+                            Position = resolvedEvent.Position.ToString()
+                        },
+                        evt));
+
+                    if (batch.Count == 1)
+                    {
+                        flushAt = DateTime.UtcNow + batchDelay;
+                    }
+                }
+
+                if (batch.Count == 0)
+                {
+                    continue;
+                }
+
+                var resolvedEvents = batch.Select(static item => item.ResolvedEvent).ToArray();
+                try
+                {
+                    await OnEventBatchAppearedAsync(
+                        batch.Select(static item => (item.EventData, item.Context)).ToArray());
+                    await subscription.Ack(resolvedEvents);
+                }
+                catch (Exception ex)
+                {
+                    _logger.HandlerFailedForEvent(ex, batch[0].ResolvedEvent.Event.EventId);
+                    await subscription.Nack(
+                        PersistentSubscriptionNakEventAction.Retry,
+                        ex.Message,
+                        resolvedEvents);
+                }
             }
         }
 
@@ -236,6 +355,22 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
         protected virtual Task OnEventAppearedAsync(T eventData, EventStoreSubscriptionContext context)
             => OnEventAppearedAsync(eventData);
+
+        protected virtual async Task OnEventBatchAppearedAsync(
+            IReadOnlyCollection<(T EventData, EventStoreSubscriptionContext Context)> events)
+        {
+            foreach (var (eventData, context) in events)
+            {
+                await OnEventAppearedAsync(eventData, context);
+            }
+        }
+
+        protected virtual bool DefersAcknowledgement => false;
+
+        private sealed record StreamingEvent(
+            T EventData,
+            EventStoreSubscriptionContext Context,
+            ResolvedEvent ResolvedEvent);
 
         private static void MergeMetadata(ReadOnlySpan<byte> metadataBytes, T target)
         {

@@ -44,8 +44,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         internal RestClient RestHttpClient { get; set; }
         internal RestClient RestHttpClientAllowingHttpErrors { get; set; }
+        internal Uri BaseAddress { get; private set; }
 
-        public async Task<bool> InitAsync(int workersMaxAmount = 1)
+        public async Task<bool> InitAsync(int workersMaxAmount = 1, bool requireIntegrationCategory = true)
         {
             try
             {
@@ -56,9 +57,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", HostEnvironments.Integration);
 
                 var testProperties = TestContext.CurrentContext.Test.Properties;
-                var testCategory = testProperties.Get("Category") as string;
+                var isIntegrationTest = testProperties["Category"]
+                    .OfType<string>()
+                    .Any(category => TestTypes.Integration.Equals(category, StringComparison.OrdinalIgnoreCase));
 
-                if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
+                if (requireIntegrationCategory && !isIntegrationTest)
                 {
                     return false;
                 }
@@ -70,6 +73,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
                 if (ShouldInitializeWorkers)
                 {
+                    var paymentHistoryProjectionGroup =
+                        $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+
                     for (var i = 0; i < workersMaxAmount; i++)
                     {
                         var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
@@ -79,7 +85,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                                 EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
                                 MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
                                 MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
-                            });
+                            },
+                            paymentHistoryProjectionGroup);
 
                         WorkerFactories.Add(worker);
                     }
@@ -105,6 +112,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     var baseAddress = realAddress is null ?
                         WebFactory.ClientOptions.BaseAddress
                         : new Uri(realAddress);
+                    BaseAddress = baseAddress;
 
                     var clientOptions = new WebApplicationFactoryClientOptions
                     {

@@ -40,7 +40,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         private readonly ILogger<PaymentOperationsEventStoreSubscriptionReadClient> _logger;
         private readonly ConcurrentDictionary<string, ProjectionBatchContext> _latestEventsPerAccount = new();
         private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _projectionLocksByAccount = new();
-        private readonly Channel<ActivityEnvelope<PaymentOperationEvent>> _paymentEventsBuffer;
+        private readonly Channel<ProjectionBatchContext> _paymentEventsBuffer;
         private readonly EventStoreDbOptions _opts;
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processorTask;
@@ -64,7 +64,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             _group = string.IsNullOrWhiteSpace(_opts.PaymentHistoryProjectionGroup)
                 ? DefaultGroup
                 : _opts.PaymentHistoryProjectionGroup;
-            _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateBufferChannel(_opts);
+            _paymentEventsBuffer = PaymentOperationEventChannelFactory.CreateProjectionBufferChannel(_opts);
             _processorTask = Task.Run(ProcessEventBatchAsync, _cts.Token);
             _processorTask.ContinueWith(
                 t => _logger.BatchProcessorCrashed(t.Exception),
@@ -76,92 +76,211 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             return CreatePersistentSubscriptionAsync(_group, ct);
         }
 
-        public override Task<PersistentSubscription> SubscribeAsync(
+        public override async Task<PersistentSubscription> SubscribeAsync(
             Func<ResolvedEvent, Task> handler = null,
             CancellationToken ct = default)
         {
-            return SubscribeAsync(_group, handler, ct);
+            if (handler is not null)
+            {
+                return await SubscribeAsync(_group, handler, ct);
+            }
+
+            await SubscribeStreamingAsync(_group, ct);
+            return null;
         }
 
-        protected override async Task OnEventAppearedAsync(PaymentOperationEvent eventData)
+        protected override bool DefersAcknowledgement => true;
+
+        protected override async Task OnEventBatchAppearedAsync(
+            IReadOnlyCollection<(PaymentOperationEvent EventData, EventStoreSubscriptionContext Context)> events)
+        {
+            var grouped = new Dictionary<string, ProjectionBatchContext>(StringComparer.Ordinal);
+            foreach (var (eventData, context) in events)
+            {
+                var projection = ProjectionBatchContext.Create(
+                    ActivityEnvelope<PaymentOperationEvent>.Capture(eventData),
+                    context);
+                var periodKey = eventData.Payload.GetMonthPeriodPaymentAccountIdentifier();
+                if (grouped.TryGetValue(periodKey, out var existing))
+                {
+                    existing.Merge(projection);
+                }
+                else
+                {
+                    grouped.Add(periodKey, projection);
+                }
+            }
+
+            var batches = grouped.ToArray();
+            await Parallel.ForEachAsync(
+                batches,
+                new ParallelOptions
+                {
+                    CancellationToken = _cts.Token,
+                    MaxDegreeOfParallelism = Math.Max(1, _opts.RequestRateLimiter)
+                },
+                ProcessProjectionBatchAsync);
+
+            var failures = batches
+                .Select(static item => item.Value.ProcessingError)
+                .Where(static error => error is not null)
+                .ToArray();
+            if (failures.Length > 0)
+            {
+                throw new AggregateException("One or more payment projection batches failed.", failures);
+            }
+        }
+
+        protected override Task OnEventAppearedAsync(PaymentOperationEvent eventData) =>
+            EnqueueProjectionAsync(eventData, null);
+
+        protected override Task OnEventAppearedAsync(
+            PaymentOperationEvent eventData,
+            EventStoreSubscriptionContext context) =>
+            EnqueueProjectionAsync(eventData, context);
+
+        private async Task EnqueueProjectionAsync(
+            PaymentOperationEvent eventData,
+            EventStoreSubscriptionContext context)
         {
             try
             {
                 await _paymentEventsBuffer.Writer.WriteAsync(
-                    ActivityEnvelope<PaymentOperationEvent>.Capture(eventData),
+                    ProjectionBatchContext.Create(
+                        ActivityEnvelope<PaymentOperationEvent>.Capture(eventData),
+                        context),
                     _cts.Token);
             }
             catch (ChannelClosedException)
             {
                 _logger.ChannelClosedDropping(eventData.EventType.ToString());
+                if (context is not null)
+                {
+                    await context.RetryAsync("Projection channel is closed.");
+                }
             }
             catch (OperationCanceledException)
             {
                 _logger.ChannelWriteCanceled();
+                if (context is not null)
+                {
+                    await context.RetryAsync("Projection channel write was canceled.");
+                }
             }
-        }
-
-        protected override Task OnEventAppearedAsync(
-            PaymentOperationEvent eventData,
-            EventStoreSubscriptionContext context)
-        {
-            return HandlePaymentOperationEventAsync(
-                ProjectionBatchContext.Create(ActivityEnvelope<PaymentOperationEvent>.Capture(eventData)),
-                context,
-                _cts.Token);
         }
 
         private async Task ProcessEventBatchAsync()
         {
             var delayMs = Math.Max(0, _opts.EventBatchingDelayInMs);
 
-            while (await _paymentEventsBuffer.Reader.WaitToReadAsync(_cts.Token))
+            try
             {
-                while (_paymentEventsBuffer.Reader.TryRead(out var evt))
+                while (await _paymentEventsBuffer.Reader.WaitToReadAsync(_cts.Token))
                 {
-                    var periodKey = evt.Item.Payload.GetMonthPeriodPaymentAccountIdentifier();
-                    _latestEventsPerAccount.AddOrUpdate(
-                        periodKey,
-                        _ => ProjectionBatchContext.Create(evt),
-                        (_, existing) =>
-                        {
-                            existing.LatestEvent = evt.Item;
-                            existing.PropagationCarriers.Add(evt.PropagationCarrier);
-                            return existing;
-                        });
-                }
-
-                if (delayMs > 0)
-                {
-                    try
+                    if (delayMs > 0)
                     {
                         await Task.Delay(TimeSpan.FromMilliseconds(delayMs), _cts.Token);
                     }
-                    catch (OperationCanceledException)
-                    {
-                    }
-                }
 
-                foreach (var (periodKey, latestEvent) in _latestEventsPerAccount.ToArray())
+                    while (_paymentEventsBuffer.Reader.TryRead(out var projection))
+                    {
+                        var periodKey = projection.LatestEvent.Payload.GetMonthPeriodPaymentAccountIdentifier();
+                        _latestEventsPerAccount.AddOrUpdate(
+                            periodKey,
+                            _ => projection,
+                            (_, existing) =>
+                            {
+                                existing.Merge(projection);
+                                return existing;
+                            });
+                    }
+
+                    var batches = new List<KeyValuePair<string, ProjectionBatchContext>>();
+                    foreach (var periodKey in _latestEventsPerAccount.Keys)
+                    {
+                        if (_latestEventsPerAccount.TryRemove(periodKey, out var batch))
+                        {
+                            batches.Add(new(periodKey, batch));
+                        }
+                    }
+
+                    await Parallel.ForEachAsync(
+                        batches,
+                        new ParallelOptions
+                        {
+                            CancellationToken = _cts.Token,
+                            MaxDegreeOfParallelism = Math.Max(1, _opts.RequestRateLimiter)
+                        },
+                        ProcessProjectionBatchAsync);
+
+                    await SettleProjectionBatchesAsync(batches);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                CancelPendingProjections();
+            }
+        }
+
+        private async ValueTask ProcessProjectionBatchAsync(
+            KeyValuePair<string, ProjectionBatchContext> item,
+            CancellationToken token)
+        {
+            var (periodKey, batch) = item;
+            try
+            {
+                await HandlePaymentOperationEventAsync(batch, batch.SubscriptionContext, token);
+            }
+            catch (OperationCanceledException ex)
+            {
+                batch.MarkFailed(ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.HandleEventsFailed(periodKey, ex);
+                TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
+                batch.MarkFailed(ex);
+            }
+        }
+
+        private async Task SettleProjectionBatchesAsync(
+            IReadOnlyCollection<KeyValuePair<string, ProjectionBatchContext>> batches)
+        {
+            foreach (var (periodKey, batch) in batches)
+            {
+                try
                 {
-                    try
+                    if (batch.ProcessingError is null)
                     {
-                        await HandlePaymentOperationEventAsync(latestEvent, null, _cts.Token);
+                        await batch.CompleteAsync();
                     }
-                    catch (OperationCanceledException)
+                    else
                     {
-                        return; // shutdown
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.HandleEventsFailed(periodKey, ex);
-                        TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
-                    }
-                    finally
-                    {
-                        _latestEventsPerAccount.Remove(periodKey, out _);
+                        await batch.RetryAsync(batch.ProcessingError);
                     }
                 }
+                catch (Exception ex)
+                {
+                    _logger.HandleEventsFailed(periodKey, ex);
+                    TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
+                    await batch.RetryAsync(ex);
+                }
+            }
+        }
+
+        private void CancelPendingProjections()
+        {
+            while (_paymentEventsBuffer.Reader.TryRead(out var projection))
+            {
+                _ = projection.RetryAsync(new OperationCanceledException("Projection processor stopped."));
+            }
+
+            foreach (var batch in _latestEventsPerAccount.Values)
+            {
+                _ = batch.RetryAsync(new OperationCanceledException("Projection processor stopped."));
             }
         }
 
@@ -316,6 +435,32 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
                 throw;
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _cts.Cancel();
+                _paymentEventsBuffer.Writer.TryComplete();
+
+                try
+                {
+                    _processorTask.Wait(TimeSpan.FromSeconds(5));
+                }
+                catch
+                {
+                }
+
+                foreach (var projectionLock in _projectionLocksByAccount.Values)
+                {
+                    projectionLock.Dispose();
+                }
+
+                _cts.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         private static string MaskAccountId(Guid accountId)

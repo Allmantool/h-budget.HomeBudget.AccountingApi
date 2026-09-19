@@ -9,9 +9,11 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.Idempotency;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
+using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Core.Models;
 
@@ -67,7 +69,7 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<Guid>> CreateNewAsync(
+        public async Task<ActionResult<Result<Guid>>> CreateNewAsync(
             [FromBody] CreatePaymentAccountRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -77,6 +79,35 @@ namespace HomeBudget.Accounting.Api.Controllers
                 request.Currency,
                 request.Description,
                 BaseEnumeration<AccountTypes, int>.FromValue(request.AccountType));
+
+            var idempotencyKey = Request.Headers["Idempotency-Key"].ToString();
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                if (!ReferenceCreateContextFactory.TryCreate(
+                    idempotencyKey,
+                    ReferenceCreateFingerprint.Account(request),
+                    request.SourceReference,
+                    out var context))
+                {
+                    return BadRequest(Result<Guid>.Failure("A valid sourceReference and Idempotency-Key are required for an idempotent account create."));
+                }
+
+                var registration = await paymentAccountDocumentClient.InsertIdempotentAsync(
+                    newPaymentAccount,
+                    context,
+                    cancellationToken);
+                if (registration.IsConflict)
+                {
+                    return Conflict(Result<Guid>.Failure("The idempotency key has already been used for a different payment-account request."));
+                }
+
+                if (registration.State == IdempotentDocumentWriteState.Created)
+                {
+                    await paymentAccountsChannel.Writer.WriteAsync(new AccountRecord(registration.TargetId), cancellationToken);
+                }
+
+                return Result<Guid>.Succeeded(registration.TargetId);
+            }
 
             var saveResult = await paymentAccountDocumentClient.InsertOneAsync(newPaymentAccount);
 

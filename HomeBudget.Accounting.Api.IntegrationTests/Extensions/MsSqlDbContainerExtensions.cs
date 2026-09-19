@@ -19,6 +19,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 
             await using var command = connection.CreateCommand();
             command.CommandText = @"
+                IF OBJECT_ID(N'dbo.TransferCommands', N'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM dbo.TransferCommands;
+                END;
+
                 IF OBJECT_ID(N'dbo.PaymentInboxMessages', N'U') IS NOT NULL
                 BEGIN
                     DELETE FROM dbo.PaymentInboxMessages;

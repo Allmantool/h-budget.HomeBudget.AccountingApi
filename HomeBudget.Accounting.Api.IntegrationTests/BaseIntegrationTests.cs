@@ -23,6 +23,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         [OneTimeSetUp]
         public virtual async Task SetupAsync()
         {
+            TestContainers = TestContainersService.GetInstance;
             if (_initialized && TestContainers is not null && TestContainers.IsReadyForUse)
             {
                 return;
@@ -51,8 +52,6 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
             }
 
             sw.Stop();
-
-            await Task.Delay(TimeSpan.FromSeconds(ComponentTestOptions.TestContainersWaitingInSeconds));
 
             _initialized = true;
         }
