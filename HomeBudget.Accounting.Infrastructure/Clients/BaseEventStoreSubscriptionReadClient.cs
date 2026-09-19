@@ -192,6 +192,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                     await handler(evt);
                                     await sub.Ack(evt);
                                 }
+
                                 consumeStopwatch.Stop();
                                 TelemetryMetrics.EventStoreConsumeDurationMs.Record(
                                     consumeStopwatch.Elapsed.TotalMilliseconds,
