@@ -10,6 +10,16 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
     {
         public static Channel<ActivityEnvelope<PaymentOperationEvent>> CreateBufferChannel(EventStoreDbOptions opts)
         {
+            return CreateBufferChannel<ActivityEnvelope<PaymentOperationEvent>>(opts);
+        }
+
+        public static Channel<HomeBudget.Accounting.Workers.OperationsConsumer.Clients.ProjectionBatchContext> CreateProjectionBufferChannel(EventStoreDbOptions opts)
+        {
+            return CreateBufferChannel<HomeBudget.Accounting.Workers.OperationsConsumer.Clients.ProjectionBatchContext>(opts);
+        }
+
+        private static Channel<T> CreateBufferChannel<T>(EventStoreDbOptions opts)
+        {
             var capacity = opts.ChannelCapacity > 0 ? opts.ChannelCapacity : 10000;
             var boundedOptions = new BoundedChannelOptions(capacity)
             {
@@ -18,7 +28,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Factories
                 FullMode = BoundedChannelFullMode.Wait
             };
 
-            return Channel.CreateBounded<ActivityEnvelope<PaymentOperationEvent>>(boundedOptions);
+            return Channel.CreateBounded<T>(boundedOptions);
         }
     }
 }

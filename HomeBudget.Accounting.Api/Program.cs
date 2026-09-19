@@ -30,6 +30,7 @@ var applicationName = environment.ApplicationName;
 var configuration = webAppBuilder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
+    .AddEnvironmentVariables()
     .Build();
 
 services

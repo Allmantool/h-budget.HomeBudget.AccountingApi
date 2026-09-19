@@ -19,15 +19,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         where TProgram : class
     {
         private readonly Func<TestContainersConnections> _workerHostInitializationCallback;
-        private readonly string _paymentHistoryProjectionGroup = $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+        private readonly string _paymentHistoryProjectionGroup;
         private TestContainersConnections _containersConnections;
 
         public IConfiguration Configuration { get; private set; }
         public IHost WorkerHost { get; private set; }
 
-        public IntegrationTestWorkerFactory(Func<TestContainersConnections> workerHostInitializationCallback)
+        public IntegrationTestWorkerFactory(
+            Func<TestContainersConnections> workerHostInitializationCallback,
+            string paymentHistoryProjectionGroup = null)
         {
             _workerHostInitializationCallback = workerHostInitializationCallback;
+            _paymentHistoryProjectionGroup = string.IsNullOrWhiteSpace(paymentHistoryProjectionGroup)
+                ? $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}"
+                : paymentHistoryProjectionGroup;
         }
 
         public async Task StartAsync()
