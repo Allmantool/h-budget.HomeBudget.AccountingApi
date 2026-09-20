@@ -16,29 +16,50 @@ using NUnit.Framework;
 
 using Microsoft.Data.Sqlite;
 
+using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
+using HomeBudget.Accounting.Api.IntegrationTests.Release;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Release
+namespace HomeBudget.Accounting.ReleaseVerification
 {
     [TestFixture]
     [NonParallelizable]
     [Category(TestTypes.Integration)]
-    internal sealed class FamilyProDisposableReleaseTests : BaseIntegrationTests
+    internal sealed class FamilyProDisposableReleaseTests
     {
         private const string DisposableIdentity = "disposable-familypro-release";
         private static readonly JsonSerializerOptions EvidenceJson = new() { WriteIndented = true };
+        private TestContainersService _testContainers;
 
         [Test]
         [Explicit("Runs the full approved Family Pro dataset through real processes and disposable infrastructure.")]
         public async Task Full_approved_manifest_is_reconciled_and_second_run_has_zero_delta()
         {
-            var inputs = ReleaseInputs.FromEnvironment();
+            await FamilyProFullRunExecutionGate.ExecuteAsync(
+                ReleaseInputs.FromEnvironment,
+                ExecuteApprovedFullRunAsync);
+        }
+
+        [OneTimeTearDown]
+        public async Task TearDownAsync()
+        {
+            if (_testContainers is not null)
+            {
+                await OperationsTestWebApp.ResetAsync();
+                await _testContainers.DisposeAsync();
+            }
+        }
+
+        private async Task ExecuteApprovedFullRunAsync(ReleaseInputs inputs)
+        {
             var sessionDirectory = Path.Combine(
                 inputs.EvidenceRoot,
                 $"release-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
             Directory.CreateDirectory(sessionDirectory);
+            var validated = inputs.FullRunPlan.Materialize(Path.Combine(sessionDirectory, "validated-inputs"));
+            inputs = inputs with { Manifest = validated.Manifest, Approval = validated.Approval };
             using var consoleCapture = ReleaseConsoleCapture.Start(
                 Path.Combine(sessionDirectory, "testhost.stdout.log"),
                 Path.Combine(sessionDirectory, "testhost.stderr.log"));
@@ -48,22 +69,34 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                 var stateDatabase = Path.Combine(sessionDirectory, "migration-state.sqlite");
                 const string runId = "familypro-approved-disposable-release";
                 const string batchId = "familypro-approved-disposable-release";
-
-                var first = await RunCliAsync(
-                    inputs,
-                    new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-1"),
-                        runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
-                    token);
-                Assert.That(first.ExitCode, Is.Zero, first.Diagnostics);
-                ValidateReleaseEvidence(first.OutputDirectory, expectSecondRunEvidence: false);
-
-                var second = await RunCliAsync(
-                    inputs,
-                    new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-2"),
-                        runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
-                    token);
-                Assert.That(second.ExitCode, Is.Zero, second.Diagnostics);
-                ValidateReleaseEvidence(second.OutputDirectory, expectSecondRunEvidence: true);
+                CliResult first = null;
+                await FamilyProFullRunExecutionGate.ExecuteSecondRunAsync(
+                    async () =>
+                    {
+                        first = await RunCliAsync(
+                            inputs,
+                            new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-1"),
+                                runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
+                            token);
+                        Assert.That(first.ExitCode, Is.Zero, first.Diagnostics);
+                    },
+                    () => ValidateReleaseEvidence(
+                        first.OutputDirectory,
+                        inputs.FullRunPlan.ExpectedResults,
+                        expectSecondRunEvidence: false),
+                    async () =>
+                    {
+                        var second = await RunCliAsync(
+                            inputs,
+                            new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-2"),
+                                runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
+                            token);
+                        Assert.That(second.ExitCode, Is.Zero, second.Diagnostics);
+                        ValidateReleaseEvidence(
+                            second.OutputDirectory,
+                            inputs.FullRunPlan.ExpectedResults,
+                            expectSecondRunEvidence: true);
+                    });
             });
         }
 
@@ -167,7 +200,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                 Assert.That(serverStatus, Is.Not.EqualTo("Projected").IgnoreCase);
 
                 await interrupted.StopAsync();
-                var afterKill = await ReadMigrationStateAsync(
+                var afterKill = await RecoverAndReadMigrationStateAfterKillAsync(
                     stateDatabase,
                     beforeKill.IdempotencyKey,
                     beforeKill.TargetEntityType,
@@ -278,7 +311,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                 Assert.That(serverStatus, Is.Not.EqualTo("Projected").IgnoreCase);
 
                 await held.StopAsync();
-                var afterKill = await ReadMigrationStateAsync(
+                var afterKill = await RecoverAndReadMigrationStateAfterKillAsync(
                     stateDatabase,
                     beforeKill.IdempotencyKey,
                     beforeKill.TargetEntityType,
@@ -334,6 +367,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
             TimeSpan deadline,
             Func<int, ReleaseWorkerTestWebApp, CancellationToken, Task> execute)
         {
+            _testContainers ??= await TestContainersService.InitAsync();
+
             // Release scenarios share the fixture-owned containers, but never target state.
             // Reset before starting the next scenario so deterministic source identities from
             // a previous test cannot satisfy a recovery boundary without new processing.
@@ -355,7 +390,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                 Environment.SetEnvironmentVariable(notificationBaseUrlVariable, previousNotificationBaseUrl);
             }
 
-            await using var api = await StartAccountingApiAsync(inputs, TestContainers, apiPort, sessionDirectory);
+            await using var api = await StartAccountingApiAsync(inputs, _testContainers, apiPort, sessionDirectory);
             await WaitForApiAsync(apiPort, api, CancellationToken.None);
             var gatewayPort = GetAvailablePort();
             var gatewayDirectory = PrepareGatewayConfiguration(
@@ -375,7 +410,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                 await StopProcessAsync(gateway);
                 await StopProcessAsync(api);
                 await accounting.StopWorkersAsync();
-                await ReleaseContainerDiagnostics.CaptureAsync(TestContainers, sessionDirectory, CancellationToken.None);
+                await ReleaseContainerDiagnostics.CaptureAsync(_testContainers, sessionDirectory, CancellationToken.None);
             }
         }
 
@@ -710,13 +745,39 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
             return await reader.ReadAsync(token) ? Snapshot(reader) : null;
         }
 
-        private static async Task<RecoveryStateSnapshot> ReadMigrationStateAsync(
+        private static Task<RecoveryStateSnapshot> RecoverAndReadMigrationStateAfterKillAsync(
             string stateDatabase,
             string idempotencyKey,
             string targetEntityType,
             CancellationToken token)
         {
-            await using var connection = new SqliteConnection(ReadOnlyConnectionString(stateDatabase));
+            // A forcibly terminated CLI can leave a hot journal. Only this immediate post-kill
+            // lookup opens read/write so SQLite can perform crash recovery before the SELECT.
+            return ReadMigrationStateWithConnectionAsync(
+                RecoveryReadableConnectionString(stateDatabase),
+                idempotencyKey,
+                targetEntityType,
+                token);
+        }
+
+        private static Task<RecoveryStateSnapshot> ReadMigrationStateAsync(
+            string stateDatabase,
+            string idempotencyKey,
+            string targetEntityType,
+            CancellationToken token) =>
+            ReadMigrationStateWithConnectionAsync(
+                ReadOnlyConnectionString(stateDatabase),
+                idempotencyKey,
+                targetEntityType,
+                token);
+
+        private static async Task<RecoveryStateSnapshot> ReadMigrationStateWithConnectionAsync(
+            string connectionString,
+            string idempotencyKey,
+            string targetEntityType,
+            CancellationToken token)
+        {
+            await using var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync(token);
             var command = connection.CreateCommand();
             command.CommandText =
@@ -918,39 +979,59 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
             Cache = SqliteCacheMode.Shared
         }.ToString();
 
+        private static string RecoveryReadableConnectionString(string path) => new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWrite,
+            Cache = SqliteCacheMode.Shared
+        }.ToString();
+
         private static string ReadNullable(SqliteDataReader reader, string name)
         {
             var ordinal = reader.GetOrdinal(name);
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
-        private static void ValidateReleaseEvidence(string outputDirectory, bool expectSecondRunEvidence)
+        private static void ValidateReleaseEvidence(
+            string outputDirectory,
+            FamilyProExpectedResults expected,
+            bool expectSecondRunEvidence)
         {
             using var document = JsonDocument.Parse(File.ReadAllText(
                 Path.Combine(outputDirectory, "approved-release-evidence.json")));
             var root = document.RootElement;
             var plan = root.GetProperty("Plan");
-            Assert.That(plan.GetProperty("Accounts").GetInt32(), Is.EqualTo(14));
-            Assert.That(plan.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(18_545));
-            Assert.That(plan.GetProperty("SplitLines").GetInt32(), Is.EqualTo(1_593));
-            Assert.That(plan.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(29));
-            Assert.That(plan.GetProperty("LogicalTransfers").GetInt32(), Is.EqualTo(833));
-            Assert.That(plan.GetProperty("TransferSides").GetInt32(), Is.EqualTo(1_666));
-            Assert.That(plan.GetProperty("UnresolvedDecisionKeys").GetArrayLength(), Is.EqualTo(5));
+            Assert.That(plan.GetProperty("Accounts").GetInt32(), Is.EqualTo(expected.Accounts));
+            Assert.That(plan.GetProperty("Categories").GetInt32(), Is.EqualTo(expected.Categories));
+            Assert.That(plan.GetProperty("Contractors").GetInt32(), Is.EqualTo(expected.Contractors));
+            Assert.That(plan.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(expected.OrdinaryPayments));
+            Assert.That(plan.GetProperty("SplitLines").GetInt32(), Is.EqualTo(expected.SplitPayments));
+            Assert.That(plan.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(expected.MigrationAdjustments));
+            Assert.That(plan.GetProperty("LogicalTransfers").GetInt32(), Is.EqualTo(expected.Transfers));
+            Assert.That(plan.GetProperty("TransferSides").GetInt32(), Is.EqualTo(expected.TransferSides));
+            Assert.That(plan.GetProperty("AdjustmentSignedTotal").GetDecimal(), Is.EqualTo(expected.AdjustmentSignedTotal));
+            Assert.That(plan.GetProperty("AdjustmentAbsoluteTotal").GetDecimal(), Is.EqualTo(expected.AdjustmentAbsoluteTotal));
+            Assert.That(plan.GetProperty("UnresolvedDecisionKeys").GetArrayLength(), Is.EqualTo(expected.UnresolvedRecords));
 
             var snapshot = root.GetProperty("TargetSnapshot");
-            Assert.That(snapshot.GetProperty("Accounts").GetInt32(), Is.EqualTo(14));
-            Assert.That(snapshot.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(18_545));
-            Assert.That(snapshot.GetProperty("SplitPayments").GetInt32(), Is.EqualTo(1_593));
-            Assert.That(snapshot.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(29));
-            Assert.That(snapshot.GetProperty("Transfers").GetInt32(), Is.EqualTo(833));
-            Assert.That(snapshot.GetProperty("TransferSides").GetInt32(), Is.EqualTo(1_666));
+            Assert.That(snapshot.GetProperty("Accounts").GetInt32(), Is.EqualTo(expected.Accounts));
+            Assert.That(snapshot.GetProperty("Categories").GetInt32(), Is.EqualTo(expected.Categories));
+            Assert.That(snapshot.GetProperty("Contractors").GetInt32(), Is.EqualTo(expected.Contractors));
+            Assert.That(snapshot.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(expected.OrdinaryPayments));
+            Assert.That(snapshot.GetProperty("SplitPayments").GetInt32(), Is.EqualTo(expected.SplitPayments));
+            Assert.That(snapshot.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(expected.MigrationAdjustments));
+            Assert.That(snapshot.GetProperty("Transfers").GetInt32(), Is.EqualTo(expected.Transfers));
+            Assert.That(snapshot.GetProperty("TransferSides").GetInt32(), Is.EqualTo(expected.TransferSides));
 
             var reconciliation = root.GetProperty("Reconciliation");
             Assert.That(reconciliation.GetProperty("Passed").GetBoolean(), Is.True);
             Assert.That(reconciliation.GetProperty("Issues").GetArrayLength(), Is.Zero);
-            Assert.That(reconciliation.GetProperty("AccountBalances").GetArrayLength(), Is.EqualTo(14));
-            Assert.That(reconciliation.GetProperty("Adjustments").GetProperty("VerifiedCount").GetInt32(), Is.EqualTo(29));
+            Assert.That(reconciliation.GetProperty("AccountCount").GetInt32(), Is.EqualTo(expected.Accounts));
+            Assert.That(reconciliation.GetProperty("AccountsVerified").GetInt32(), Is.EqualTo(expected.BalancedAccounts));
+            Assert.That(reconciliation.GetProperty("AccountBalances").GetArrayLength(), Is.EqualTo(expected.Accounts));
+            Assert.That(
+                reconciliation.GetProperty("Adjustments").GetProperty("VerifiedCount").GetInt32(),
+                Is.EqualTo(expected.MigrationAdjustments));
 
             if (!expectSecondRunEvidence)
             {
@@ -1096,7 +1177,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
             string RecipientOperationId,
             string UpdatedAtUtc);
 
-        private sealed record ReleaseInputs(
+        internal sealed record ReleaseInputs(
             string AccountingDll,
             string AccountingContentRoot,
             string GatewayDll,
@@ -1105,15 +1186,32 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
             string CliWorkingDirectory,
             string Manifest,
             string Approval,
-            string EvidenceRoot)
+            string EvidenceRoot,
+            FamilyProFullRunPlan FullRunPlan)
         {
             public static ReleaseInputs FromEnvironment()
             {
                 var runtime = RuntimeFromEnvironment();
+                var selection = FamilyProFullRunSelection.FromEnvironment();
+                var plan = FamilyProFullRunPlan.Load(selection);
+                plan.RequireRuntimeLayout(
+                    runtime.AccountingDll,
+                    runtime.AccountingContentRoot,
+                    runtime.GatewayDll,
+                    runtime.GatewayContentRoot,
+                    runtime.CliDll,
+                    typeof(HomeBudget.Accounting.Workers.OperationsConsumer.Program).Assembly.Location);
+                plan.RequireRuntimeArtifact(runtime.AccountingDll, RequiredValue("FAMILYPRO_RELEASE_ACCOUNTING_SHA256"));
+                plan.RequireRuntimeArtifact(runtime.GatewayDll, RequiredValue("FAMILYPRO_RELEASE_GATEWAY_SHA256"));
+                plan.RequireRuntimeArtifact(runtime.CliDll, RequiredValue("FAMILYPRO_RELEASE_CLI_SHA256"));
+                plan.RequireRuntimeArtifact(
+                    typeof(HomeBudget.Accounting.Workers.OperationsConsumer.Program).Assembly.Location,
+                    RequiredValue("FAMILYPRO_RELEASE_WORKER_SHA256"));
                 return runtime with
                 {
-                    Manifest = RequiredFile("FAMILYPRO_RELEASE_MANIFEST"),
-                    Approval = RequiredFile("FAMILYPRO_RELEASE_APPROVAL")
+                    Manifest = selection.ManifestPath,
+                    Approval = selection.ApprovalPath,
+                    FullRunPlan = plan
                 };
             }
 
@@ -1131,7 +1229,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                         ?? throw new InvalidOperationException("The CLI assembly has no parent directory."),
                     string.Empty,
                     string.Empty,
-                    RequiredDirectory("FAMILYPRO_RELEASE_EVIDENCE_ROOT"));
+                    RequiredDirectory("FAMILYPRO_RELEASE_EVIDENCE_ROOT"),
+                    null);
             }
 
             private static string RequiredFile(string name)
