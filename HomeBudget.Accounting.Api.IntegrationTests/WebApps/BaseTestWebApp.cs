@@ -39,6 +39,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         public bool ShouldInitializeWebApp { get; protected set; } = true;
         public bool ShouldInitializeWorkers { get; protected set; } = true;
+        public bool ShouldSuppressKafkaDiagnostics { get; protected set; }
+        protected Action<IServiceCollection> ConfigureTestServices { get; set; }
 
         internal static TestContainersService TestContainersService { get; set; }
 
@@ -70,6 +72,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await StartContainersAsync();
 
                 var kafkaContainerConnection = await TestContainersService.KafkaContainer.GetReachableBootstrapAsync();
+                var testContainersConnections = new TestContainersConnections
+                {
+                    KafkaContainer = kafkaContainerConnection,
+                    EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                    MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
+                    MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
+                };
 
                 if (ShouldInitializeWorkers)
                 {
@@ -79,14 +88,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     for (var i = 0; i < workersMaxAmount; i++)
                     {
                         var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
-                            () => new TestContainersConnections
-                            {
-                                KafkaContainer = kafkaContainerConnection,
-                                EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                                MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
-                                MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
-                            },
-                            paymentHistoryProjectionGroup);
+                            () => testContainersConnections,
+                            paymentHistoryProjectionGroup,
+                            ShouldSuppressKafkaDiagnostics);
 
                         WorkerFactories.Add(worker);
                     }
@@ -98,13 +102,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 if (ShouldInitializeWebApp)
                 {
                     WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
-                        () => new TestContainersConnections
-                        {
-                            KafkaContainer = kafkaContainerConnection,
-                            EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
-                            MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
-                        });
+                        () => testContainersConnections,
+                        ConfigureTestServices);
 
                     var server = WebFactory.Server;
                     var addresses = server.Features.Get<IServerAddressesFeature>();
@@ -256,11 +255,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.ResetContainersAsync();
         }
 
-        internal async Task RestartWorkersAsync()
+        internal async Task RestartWorkersAsync(IntegrationWorkerProfile profile = IntegrationWorkerProfile.Full)
         {
             await StopWorkersAsync();
-            await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
-            await WaitForPaymentWorkerReadyAsync();
+            await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync(profile)));
+            if (profile != IntegrationWorkerProfile.ProjectionOnly)
+            {
+                await WaitForPaymentWorkerReadyAsync();
+            }
         }
 
         internal Task StopWorkersAsync()

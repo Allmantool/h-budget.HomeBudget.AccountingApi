@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 using EventStore.Client;
@@ -15,11 +16,19 @@ using AccountingWorker = HomeBudget.Accounting.Workers.OperationsConsumer;
 
 namespace HomeBudget.Accounting.Api.IntegrationTests
 {
+    internal enum IntegrationWorkerProfile
+    {
+        Full,
+        PersistenceOnly,
+        ProjectionOnly
+    }
+
     public class IntegrationTestWorkerFactory<TProgram>
         where TProgram : class
     {
         private readonly Func<TestContainersConnections> _workerHostInitializationCallback;
         private readonly string _paymentHistoryProjectionGroup;
+        private readonly bool _suppressKafkaDiagnostics;
         private TestContainersConnections _containersConnections;
 
         public IConfiguration Configuration { get; private set; }
@@ -27,15 +36,19 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         public IntegrationTestWorkerFactory(
             Func<TestContainersConnections> workerHostInitializationCallback,
-            string paymentHistoryProjectionGroup = null)
+            string paymentHistoryProjectionGroup = null,
+            bool suppressKafkaDiagnostics = false)
         {
             _workerHostInitializationCallback = workerHostInitializationCallback;
             _paymentHistoryProjectionGroup = string.IsNullOrWhiteSpace(paymentHistoryProjectionGroup)
                 ? $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}"
                 : paymentHistoryProjectionGroup;
+            _suppressKafkaDiagnostics = suppressKafkaDiagnostics;
         }
 
-        public async Task StartAsync()
+        public Task StartAsync() => StartAsync(IntegrationWorkerProfile.Full);
+
+        internal async Task StartAsync(IntegrationWorkerProfile profile)
         {
             _containersConnections = _workerHostInitializationCallback.Invoke();
 
@@ -53,15 +66,18 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     {
                         options.ProducerSettings = new ProducerSettings
                         {
-                            BootstrapServers = _containersConnections.KafkaContainer
+                            BootstrapServers = _containersConnections.KafkaContainer,
+                            StatisticsIntervalMs = _suppressKafkaDiagnostics ? null : new ProducerSettings().StatisticsIntervalMs
                         };
                         options.ConsumerSettings = new ConsumerSettings
                         {
-                            BootstrapServers = _containersConnections.KafkaContainer
+                            BootstrapServers = _containersConnections.KafkaContainer,
+                            Debug = _suppressKafkaDiagnostics ? null : new ConsumerSettings().Debug
                         };
                         options.AdminSettings = new AdminSettings
                         {
-                            BootstrapServers = _containersConnections.KafkaContainer
+                            BootstrapServers = _containersConnections.KafkaContainer,
+                            Debug = _suppressKafkaDiagnostics ? null : new AdminSettings().Debug
                         };
                     });
 
@@ -116,6 +132,21 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                                 MaxDiscoverAttempts = eventStoreDbOptions.MaxDiscoverAttempts
                             };
                         });
+
+                    if (profile != IntegrationWorkerProfile.Full)
+                    {
+                        var excludedHostedService = profile == IntegrationWorkerProfile.PersistenceOnly
+                            ? typeof(AccountingWorker.EventStoreDbPaymentsConsumerWorker)
+                            : typeof(AccountingWorker.KafkaPaymentsConsumerWorker);
+                        var descriptors = services
+                            .Where(descriptor => descriptor.ServiceType == typeof(IHostedService) &&
+                                descriptor.ImplementationType == excludedHostedService)
+                            .ToArray();
+                        foreach (var descriptor in descriptors)
+                        {
+                            services.Remove(descriptor);
+                        }
+                    }
                 });
 
             var configBuilder = new ConfigurationBuilder()
