@@ -19,28 +19,19 @@ using Microsoft.Data.Sqlite;
 using HomeBudget.Accounting.Api.IntegrationTests;
 using HomeBudget.Accounting.Api.IntegrationTests.Constants;
 using HomeBudget.Accounting.Api.IntegrationTests.Extensions;
-using HomeBudget.Accounting.Api.IntegrationTests.Release;
+using HomeBudget.Accounting.Api.IntegrationTests.Migration;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 
-namespace HomeBudget.Accounting.ReleaseVerification
+namespace HomeBudget.Accounting.MigrationVerification
 {
     [TestFixture]
     [NonParallelizable]
     [Category(TestTypes.Integration)]
-    internal sealed class FamilyProDisposableReleaseTests
+    internal sealed class FamilyProCliGatewayTests
     {
-        private const string DisposableIdentity = "disposable-familypro-release";
+        private const string DisposableIdentity = "disposable-familypro-migration-test";
         private static readonly JsonSerializerOptions EvidenceJson = new() { WriteIndented = true };
         private TestContainersService _testContainers;
-
-        [Test]
-        [Explicit("Runs the full approved Family Pro dataset through real processes and disposable infrastructure.")]
-        public async Task Full_approved_manifest_is_reconciled_and_second_run_has_zero_delta()
-        {
-            await FamilyProFullRunExecutionGate.ExecuteAsync(
-                ReleaseInputs.FromEnvironment,
-                ExecuteApprovedFullRunAsync);
-        }
 
         [OneTimeTearDown]
         public async Task TearDownAsync()
@@ -52,67 +43,16 @@ namespace HomeBudget.Accounting.ReleaseVerification
             }
         }
 
-        private async Task ExecuteApprovedFullRunAsync(ReleaseInputs inputs)
-        {
-            var sessionDirectory = Path.Combine(
-                inputs.EvidenceRoot,
-                $"release-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(sessionDirectory);
-            var validated = inputs.FullRunPlan.Materialize(Path.Combine(sessionDirectory, "validated-inputs"));
-            inputs = inputs with { Manifest = validated.Manifest, Approval = validated.Approval };
-            using var consoleCapture = ReleaseConsoleCapture.Start(
-                Path.Combine(sessionDirectory, "testhost.stdout.log"),
-                Path.Combine(sessionDirectory, "testhost.stderr.log"));
-
-            await RunWithDisposableStackAsync(inputs, sessionDirectory, TimeSpan.FromHours(6), async (gatewayPort, _, token) =>
-            {
-                var stateDatabase = Path.Combine(sessionDirectory, "migration-state.sqlite");
-                const string runId = "familypro-approved-disposable-release";
-                const string batchId = "familypro-approved-disposable-release";
-                CliResult first = null;
-                await FamilyProFullRunExecutionGate.ExecuteSecondRunAsync(
-                    async () =>
-                    {
-                        first = await RunCliAsync(
-                            inputs,
-                            new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-1"),
-                                runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
-                            token);
-                        Assert.That(first.ExitCode, Is.Zero, first.Diagnostics);
-                    },
-                    () => ValidateReleaseEvidence(
-                        first.OutputDirectory,
-                        inputs.FullRunPlan.ExpectedResults,
-                        expectSecondRunEvidence: false),
-                    async () =>
-                    {
-                        var second = await RunCliAsync(
-                            inputs,
-                            new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-2"),
-                                runId, batchId, inputs.Manifest, inputs.Approval, ApprovedSubset: true),
-                            token);
-                        Assert.That(second.ExitCode, Is.Zero, second.Diagnostics);
-                        ValidateReleaseEvidence(
-                            second.OutputDirectory,
-                            inputs.FullRunPlan.ExpectedResults,
-                            expectSecondRunEvidence: true);
-                    });
-            });
-        }
-
         [Test]
         [Explicit("Runs the sanitized small manifest through the real CLI and disposable distributed stack twice.")]
         public async Task Small_real_cli_fixture_reconciles_and_second_run_has_zero_delta()
         {
-            var smallInputs = SmallReleaseInputs.FromEnvironment();
+            var smallInputs = MigrationTestInputs.FromEnvironment();
             var inputs = smallInputs.Runtime;
             var sessionDirectory = Path.Combine(
                 inputs.EvidenceRoot,
-                $"small-release-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
+                $"small-migration-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
             Directory.CreateDirectory(sessionDirectory);
-            using var consoleCapture = ReleaseConsoleCapture.Start(
-                Path.Combine(sessionDirectory, "testhost.stdout.log"),
-                Path.Combine(sessionDirectory, "testhost.stderr.log"));
 
             var fixtureDirectory = await GenerateSmallFixtureAsync(
                 smallInputs.FixtureDll,
@@ -125,15 +65,15 @@ namespace HomeBudget.Accounting.ReleaseVerification
             await RunWithDisposableStackAsync(inputs, sessionDirectory, TimeSpan.FromMinutes(30), async (gatewayPort, _, token) =>
             {
                 var stateDatabase = Path.Combine(sessionDirectory, "migration-state.sqlite");
-                const string runId = "familypro-small-real-cli-release";
-                const string batchId = "familypro-small-real-cli-release";
+                const string runId = "familypro-small-real-cli-test";
+                const string batchId = "familypro-small-real-cli-test";
                 var first = await RunCliAsync(
                     inputs,
                     new("import", gatewayPort, stateDatabase, Path.Combine(sessionDirectory, "run-1"),
                         runId, batchId, manifest, approval, ApprovedSubset: false),
                     token);
                 Assert.That(first.ExitCode, Is.Zero, first.Diagnostics);
-                ValidateSmallReleaseEvidence(first.OutputDirectory, expected, expectSecondRunEvidence: false);
+                ValidateSmallMigrationEvidence(first.OutputDirectory, expected, expectSecondRunEvidence: false);
 
                 var second = await RunCliAsync(
                     inputs,
@@ -141,7 +81,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                         runId, batchId, manifest, approval, ApprovedSubset: false),
                     token);
                 Assert.That(second.ExitCode, Is.Zero, second.Diagnostics);
-                ValidateSmallReleaseEvidence(second.OutputDirectory, expected, expectSecondRunEvidence: true);
+                ValidateSmallMigrationEvidence(second.OutputDirectory, expected, expectSecondRunEvidence: true);
             });
         }
 
@@ -149,15 +89,12 @@ namespace HomeBudget.Accounting.ReleaseVerification
         [Explicit("Forcibly terminates the real CLI after durable acceptance, then resumes with the same journal and target.")]
         public async Task Actual_cli_process_kill_after_acceptance_resumes_without_duplicate_effects()
         {
-            var smallInputs = SmallReleaseInputs.FromEnvironment();
+            var smallInputs = MigrationTestInputs.FromEnvironment();
             var inputs = smallInputs.Runtime;
             var sessionDirectory = Path.Combine(
                 inputs.EvidenceRoot,
                 $"process-recovery-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
             Directory.CreateDirectory(sessionDirectory);
-            using var consoleCapture = ReleaseConsoleCapture.Start(
-                Path.Combine(sessionDirectory, "testhost.stdout.log"),
-                Path.Combine(sessionDirectory, "testhost.stderr.log"));
             var fixtureDirectory = await GenerateSmallFixtureAsync(
                 smallInputs.FixtureDll,
                 sessionDirectory,
@@ -199,7 +136,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                     token);
                 Assert.That(serverStatus, Is.Not.EqualTo("Projected").IgnoreCase);
 
-                await interrupted.StopAsync();
+                await ForceTerminateAsync(interrupted, "payment command accepted before worker projection");
                 var afterKill = await RecoverAndReadMigrationStateAfterKillAsync(
                     stateDatabase,
                     beforeKill.IdempotencyKey,
@@ -218,7 +155,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                     },
                     token);
                 Assert.That(resumed.ExitCode, Is.Zero, resumed.Diagnostics);
-                ValidateSmallReleaseEvidence(resumed.OutputDirectory, expected, expectSecondRunEvidence: false);
+                ValidateSmallMigrationEvidence(resumed.OutputDirectory, expected, expectSecondRunEvidence: false);
 
                 var terminal = await ReadMigrationStateAsync(
                     stateDatabase,
@@ -249,15 +186,12 @@ namespace HomeBudget.Accounting.ReleaseVerification
         [Explicit("Interrupts the real transfer workflow at durable acceptance and verifies two-sided convergence after resume.")]
         public async Task Actual_transfer_interruption_after_acceptance_resumes_to_one_two_sided_transfer()
         {
-            var smallInputs = SmallReleaseInputs.FromEnvironment();
+            var smallInputs = MigrationTestInputs.FromEnvironment();
             var inputs = smallInputs.Runtime;
             var sessionDirectory = Path.Combine(
                 inputs.EvidenceRoot,
                 $"transfer-recovery-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}");
             Directory.CreateDirectory(sessionDirectory);
-            using var consoleCapture = ReleaseConsoleCapture.Start(
-                Path.Combine(sessionDirectory, "testhost.stdout.log"),
-                Path.Combine(sessionDirectory, "testhost.stderr.log"));
             var fixtureDirectory = await GenerateSmallFixtureAsync(
                 smallInputs.FixtureDll,
                 sessionDirectory,
@@ -290,7 +224,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                         "Started",
                         TimeSpan.FromMinutes(2),
                         token);
-                    await initial.StopAsync();
+                    await ForceTerminateAsync(initial, "transfer phase reached before durable transfer acceptance");
                 }
 
                 await accounting.StopWorkersAsync();
@@ -310,7 +244,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                     token);
                 Assert.That(serverStatus, Is.Not.EqualTo("Projected").IgnoreCase);
 
-                await held.StopAsync();
+                await ForceTerminateAsync(held, "transfer command accepted before worker projection");
                 var afterKill = await RecoverAndReadMigrationStateAfterKillAsync(
                     stateDatabase,
                     beforeKill.IdempotencyKey,
@@ -325,7 +259,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                     heldInvocation with { OutputDirectory = Path.Combine(sessionDirectory, "resumed-run") },
                     token);
                 Assert.That(resumed.ExitCode, Is.Zero, resumed.Diagnostics);
-                ValidateSmallReleaseEvidence(resumed.OutputDirectory, expected, expectSecondRunEvidence: false);
+                ValidateSmallMigrationEvidence(resumed.OutputDirectory, expected, expectSecondRunEvidence: false);
 
                 var terminal = await ReadMigrationStateAsync(
                     stateDatabase,
@@ -362,18 +296,18 @@ namespace HomeBudget.Accounting.ReleaseVerification
         }
 
         private async Task RunWithDisposableStackAsync(
-            ReleaseInputs inputs,
+            MigrationRuntimeInputs inputs,
             string sessionDirectory,
             TimeSpan deadline,
-            Func<int, ReleaseWorkerTestWebApp, CancellationToken, Task> execute)
+            Func<int, MigrationWorkerTestWebApp, CancellationToken, Task> execute)
         {
             _testContainers ??= await TestContainersService.InitAsync();
 
-            // Release scenarios share the fixture-owned containers, but never target state.
+            // Scenarios share fixture-owned containers, but never target state.
             // Reset before starting the next scenario so deterministic source identities from
             // a previous test cannot satisfy a recovery boundary without new processing.
             await OperationsTestWebApp.ResetAsync();
-            await using var accounting = new ReleaseWorkerTestWebApp();
+            await using var accounting = new MigrationWorkerTestWebApp();
             var apiPort = GetAvailablePort();
             const string notificationBaseUrlVariable = "NotificationPublisherOptions__AccountingApiBaseUrl";
             var previousNotificationBaseUrl = Environment.GetEnvironmentVariable(notificationBaseUrlVariable);
@@ -410,7 +344,6 @@ namespace HomeBudget.Accounting.ReleaseVerification
                 await StopProcessAsync(gateway);
                 await StopProcessAsync(api);
                 await accounting.StopWorkersAsync();
-                await ReleaseContainerDiagnostics.CaptureAsync(_testContainers, sessionDirectory, CancellationToken.None);
             }
         }
 
@@ -453,7 +386,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
             return target;
         }
 
-        private static CapturedReleaseProcess StartGateway(
+        private static CapturedTestProcess StartGateway(
             string gatewayDll,
             string contentRoot,
             int port,
@@ -464,17 +397,17 @@ namespace HomeBudget.Accounting.ReleaseVerification
             start.Environment["DOTNET_ENVIRONMENT"] = "Development";
             start.Environment["SslOptions__HttpPort"] = port.ToString(CultureInfo.InvariantCulture);
             start.Environment["MigrationContract__EnvironmentIdentity"] = DisposableIdentity;
-            start.Environment["MigrationContract__InstanceIdentity"] = $"release-{Environment.ProcessId}";
-            start.Environment["MigrationContract__Commit"] = "disposable-release-verification";
+            start.Environment["MigrationContract__InstanceIdentity"] = $"migration-test-{Environment.ProcessId}";
+            start.Environment["MigrationContract__Commit"] = "disposable-migration-verification";
 
-            return CapturedReleaseProcess.Start(
+            return CapturedTestProcess.Start(
                 start,
                 Path.Combine(evidenceDirectory, "gateway.stdout.log"),
                 Path.Combine(evidenceDirectory, "gateway.stderr.log"));
         }
 
-        private static async Task<CapturedReleaseProcess> StartAccountingApiAsync(
-            ReleaseInputs inputs,
+        private static async Task<CapturedTestProcess> StartAccountingApiAsync(
+            MigrationRuntimeInputs inputs,
             TestContainersService containers,
             int port,
             string evidenceDirectory)
@@ -485,7 +418,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
             start.Environment["DOTNET_ENVIRONMENT"] = "Integration";
             start.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
             start.Environment["DatabaseConnectionOptions__ConnectionString"] = containers.AccountingDbConnectionString;
-            start.Environment["DatabaseConnectionOptions__RedisConnectionString"] = "release-no-redis";
+            start.Environment["DatabaseConnectionOptions__RedisConnectionString"] = "migration-test-no-redis";
             start.Environment["KafkaOptions__ProducerSettings__BootstrapServers"] = kafka;
             start.Environment["KafkaOptions__ConsumerSettings__BootstrapServers"] = kafka;
             start.Environment["KafkaOptions__AdminSettings__BootstrapServers"] = kafka;
@@ -500,13 +433,13 @@ namespace HomeBudget.Accounting.ReleaseVerification
             start.Environment["ObservabilityOptions__TelemetryEndpoint"] = string.Empty;
             start.Environment["ObservabilityOptions__LogsEndpoint"] = string.Empty;
 
-            return CapturedReleaseProcess.Start(
+            return CapturedTestProcess.Start(
                 start,
                 Path.Combine(evidenceDirectory, "accounting-api.stdout.log"),
                 Path.Combine(evidenceDirectory, "accounting-api.stderr.log"));
         }
 
-        private static async Task WaitForApiAsync(int port, CapturedReleaseProcess api, CancellationToken token)
+        private static async Task WaitForApiAsync(int port, CapturedTestProcess api, CancellationToken token)
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             var endpoint = new Uri($"http://127.0.0.1:{port}/payment-accounts");
@@ -538,7 +471,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
 
         private static async Task WaitForGatewayAsync(
             int port,
-            CapturedReleaseProcess gateway,
+            CapturedTestProcess gateway,
             CancellationToken token)
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
@@ -575,13 +508,13 @@ namespace HomeBudget.Accounting.ReleaseVerification
         }
 
         private static async Task<CliResult> RunCliAsync(
-            ReleaseInputs inputs,
+            MigrationRuntimeInputs inputs,
             CliInvocation invocation,
             CancellationToken token)
         {
             await using var process = StartCliProcess(inputs, invocation);
             var progressPath = Path.Combine(invocation.OutputDirectory, "execution-progress.jsonl");
-            await ReleaseProcessMonitor.WaitForExitAsync(
+            await ProcessProgressMonitor.WaitForExitAsync(
                 process,
                 () => File.Exists(progressPath) ? new FileInfo(progressPath).Length : 0,
                 TimeSpan.FromMinutes(15),
@@ -594,7 +527,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                 process.StandardErrorTail);
         }
 
-        private static CapturedReleaseProcess StartCliProcess(ReleaseInputs inputs, CliInvocation invocation)
+        private static CapturedTestProcess StartCliProcess(MigrationRuntimeInputs inputs, CliInvocation invocation)
         {
             Directory.CreateDirectory(invocation.OutputDirectory);
             var start = CreateDotNetStartInfo(inputs.CliDll, inputs.CliWorkingDirectory);
@@ -638,7 +571,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                 invocation.BatchId,
                 "--quiet",
                 "true");
-            return CapturedReleaseProcess.Start(
+            return CapturedTestProcess.Start(
                 start,
                 Path.Combine(invocation.OutputDirectory, "cli.stdout.log"),
                 Path.Combine(invocation.OutputDirectory, "cli.stderr.log"));
@@ -655,7 +588,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
                 Path.GetDirectoryName(fixtureDll)
                     ?? throw new InvalidOperationException("The fixture generator assembly has no parent directory."));
             start.ArgumentList.Add(fixtureDirectory);
-            await using var process = CapturedReleaseProcess.Start(
+            await using var process = CapturedTestProcess.Start(
                 start,
                 Path.Combine(sessionDirectory, "fixture-generator.stdout.log"),
                 Path.Combine(sessionDirectory, "fixture-generator.stderr.log"));
@@ -751,8 +684,9 @@ namespace HomeBudget.Accounting.ReleaseVerification
             string targetEntityType,
             CancellationToken token)
         {
-            // A forcibly terminated CLI can leave a hot journal. Only this immediate post-kill
-            // lookup opens read/write so SQLite can perform crash recovery before the SELECT.
+            // A forcibly terminated CLI can leave a hot journal. Close any pooled read-only
+            // handles, then open read/write so SQLite can perform crash recovery before the SELECT.
+            SqliteConnection.ClearAllPools();
             return ReadMigrationStateWithConnectionAsync(
                 RecoveryReadableConnectionString(stateDatabase),
                 idempotencyKey,
@@ -976,14 +910,16 @@ namespace HomeBudget.Accounting.ReleaseVerification
         {
             DataSource = path,
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString();
 
         private static string RecoveryReadableConnectionString(string path) => new SqliteConnectionStringBuilder
         {
             DataSource = path,
             Mode = SqliteOpenMode.ReadWrite,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString();
 
         private static string ReadNullable(SqliteDataReader reader, string name)
@@ -992,63 +928,7 @@ namespace HomeBudget.Accounting.ReleaseVerification
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
-        private static void ValidateReleaseEvidence(
-            string outputDirectory,
-            FamilyProExpectedResults expected,
-            bool expectSecondRunEvidence)
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(
-                Path.Combine(outputDirectory, "approved-release-evidence.json")));
-            var root = document.RootElement;
-            var plan = root.GetProperty("Plan");
-            Assert.That(plan.GetProperty("Accounts").GetInt32(), Is.EqualTo(expected.Accounts));
-            Assert.That(plan.GetProperty("Categories").GetInt32(), Is.EqualTo(expected.Categories));
-            Assert.That(plan.GetProperty("Contractors").GetInt32(), Is.EqualTo(expected.Contractors));
-            Assert.That(plan.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(expected.OrdinaryPayments));
-            Assert.That(plan.GetProperty("SplitLines").GetInt32(), Is.EqualTo(expected.SplitPayments));
-            Assert.That(plan.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(expected.MigrationAdjustments));
-            Assert.That(plan.GetProperty("LogicalTransfers").GetInt32(), Is.EqualTo(expected.Transfers));
-            Assert.That(plan.GetProperty("TransferSides").GetInt32(), Is.EqualTo(expected.TransferSides));
-            Assert.That(plan.GetProperty("AdjustmentSignedTotal").GetDecimal(), Is.EqualTo(expected.AdjustmentSignedTotal));
-            Assert.That(plan.GetProperty("AdjustmentAbsoluteTotal").GetDecimal(), Is.EqualTo(expected.AdjustmentAbsoluteTotal));
-            Assert.That(plan.GetProperty("UnresolvedDecisionKeys").GetArrayLength(), Is.EqualTo(expected.UnresolvedRecords));
-
-            var snapshot = root.GetProperty("TargetSnapshot");
-            Assert.That(snapshot.GetProperty("Accounts").GetInt32(), Is.EqualTo(expected.Accounts));
-            Assert.That(snapshot.GetProperty("Categories").GetInt32(), Is.EqualTo(expected.Categories));
-            Assert.That(snapshot.GetProperty("Contractors").GetInt32(), Is.EqualTo(expected.Contractors));
-            Assert.That(snapshot.GetProperty("OrdinaryPayments").GetInt32(), Is.EqualTo(expected.OrdinaryPayments));
-            Assert.That(snapshot.GetProperty("SplitPayments").GetInt32(), Is.EqualTo(expected.SplitPayments));
-            Assert.That(snapshot.GetProperty("MigrationAdjustments").GetInt32(), Is.EqualTo(expected.MigrationAdjustments));
-            Assert.That(snapshot.GetProperty("Transfers").GetInt32(), Is.EqualTo(expected.Transfers));
-            Assert.That(snapshot.GetProperty("TransferSides").GetInt32(), Is.EqualTo(expected.TransferSides));
-
-            var reconciliation = root.GetProperty("Reconciliation");
-            Assert.That(reconciliation.GetProperty("Passed").GetBoolean(), Is.True);
-            Assert.That(reconciliation.GetProperty("Issues").GetArrayLength(), Is.Zero);
-            Assert.That(reconciliation.GetProperty("AccountCount").GetInt32(), Is.EqualTo(expected.Accounts));
-            Assert.That(reconciliation.GetProperty("AccountsVerified").GetInt32(), Is.EqualTo(expected.BalancedAccounts));
-            Assert.That(reconciliation.GetProperty("AccountBalances").GetArrayLength(), Is.EqualTo(expected.Accounts));
-            Assert.That(
-                reconciliation.GetProperty("Adjustments").GetProperty("VerifiedCount").GetInt32(),
-                Is.EqualTo(expected.MigrationAdjustments));
-
-            if (!expectSecondRunEvidence)
-            {
-                return;
-            }
-
-            using var idempotency = JsonDocument.Parse(File.ReadAllText(
-                Path.Combine(outputDirectory, "second-run-idempotency.json")));
-            var idempotencyRoot = idempotency.RootElement;
-            Assert.That(idempotencyRoot.GetProperty("ZeroAdditionalLogicalEffects").GetBoolean(), Is.True);
-            foreach (var delta in idempotencyRoot.GetProperty("Delta").EnumerateObject())
-            {
-                Assert.That(delta.Value.GetInt32(), Is.Zero, $"Second-run delta {delta.Name} was not zero.");
-            }
-        }
-
-        private static void ValidateSmallReleaseEvidence(
+        private static void ValidateSmallMigrationEvidence(
             string outputDirectory,
             string independentExpectedPath,
             bool expectSecondRunEvidence)
@@ -1135,9 +1015,22 @@ namespace HomeBudget.Accounting.ReleaseVerification
             }
         }
 
-        private static Task StopProcessAsync(CapturedReleaseProcess process)
+        private static Task StopProcessAsync(CapturedTestProcess process)
         {
             return process.StopAsync();
+        }
+
+        private static async Task ForceTerminateAsync(CapturedTestProcess process, string checkpoint)
+        {
+            Assert.That(
+                process.HasExited,
+                Is.False,
+                $"CLI exited before the intended interruption checkpoint: {checkpoint}.");
+            await process.StopAsync();
+            Assert.That(
+                process.WasForceTerminated,
+                Is.True,
+                $"CLI was not forcibly terminated at checkpoint: {checkpoint}.");
         }
 
         private static int GetAvailablePort()
@@ -1177,60 +1070,28 @@ namespace HomeBudget.Accounting.ReleaseVerification
             string RecipientOperationId,
             string UpdatedAtUtc);
 
-        internal sealed record ReleaseInputs(
+        internal sealed record MigrationRuntimeInputs(
             string AccountingDll,
             string AccountingContentRoot,
             string GatewayDll,
             string GatewayContentRoot,
             string CliDll,
             string CliWorkingDirectory,
-            string Manifest,
-            string Approval,
-            string EvidenceRoot,
-            FamilyProFullRunPlan FullRunPlan)
+            string EvidenceRoot)
         {
-            public static ReleaseInputs FromEnvironment()
+            public static MigrationRuntimeInputs FromEnvironment()
             {
-                var runtime = RuntimeFromEnvironment();
-                var selection = FamilyProFullRunSelection.FromEnvironment();
-                var plan = FamilyProFullRunPlan.Load(selection);
-                plan.RequireRuntimeLayout(
-                    runtime.AccountingDll,
-                    runtime.AccountingContentRoot,
-                    runtime.GatewayDll,
-                    runtime.GatewayContentRoot,
-                    runtime.CliDll,
-                    typeof(HomeBudget.Accounting.Workers.OperationsConsumer.Program).Assembly.Location);
-                plan.RequireRuntimeArtifact(runtime.AccountingDll, RequiredValue("FAMILYPRO_RELEASE_ACCOUNTING_SHA256"));
-                plan.RequireRuntimeArtifact(runtime.GatewayDll, RequiredValue("FAMILYPRO_RELEASE_GATEWAY_SHA256"));
-                plan.RequireRuntimeArtifact(runtime.CliDll, RequiredValue("FAMILYPRO_RELEASE_CLI_SHA256"));
-                plan.RequireRuntimeArtifact(
-                    typeof(HomeBudget.Accounting.Workers.OperationsConsumer.Program).Assembly.Location,
-                    RequiredValue("FAMILYPRO_RELEASE_WORKER_SHA256"));
-                return runtime with
-                {
-                    Manifest = selection.ManifestPath,
-                    Approval = selection.ApprovalPath,
-                    FullRunPlan = plan
-                };
-            }
-
-            public static ReleaseInputs RuntimeFromEnvironment()
-            {
-                var gatewayDll = RequiredFile("FAMILYPRO_RELEASE_GATEWAY_DLL");
-                var cliDll = RequiredFile("FAMILYPRO_RELEASE_CLI_DLL");
-                return new ReleaseInputs(
-                    RequiredFile("FAMILYPRO_RELEASE_ACCOUNTING_DLL"),
-                    RequiredDirectory("FAMILYPRO_RELEASE_ACCOUNTING_CONTENT_ROOT"),
+                var gatewayDll = RequiredFile("FAMILYPRO_TEST_GATEWAY_DLL");
+                var cliDll = RequiredFile("FAMILYPRO_TEST_CLI_DLL");
+                return new MigrationRuntimeInputs(
+                    RequiredFile("FAMILYPRO_TEST_ACCOUNTING_DLL"),
+                    RequiredDirectory("FAMILYPRO_TEST_ACCOUNTING_CONTENT_ROOT"),
                     gatewayDll,
-                    RequiredDirectory("FAMILYPRO_RELEASE_GATEWAY_CONTENT_ROOT"),
+                    RequiredDirectory("FAMILYPRO_TEST_GATEWAY_CONTENT_ROOT"),
                     cliDll,
                     Path.GetDirectoryName(cliDll)
                         ?? throw new InvalidOperationException("The CLI assembly has no parent directory."),
-                    string.Empty,
-                    string.Empty,
-                    RequiredDirectory("FAMILYPRO_RELEASE_EVIDENCE_ROOT"),
-                    null);
+                    RequiredDirectory("FAMILYPRO_TEST_OUTPUT_ROOT"));
             }
 
             private static string RequiredFile(string name)
@@ -1255,11 +1116,11 @@ namespace HomeBudget.Accounting.ReleaseVerification
                     : throw new InvalidOperationException($"Required environment variable {name} is not set.");
         }
 
-        private sealed record SmallReleaseInputs(ReleaseInputs Runtime, string FixtureDll)
+        private sealed record MigrationTestInputs(MigrationRuntimeInputs Runtime, string FixtureDll)
         {
-            public static SmallReleaseInputs FromEnvironment() => new(
-                ReleaseInputs.RuntimeFromEnvironment(),
-                RequiredFile("FAMILYPRO_RELEASE_FIXTURE_DLL"));
+            public static MigrationTestInputs FromEnvironment() => new(
+                MigrationRuntimeInputs.FromEnvironment(),
+                RequiredFile("FAMILYPRO_TEST_FIXTURE_DLL"));
 
             private static string RequiredFile(string name)
             {

@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Release
+namespace HomeBudget.Accounting.Api.IntegrationTests.Migration
 {
-    internal static class ReleaseProcessMonitor
+    internal static class ProcessProgressMonitor
     {
         public static Task WaitForExitAsync(
-            CapturedReleaseProcess process,
+            CapturedTestProcess process,
             Func<long> readProgressMarker,
             TimeSpan stallTimeout,
             TimeSpan pollInterval,
@@ -28,7 +28,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
         }
 
         private static async Task WaitForExitCoreAsync(
-            CapturedReleaseProcess process,
+            CapturedTestProcess process,
             Func<long> readProgressMarker,
             TimeSpan stallTimeout,
             TimeSpan pollInterval,

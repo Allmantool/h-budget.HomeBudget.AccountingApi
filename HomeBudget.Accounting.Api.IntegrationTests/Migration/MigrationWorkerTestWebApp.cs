@@ -4,11 +4,11 @@ using System.Threading.Tasks;
 using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using AccountingWorker = HomeBudget.Accounting.Workers.OperationsConsumer;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Release
+namespace HomeBudget.Accounting.Api.IntegrationTests.Migration
 {
-    internal sealed class ReleaseWorkerTestWebApp : BaseTestWebApp<Program, AccountingWorker.Program>
+    internal sealed class MigrationWorkerTestWebApp : BaseTestWebApp<Program, AccountingWorker.Program>
     {
-        public ReleaseWorkerTestWebApp()
+        public MigrationWorkerTestWebApp()
         {
             ShouldInitializeWebApp = false;
             ShouldInitializeWorkers = true;

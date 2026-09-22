@@ -5,9 +5,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HomeBudget.Accounting.Api.IntegrationTests.Release
+namespace HomeBudget.Accounting.Api.IntegrationTests.Migration
 {
-    internal sealed class CapturedReleaseProcess : IAsyncDisposable
+    internal sealed class CapturedTestProcess : IAsyncDisposable
     {
         private const int DefaultDiagnosticTailByteLimit = 64 * 1024;
         private static readonly TimeSpan DefaultCleanupGrace = TimeSpan.FromSeconds(30);
@@ -19,7 +19,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
         private readonly Task _outputCompletion;
         private bool _isDisposed;
 
-        private CapturedReleaseProcess(
+        private CapturedTestProcess(
             Process process,
             CapturedStream standardOutput,
             CapturedStream standardError,
@@ -35,13 +35,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
 
         public int ExitCode => _process.ExitCode;
 
+        public bool WasForceTerminated { get; private set; }
+
         public bool OutputCompleted => _outputCompletion.IsCompletedSuccessfully;
 
         public string StandardOutputTail => _standardOutput.Tail;
 
         public string StandardErrorTail => _standardError.Tail;
 
-        public static CapturedReleaseProcess Start(
+        public static CapturedTestProcess Start(
             ProcessStartInfo start,
             string standardOutputPath,
             string standardErrorPath,
@@ -62,7 +64,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
 
                 var outputPump = standardOutput.PumpAsync(process.StandardOutput.BaseStream);
                 var errorPump = standardError.PumpAsync(process.StandardError.BaseStream);
-                return new CapturedReleaseProcess(
+                return new CapturedTestProcess(
                     process,
                     standardOutput,
                     standardError,
@@ -150,6 +152,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Release
                     try
                     {
                         _process.Kill(entireProcessTree: true);
+                        WasForceTerminated = true;
                     }
                     catch (InvalidOperationException) when (_process.HasExited)
                     {

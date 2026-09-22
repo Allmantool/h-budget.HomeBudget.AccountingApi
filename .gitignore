@@ -272,7 +272,3 @@ _Pvt_Extensions
 .fake/
 .dotnet/
 test-results/
-
-# Keep source release-verification tests even though generic Release build folders are ignored.
-!HomeBudget.Accounting.Api.IntegrationTests/Release/
-!HomeBudget.Accounting.Api.IntegrationTests/Release/*.cs
