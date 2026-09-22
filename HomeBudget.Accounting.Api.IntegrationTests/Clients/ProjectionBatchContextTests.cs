@@ -174,13 +174,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
         private static EventStoreSubscriptionContext Context(
             Func<Task> acknowledge = null,
-            Func<string, Task> retry = null) => new()
-        {
-            StreamId = "stream",
-            Revision = "1",
-            Position = "2",
-            Acknowledge = acknowledge,
-            Retry = retry
-        };
+            Func<string, Task> retry = null) =>
+            new()
+            {
+                StreamId = "stream",
+                Revision = "1",
+                Position = "2",
+                Acknowledge = acknowledge,
+                Retry = retry
+            };
     }
 }
