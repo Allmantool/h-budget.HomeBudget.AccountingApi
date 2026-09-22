@@ -446,7 +446,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
                 try
                 {
-                    _processorTask.Wait(TimeSpan.FromSeconds(5));
+                    _processorTask.Wait(TimeSpan.FromSeconds(5), CancellationToken.None);
                 }
                 catch
                 {
