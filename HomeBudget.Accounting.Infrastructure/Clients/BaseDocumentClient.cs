@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using MongoDB.Bson;
@@ -100,6 +101,84 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             };
 
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(indexKeysDefinition, indexOptions));
+        }
+
+        protected static async Task EnsureUniquePartialStringIndexAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            string fieldPath,
+            string indexName)
+        {
+            ArgumentNullException.ThrowIfNull(collection);
+
+            var existingIndexes = await collection.Indexes.List().ToListAsync();
+            if (HasUniqueIndex(existingIndexes, fieldPath))
+            {
+                return;
+            }
+
+            var key = Builders<TDocument>.IndexKeys.Ascending(fieldPath);
+            var options = new CreateIndexOptions<TDocument>
+            {
+                Name = indexName,
+                Unique = true,
+                PartialFilterExpression = new BsonDocument(fieldPath, new BsonDocument("$type", "string"))
+            };
+
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(key, options));
+        }
+
+        protected static async Task<IdempotentDocumentWriteResult> UpsertIdempotentAsync<TDocument, TPayload>(
+            IMongoCollection<TDocument> collection,
+            TPayload payload,
+            Func<TPayload, Guid> targetId,
+            IdempotentDocumentWriteContext context,
+            CancellationToken cancellationToken)
+            where TDocument : DocumentEntity<TPayload>
+            where TPayload : class
+        {
+            ArgumentNullException.ThrowIfNull(collection);
+            ArgumentNullException.ThrowIfNull(payload);
+            ArgumentNullException.ThrowIfNull(context);
+
+            var now = DateTime.UtcNow;
+            var filter = Builders<TDocument>.Filter.Eq(
+                nameof(DocumentEntity<TPayload>.IdempotencyKeyHash),
+                context.IdempotencyKeyHash);
+            var update = Builders<TDocument>.Update
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.Payload), payload)
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.CreatedUtc), now)
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.UpdatedUtc), now)
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.IdempotencyKeyHash), context.IdempotencyKeyHash)
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.RequestFingerprint), context.RequestFingerprint)
+                .SetOnInsert(nameof(DocumentEntity<TPayload>.SourceReference), context.SourceReference)
+                .Set(nameof(DocumentEntity<TPayload>.LastSeenUtc), now);
+
+            UpdateResult result;
+            try
+            {
+                result = await collection.UpdateOneAsync(
+                    filter,
+                    update,
+                    new UpdateOptions { IsUpsert = true },
+                    cancellationToken);
+            }
+            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                result = null;
+            }
+
+            var stored = await collection.Find(filter).SingleOrDefaultAsync(cancellationToken);
+            if (stored == null)
+            {
+                throw new InvalidOperationException("Idempotent document registration did not produce a readable target document.");
+            }
+
+            var state = !string.Equals(stored.RequestFingerprint, context.RequestFingerprint, StringComparison.Ordinal)
+                ? IdempotentDocumentWriteState.Conflict
+                : result?.UpsertedId != null
+                    ? IdempotentDocumentWriteState.Created
+                    : IdempotentDocumentWriteState.Existing;
+            return new IdempotentDocumentWriteResult(targetId(stored.Payload), state);
         }
 
         protected virtual void Dispose(bool disposing)

@@ -12,6 +12,11 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
         public decimal Amount { get; set; }
         public decimal Multiplier { get; set; }
         public decimal? CustomConversionMultiplier { get; set; }
+        public decimal? SenderAmount { get; set; }
+        public decimal? RecipientAmount { get; set; }
+        public string SenderCurrency { get; set; }
+        public string RecipientCurrency { get; set; }
+        public string SourceReference { get; set; }
         public DateOnly OperationAt { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -31,14 +36,29 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Requests
                 yield return new ValidationResult("Sender and recipient accounts must be different", [nameof(Sender), nameof(Recipient)]);
             }
 
-            if (Amount <= 0m)
+            var exactAmountsProvided = SenderAmount.HasValue || RecipientAmount.HasValue;
+            if (exactAmountsProvided && (SenderAmount is null or <= 0m || RecipientAmount is null or <= 0m))
+            {
+                yield return new ValidationResult(
+                    "Both exact transfer-side amounts must be greater than zero",
+                    [nameof(SenderAmount), nameof(RecipientAmount)]);
+            }
+
+            if (!exactAmountsProvided && Amount <= 0m)
             {
                 yield return new ValidationResult("Amount must be greater than zero", [nameof(Amount)]);
             }
 
-            if (Multiplier <= 0m)
+            if (!exactAmountsProvided && Multiplier <= 0m)
             {
                 yield return new ValidationResult("Multiplier must be greater than zero", [nameof(Multiplier)]);
+            }
+
+            if (exactAmountsProvided && (string.IsNullOrWhiteSpace(SenderCurrency) || string.IsNullOrWhiteSpace(RecipientCurrency)))
+            {
+                yield return new ValidationResult(
+                    "Both transfer-side currencies are required with exact amounts",
+                    [nameof(SenderCurrency), nameof(RecipientCurrency)]);
             }
 
             if (CustomConversionMultiplier is <= 0m)

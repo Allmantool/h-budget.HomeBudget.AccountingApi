@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 
 using HomeBudget.Accounting.Api.Constants;
+using HomeBudget.Accounting.Api.Idempotency;
 using HomeBudget.Accounting.Api.Models.Category;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
@@ -62,11 +64,34 @@ namespace HomeBudget.Accounting.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<Result<Guid>> CreateNewAsync([FromBody] CreateCategoryRequest request)
+        public async Task<ActionResult<Result<Guid>>> CreateNewAsync(
+            [FromBody] CreateCategoryRequest request,
+            CancellationToken cancellationToken)
         {
             var newCategory = categoryFactory.Create(
                 BaseEnumeration<CategoryTypes, int>.FromValue(request.CategoryType),
                 request.NameNodes);
+
+            var idempotencyKey = Request.Headers["Idempotency-Key"].ToString();
+            if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                if (!ReferenceCreateContextFactory.TryCreate(
+                    idempotencyKey,
+                    ReferenceCreateFingerprint.Category(request),
+                    request.SourceReference,
+                    out var context))
+                {
+                    return BadRequest(Result<Guid>.Failure("A valid sourceReference and Idempotency-Key are required for an idempotent category create."));
+                }
+
+                var registration = await categoryDocumentsClient.InsertIdempotentAsync(
+                    newCategory,
+                    context,
+                    cancellationToken);
+                return registration.IsConflict
+                    ? Conflict(Result<Guid>.Failure("The idempotency key has already been used for a different category request."))
+                    : Result<Guid>.Succeeded(registration.TargetId);
+            }
 
             var saveResult = await categoryDocumentsClient.InsertOneAsync(newCategory);
 

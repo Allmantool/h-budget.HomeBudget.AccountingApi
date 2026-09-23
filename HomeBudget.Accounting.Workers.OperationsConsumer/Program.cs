@@ -68,6 +68,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
             var configuration = builder.Configuration
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{environment.EnvironmentName}.json", optional: true)
+                .AddEnvironmentVariables()
                 .Build();
 
             services

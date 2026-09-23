@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Docker.DotNet;
@@ -51,13 +50,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
                 }
                 catch (DockerApiException ex) when (IsRetryableDockerError(ex) && attempt < maxRetries)
                 {
+                    LogRetry("Docker reported a transient writable-layer error", ex, attempt);
                     await Task.Delay(TimeSpan.FromSeconds(baseDelaySeconds * attempt));
-                    await CleanupDockerResourcesAsync();
                 }
                 catch (DockerContainerNotFoundException ex) when (attempt < maxRetries)
                 {
                     LogRetry("Container not found (likely crashed on startup)", ex, attempt);
-                    await CleanupDockerResourcesAsync();
                     await Task.Delay(TimeSpan.FromSeconds(baseDelaySeconds * (attempt + 1)));
                 }
                 catch (DockerApiException ex) when (
@@ -85,40 +83,5 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Extensions
 
         private static bool IsRetryableDockerError(DockerApiException ex)
             => ex.Message.Contains("RWLayer", StringComparison.OrdinalIgnoreCase);
-
-        private static async Task CleanupDockerResourcesAsync()
-        {
-            try
-            {
-                using var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "docker",
-                        Arguments = "system prune -f",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-
-                var stdout = await process.StandardOutput.ReadToEndAsync();
-                var stderr = await process.StandardError.ReadToEndAsync();
-
-                await process.WaitForExitAsync();
-
-                if (process.ExitCode != 0)
-                {
-                    Console.WriteLine($"Docker cleanup failed. ExitCode={process.ExitCode}, stdout={stdout}, stderr={stderr}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to cleanup Docker resources: {ex}");
-            }
-        }
     }
 }

@@ -8,6 +8,8 @@ namespace HomeBudget.Accounting.Api.Models.Contractor
     {
         public IEnumerable<string> NameNodes { get; set; }
 
+        public string SourceReference { get; set; }
+
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             if (NameNodes == null || !NameNodes.Any(node => !string.IsNullOrWhiteSpace(node)))
