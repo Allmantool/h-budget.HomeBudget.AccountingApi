@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,6 +33,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
         private readonly CrossAccountsTransferWebApp _sut = new();
         private RestClient _restClient;
+        private RestClient _restClientAllowingHttpErrors;
 
         [OneTimeSetUp]
         public override async Task SetupAsync()
@@ -41,6 +43,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             await base.SetupAsync();
 
             _restClient = _sut.RestHttpClient;
+            _restClientAllowingHttpErrors = _sut.RestHttpClientAllowingHttpErrors;
         }
 
         [Test]
@@ -214,6 +217,69 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
         }
 
         [Test]
+        public async Task ApplyIdempotentExactTransfer_WhenRetried_ThenOneAtomicTransferIsProjectedAndConflictIsDeterministic()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Cash, CurrencyTypes.Byn)).Payload;
+            var idempotencyKey = $"transfer-{Guid.NewGuid():N}";
+            var request = new CrossAccountsTransferRequest
+            {
+                Sender = senderAccountId,
+                Recipient = recipientAccountId,
+                SenderAmount = 1800m,
+                RecipientAmount = 6030m,
+                SenderCurrency = "USD",
+                RecipientCurrency = "BYN",
+                SourceReference = "FamilyPro12:fixture:REESTR:23460-23461",
+                OperationAt = new DateOnly(2026, 9, 17)
+            };
+
+            var first = await _restClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post)
+                    .AddHeader("Idempotency-Key", idempotencyKey)
+                    .AddJsonBody(request));
+            var replay = await _restClient.ExecuteAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post)
+                    .AddHeader("Idempotency-Key", idempotencyKey)
+                    .AddJsonBody(request));
+            var conflict = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<CrossAccountsTransferResponse>>(
+                new RestRequest(CrossAccountsTransferApiHost, Method.Post)
+                    .AddHeader("Idempotency-Key", idempotencyKey)
+                    .AddJsonBody(request with { RecipientAmount = 6031m }),
+                [HttpStatusCode.Conflict]);
+
+            first.IsSuccessful.Should().BeTrue(DescribeResponse(first));
+            replay.IsSuccessful.Should().BeTrue(DescribeResponse(replay));
+            first.Data.Payload.PaymentOperationId.Should().Be(replay.Data.Payload.PaymentOperationId);
+            first.Data.Payload.CommandId.Should().Be(replay.Data.Payload.CommandId);
+            replay.Data.Payload.IsDuplicate.Should().BeTrue();
+            conflict.StatusCode.Should().Be(HttpStatusCode.Conflict, DescribeResponse(conflict));
+
+            var transferId = first.Data.Payload.PaymentOperationId;
+            var senderHistory = await WaitForHistoryAsync(
+                senderAccountId,
+                records => records.Count(record => record.Record.Key == transferId) == 1,
+                [transferId]);
+            var recipientHistory = await WaitForHistoryAsync(
+                recipientAccountId,
+                records => records.Count(record => record.Record.Key == transferId) == 1,
+                [transferId]);
+            var status = await WaitForTransferStatusAsync(transferId, first.Data.Payload.CommandId, "Projected");
+
+            Assert.Multiple(() =>
+            {
+                senderHistory.Single(record => record.Record.Key == transferId).Record.Amount.Should().Be(-1800m);
+                recipientHistory.Single(record => record.Record.Key == transferId).Record.Amount.Should().Be(6030m);
+                status.IsSuccessful.Should().BeTrue(DescribeResponse(status));
+                status.Data.Payload.Status.Should().Be("Projected");
+                status.Data.Payload.SenderAmount.Should().Be(1800m);
+                status.Data.Payload.RecipientAmount.Should().Be(6030m);
+                status.Data.Payload.SenderCurrency.Should().Be("USD");
+                status.Data.Payload.RecipientCurrency.Should().Be("BYN");
+            });
+        }
+
+        [Test]
         public async Task RemoveTransfer_ThenRelatedOperationsAlsoWillBeDeletedAsync()
         {
             var senderAccountId = (await SavePaymentAccountAsync(0, AccountTypes.Deposit, CurrencyTypes.Byn)).Payload;
@@ -324,6 +390,27 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 .ExecuteWithDelayAsync<Result<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>>>(getRecipientOperationsRequest, executionDelayBeforeInMs: 2000);
 
             return recipientHistoryResponse.Data.Payload;
+        }
+
+        private async Task<RestResponse<Result<TransferCommandStatusResponse>>> WaitForTransferStatusAsync(
+            Guid transferId,
+            string commandId,
+            string expectedStatus)
+        {
+            RestResponse<Result<TransferCommandStatusResponse>> response = null;
+            for (var attempt = 0; attempt < 30; attempt++)
+            {
+                response = await _restClient.ExecuteAsync<Result<TransferCommandStatusResponse>>(
+                    new RestRequest($"{CrossAccountsTransferApiHost}/{transferId}/commands/{commandId}"));
+                if (response.Data?.Payload?.Status == expectedStatus)
+                {
+                    return response;
+                }
+
+                await Task.Delay(500);
+            }
+
+            return response;
         }
 
         private async Task<IReadOnlyCollection<PaymentOperationHistoryRecordResponse>> WaitForHistoryAsync(

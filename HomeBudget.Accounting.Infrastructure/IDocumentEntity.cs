@@ -20,6 +20,18 @@ namespace HomeBudget.Accounting.Infrastructure
 
         public string ImportBatchId { get; init; }
 
+        [BsonIgnoreIfNull]
+        public string IdempotencyKeyHash { get; init; }
+
+        [BsonIgnoreIfNull]
+        public string RequestFingerprint { get; init; }
+
+        [BsonIgnoreIfNull]
+        public string SourceReference { get; init; }
+
+        [BsonIgnoreIfNull]
+        public DateTime? LastSeenUtc { get; init; }
+
         public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
 
         public DateTime UpdatedUtc { get; init; } = DateTime.UtcNow;

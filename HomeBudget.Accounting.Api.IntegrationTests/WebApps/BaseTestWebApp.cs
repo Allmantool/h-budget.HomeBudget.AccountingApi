@@ -39,13 +39,16 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
 
         public bool ShouldInitializeWebApp { get; protected set; } = true;
         public bool ShouldInitializeWorkers { get; protected set; } = true;
+        public bool ShouldSuppressKafkaDiagnostics { get; protected set; }
+        protected Action<IServiceCollection> ConfigureTestServices { get; set; }
 
         internal static TestContainersService TestContainersService { get; set; }
 
         internal RestClient RestHttpClient { get; set; }
         internal RestClient RestHttpClientAllowingHttpErrors { get; set; }
+        internal Uri BaseAddress { get; private set; }
 
-        public async Task<bool> InitAsync(int workersMaxAmount = 1)
+        public async Task<bool> InitAsync(int workersMaxAmount = 1, bool requireIntegrationCategory = true)
         {
             try
             {
@@ -56,9 +59,11 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", HostEnvironments.Integration);
 
                 var testProperties = TestContext.CurrentContext.Test.Properties;
-                var testCategory = testProperties.Get("Category") as string;
+                var isIntegrationTest = testProperties["Category"]
+                    .OfType<string>()
+                    .Any(category => TestTypes.Integration.Equals(category, StringComparison.OrdinalIgnoreCase));
 
-                if (!TestTypes.Integration.Equals(testCategory, StringComparison.OrdinalIgnoreCase))
+                if (requireIntegrationCategory && !isIntegrationTest)
                 {
                     return false;
                 }
@@ -67,19 +72,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 await StartContainersAsync();
 
                 var kafkaContainerConnection = await TestContainersService.KafkaContainer.GetReachableBootstrapAsync();
+                var testContainersConnections = new TestContainersConnections
+                {
+                    KafkaContainer = kafkaContainerConnection,
+                    EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
+                    MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
+                    MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
+                };
 
                 if (ShouldInitializeWorkers)
                 {
+                    var paymentHistoryProjectionGroup =
+                        $"ps-homeledger-mongo-projection-v1-{Guid.NewGuid():N}";
+
                     for (var i = 0; i < workersMaxAmount; i++)
                     {
                         var worker = new IntegrationTestWorkerFactory<TWorkerEntryPoint>(
-                            () => new TestContainersConnections
-                            {
-                                KafkaContainer = kafkaContainerConnection,
-                                EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                                MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
-                                MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
-                            });
+                            () => testContainersConnections,
+                            paymentHistoryProjectionGroup,
+                            ShouldSuppressKafkaDiagnostics);
 
                         WorkerFactories.Add(worker);
                     }
@@ -91,13 +102,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                 if (ShouldInitializeWebApp)
                 {
                     WebFactory = new IntegrationTestWebApplicationFactory<TWebAppEntryPoint>(
-                        () => new TestContainersConnections
-                        {
-                            KafkaContainer = kafkaContainerConnection,
-                            EventSourceDbContainer = TestContainersService.EventSourceDbContainer.GetConnectionString(),
-                            MongoDbContainer = TestContainersService.MongoDbContainer.GetConnectionString(),
-                            MsSqlDbContainer = TestContainersService.AccountingDbConnectionString,
-                        });
+                        () => testContainersConnections,
+                        ConfigureTestServices);
 
                     var server = WebFactory.Server;
                     var addresses = server.Features.Get<IServerAddressesFeature>();
@@ -105,6 +111,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
                     var baseAddress = realAddress is null ?
                         WebFactory.ClientOptions.BaseAddress
                         : new Uri(realAddress);
+                    BaseAddress = baseAddress;
 
                     var clientOptions = new WebApplicationFactoryClientOptions
                     {
@@ -248,11 +255,14 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.WebApps
             await TestContainersService.ResetContainersAsync();
         }
 
-        internal async Task RestartWorkersAsync()
+        internal async Task RestartWorkersAsync(IntegrationWorkerProfile profile = IntegrationWorkerProfile.Full)
         {
             await StopWorkersAsync();
-            await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync()));
-            await WaitForPaymentWorkerReadyAsync();
+            await Task.WhenAll(WorkerFactories.Select(w => w.StartAsync(profile)));
+            if (profile != IntegrationWorkerProfile.ProjectionOnly)
+            {
+                await WaitForPaymentWorkerReadyAsync();
+            }
         }
 
         internal Task StopWorkersAsync()

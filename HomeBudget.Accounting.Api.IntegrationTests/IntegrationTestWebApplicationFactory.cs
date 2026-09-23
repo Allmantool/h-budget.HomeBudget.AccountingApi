@@ -25,14 +25,17 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
         where TStartup : class
     {
         private readonly Func<TestContainersConnections> _webHostInitializationCallback;
+        private readonly Action<IServiceCollection> _configureTestServices;
         private TestContainersConnections _containersConnections;
 
         internal IConfiguration Configuration { get; private set; }
 
         public IntegrationTestWebApplicationFactory(
-            Func<TestContainersConnections> webHostInitializationCallback)
+            Func<TestContainersConnections> webHostInitializationCallback,
+            Action<IServiceCollection> configureTestServices = null)
         {
             _webHostInitializationCallback = webHostInitializationCallback;
+            _configureTestServices = configureTestServices;
         }
 
         protected override IHost CreateHost(IHostBuilder builder)
@@ -160,6 +163,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
                     {
                         settings = eventStoreDbSettings;
                     });
+
+                _configureTestServices?.Invoke(services);
             });
         }
 

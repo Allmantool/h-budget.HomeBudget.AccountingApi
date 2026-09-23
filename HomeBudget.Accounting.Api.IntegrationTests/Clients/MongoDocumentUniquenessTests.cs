@@ -143,6 +143,82 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
         }
 
         [Test]
+        public async Task ConcurrentIdempotentAccountCreate_WithSameKey_ShouldReturnOneStableTargetAndDetectConflict()
+        {
+            var context = new IdempotentDocumentWriteContext("account-key-hash", "fingerprint-a", "FamilyPro12:test:SCHETA:1");
+            var creates = Enumerable.Range(0, 20)
+                .Select(index => _paymentAccountClient.InsertIdempotentAsync(
+                    CreatePaymentAccount(Guid.NewGuid(), $"account-{index}"),
+                    context,
+                    default));
+
+            var results = await Task.WhenAll(creates);
+            var conflict = await _paymentAccountClient.InsertIdempotentAsync(
+                CreatePaymentAccount(Guid.NewGuid(), "changed"),
+                context with { RequestFingerprint = "fingerprint-b" },
+                default);
+            var stored = await _ledgerDatabase.GetCollection<PaymentAccountDocument>(LedgerDbCollections.PaymentAccounts)
+                .Find(document => document.IdempotencyKeyHash == context.IdempotencyKeyHash)
+                .ToListAsync();
+
+            results.Select(result => result.TargetId).Distinct().Should().ContainSingle();
+            results.Count(result => result.State == IdempotentDocumentWriteState.Created).Should().Be(1);
+            conflict.State.Should().Be(IdempotentDocumentWriteState.Conflict);
+            conflict.TargetId.Should().Be(results[0].TargetId);
+            stored.Should().ContainSingle();
+        }
+
+        [Test]
+        public async Task ConcurrentIdempotentCategoryCreate_WithSameKey_ShouldReturnOneStableTargetAndDetectConflict()
+        {
+            var context = new IdempotentDocumentWriteContext("category-key-hash", "fingerprint-a", "FamilyPro12:test:CATEGORY:shared");
+            var creates = Enumerable.Range(0, 20)
+                .Select(_ => _categoryClient.InsertIdempotentAsync(
+                    new Category(CategoryTypes.Expense, ["migration", "shared"]) { Key = Guid.NewGuid() },
+                    context,
+                    default));
+
+            var results = await Task.WhenAll(creates);
+            var conflict = await _categoryClient.InsertIdempotentAsync(
+                new Category(CategoryTypes.Expense, ["migration", "changed"]) { Key = Guid.NewGuid() },
+                context with { RequestFingerprint = "fingerprint-b" },
+                default);
+            var stored = await _handbooksDatabase.GetCollection<CategoryDocument>(LedgerDbCollections.Categories)
+                .Find(document => document.IdempotencyKeyHash == context.IdempotencyKeyHash)
+                .ToListAsync();
+
+            results.Select(result => result.TargetId).Distinct().Should().ContainSingle();
+            results.Count(result => result.State == IdempotentDocumentWriteState.Created).Should().Be(1);
+            conflict.State.Should().Be(IdempotentDocumentWriteState.Conflict);
+            stored.Should().ContainSingle();
+        }
+
+        [Test]
+        public async Task ConcurrentIdempotentContractorCreate_WithSameKey_ShouldReturnOneStableTargetAndDetectConflict()
+        {
+            var context = new IdempotentDocumentWriteContext("contractor-key-hash", "fingerprint-a", "FamilyPro12:test:PAYEE:7");
+            var creates = Enumerable.Range(0, 20)
+                .Select(_ => _contractorClient.InsertIdempotentAsync(
+                    new Contractor(["historical-payee"]) { Key = Guid.NewGuid() },
+                    context,
+                    default));
+
+            var results = await Task.WhenAll(creates);
+            var conflict = await _contractorClient.InsertIdempotentAsync(
+                new Contractor(["changed-payee"]) { Key = Guid.NewGuid() },
+                context with { RequestFingerprint = "fingerprint-b" },
+                default);
+            var stored = await _handbooksDatabase.GetCollection<ContractorDocument>(LedgerDbCollections.Contractors)
+                .Find(document => document.IdempotencyKeyHash == context.IdempotencyKeyHash)
+                .ToListAsync();
+
+            results.Select(result => result.TargetId).Distinct().Should().ContainSingle();
+            results.Count(result => result.State == IdempotentDocumentWriteState.Created).Should().Be(1);
+            conflict.State.Should().Be(IdempotentDocumentWriteState.Conflict);
+            stored.Should().ContainSingle();
+        }
+
+        [Test]
         public async Task HandbookMigrationRerun_WithSameBusinessKeys_ShouldNotDuplicateDocuments()
         {
             var firstCategory = new Category(CategoryTypes.Expense, ["migration", "category"]) { Key = Guid.NewGuid() };

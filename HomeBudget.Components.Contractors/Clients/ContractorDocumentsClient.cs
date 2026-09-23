@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
@@ -21,6 +22,7 @@ namespace HomeBudget.Components.Contractors.Clients
     {
         private const string PayloadKeyIndexName = "ux_contractors_payload_key";
         private const string ContractorKeyIndexName = "ux_contractors_payload_contractor_key";
+        private const string IdempotencyIndexName = "ux_contractors_idempotency_key_hash";
 
         public async Task<Result<IReadOnlyCollection<ContractorDocument>>> GetAsync()
         {
@@ -79,12 +81,27 @@ namespace HomeBudget.Components.Contractors.Clients
             }
         }
 
+        public async Task<IdempotentDocumentWriteResult> InsertIdempotentAsync(
+            Contractor payload,
+            IdempotentDocumentWriteContext context,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetContractorsCollectionAsync();
+            return await UpsertIdempotentAsync(
+                collection,
+                payload,
+                static contractor => contractor.Key,
+                context,
+                cancellationToken);
+        }
+
         private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<ContractorDocument>(LedgerDbCollections.Contractors);
 
             await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
             await EnsureUniqueIndexAsync(collection, "Payload.ContractorKey", ContractorKeyIndexName);
+            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
         }
