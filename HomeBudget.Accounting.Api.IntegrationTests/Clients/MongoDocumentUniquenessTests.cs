@@ -311,9 +311,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                     Position = "C:3/P:3"
                 });
 
-            var stored = await _historyDatabase.GetCollection<PaymentHistoryDocument>(period)
-                .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .ToListAsync();
+            var stored = await _historyClient.GetAsync(accountId, operationDay.ToFinancialPeriod());
             var audits = await _historyDatabase.GetCollection<ProjectionAuditDocument>("_projection_audit")
                 .Find(FilterDefinition<ProjectionAuditDocument>.Empty)
                 .ToListAsync();
@@ -324,7 +322,8 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             audits.Should().ContainSingle(a =>
                 a.Payload.StreamId == "payment-account-stream" &&
                 a.Payload.Revision == "3" &&
-                a.Payload.Status == "Succeeded");
+                a.Payload.Status == "Succeeded" &&
+                a.Payload.PublicationState == "Published");
         }
 
         [Test]
@@ -355,9 +354,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                 period,
                 [BuildPaymentEvent(accountId, activeOperationId, 12m, operationDay, PaymentEventTypes.Added, 1)]);
 
-            var stored = await _historyDatabase.GetCollection<PaymentHistoryDocument>(period)
-                .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .ToListAsync();
+            var stored = await _historyClient.GetAsync(accountId, operationDay.ToFinancialPeriod());
 
             stored.Should().ContainSingle();
             stored.Single().Payload.Record.Key.Should().Be(activeOperationId);
@@ -418,7 +415,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                     BuildPaymentEvent(accountId, secondOperationId, 7m, operationDay.AddDays(1), PaymentEventTypes.Added, 2)
                 ]);
 
-            var stored = await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty).ToListAsync();
+            var stored = await _historyClient.GetAsync(accountId, operationDay.ToFinancialPeriod());
 
             stored.Select(x => x.Payload.Record.Key).Should().BeEquivalentTo([firstOperationId, secondOperationId]);
             stored.Should().OnlyContain(x => x.ProjectionRunId != staleRunId);
@@ -441,9 +438,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
                     BuildPaymentEvent(accountId, operationId, 15m, operationDay, PaymentEventTypes.Updated, 2)
                 ]);
 
-            var stored = await _historyDatabase.GetCollection<PaymentHistoryDocument>(period)
-                .Find(FilterDefinition<PaymentHistoryDocument>.Empty)
-                .ToListAsync();
+            var stored = await _historyClient.GetAsync(accountId, operationDay.ToFinancialPeriod());
 
             stored.Should().ContainSingle();
             stored.Single().Payload.Record.Amount.Should().Be(15m);

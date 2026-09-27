@@ -7,7 +7,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 ARG BUILD_CONFIGURATION=Release
-ARG BUILD_VERSION=local
+ARG BUILD_VERSION=0.0.0
 ARG BUILD_SHA=local
 ENV BUILD_VERSION=${BUILD_VERSION}
 ENV BUILD_SHA=${BUILD_SHA}
@@ -71,6 +71,7 @@ RUN dotnet publish "HomeBudget.Accounting.Workers.OperationsConsumer.csproj" \
 FROM base AS final
 WORKDIR /app
 
+ARG BUILD_VERSION=0.0.0
 LABEL build_version="${BUILD_VERSION}"
 LABEL service="OperationConsumerWorker"
 

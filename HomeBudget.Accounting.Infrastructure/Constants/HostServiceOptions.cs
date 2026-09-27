@@ -3,6 +3,6 @@
     public static class HostServiceOptions
     {
         public static readonly string AccountingApiName = "HomeBudget-Accounting-Api";
-        public static readonly string AccountConsumerWorkerName = "HomeBudget-Accounting-Consumer-Worker";
+        public static readonly string AccountConsumerWorkerName = "homebudget-accounting-payments-consumer-worker";
     }
 }

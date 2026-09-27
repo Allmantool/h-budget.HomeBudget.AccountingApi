@@ -72,8 +72,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                             parentContext,
                             links);
                         using var baggageScope = TraceContextPropagation.UseExtractedBaggage(propagationContext);
-                        var writeStartedAt = Stopwatch.StartNew();
-
                         if (activity != null)
                         {
                             activity.SetCorrelationId(correlationId);
@@ -92,10 +90,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
                             eventTypeTitle,
                             cancellationToken);
 
-                        writeStartedAt.Stop();
-                        TelemetryMetrics.EventStoreWriteDurationMs.Record(
-                            writeStartedAt.Elapsed.TotalMilliseconds,
-                            [new("event_type", firstEvent.EventType.ToString())]);
                         activity?.SetStatus(ActivityStatusCode.Ok);
                         activity?.AddEvent(ActivityEvents.EventStoreSend);
                     }

@@ -49,7 +49,7 @@ namespace HomeBudget.Components.Operations
                         Activity.Current?.AddEvent(ActivityEvents.RetryAttempt(attempt));
                         TelemetryMetrics.EventStoreRetries.Add(
                             1,
-                            [new("event_type", eventType ?? "unknown")]);
+                            [new("event_type", TelemetryMetrics.NormalizePaymentEventType(eventType))]);
                     });
         }
     }

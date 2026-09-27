@@ -5,5 +5,6 @@ namespace HomeBudget.Components.Accounts.Models
 {
     public class PaymentAccountDocument : DocumentEntity<PaymentAccount>
     {
+        public long PaymentHistoryProjectionFence { get; init; }
     }
 }

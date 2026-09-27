@@ -39,6 +39,14 @@ public static class ActivityExtensions
 
         activity.SetTag(ActivityTags.ExceptionType, ex?.GetType()?.FullName);
         activity.SetTag(ActivityTags.ExceptionMessage, ex.Message);
-        activity.SetStatus(ActivityStatusCode.Error);
+        activity.AddEvent(new ActivityEvent(
+            "exception",
+            tags: new ActivityTagsCollection
+            {
+                { "exception.type", ex.GetType().FullName },
+                { "exception.message", ex.Message },
+                { "exception.stacktrace", ex.StackTrace }
+            }));
+        activity.SetStatus(ActivityStatusCode.Error, ex.Message);
     }
 }

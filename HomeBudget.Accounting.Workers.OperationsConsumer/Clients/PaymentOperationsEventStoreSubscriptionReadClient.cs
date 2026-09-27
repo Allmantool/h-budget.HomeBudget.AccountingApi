@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
@@ -232,16 +233,28 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             var (periodKey, batch) = item;
             try
             {
-                await HandlePaymentOperationEventAsync(batch, batch.SubscriptionContext, token);
+                var projectedEventCount = await HandlePaymentOperationEventAsync(batch, batch.SubscriptionContext, token);
+                TelemetryMetrics.ProjectionEventsProjected.Add(
+                    projectedEventCount,
+                    [new("projection_name", "sync_operations_history")]);
+                TelemetryMetrics.ProjectionBatchAttempts.Add(
+                    1,
+                    [new("projection_name", "sync_operations_history"), new("outcome", "success")]);
             }
             catch (OperationCanceledException ex)
             {
+                TelemetryMetrics.ProjectionBatchAttempts.Add(
+                    1,
+                    [new("projection_name", "sync_operations_history"), new("outcome", "canceled")]);
                 batch.MarkFailed(ex);
             }
             catch (Exception ex)
             {
                 _logger.HandleEventsFailed(periodKey, ex);
                 TelemetryMetrics.ProjectionFailures.Add(1, [new("projection_name", "sync_operations_history")]);
+                TelemetryMetrics.ProjectionBatchAttempts.Add(
+                    1,
+                    [new("projection_name", "sync_operations_history"), new("outcome", "failure")]);
                 batch.MarkFailed(ex);
             }
         }
@@ -284,7 +297,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
-        private async Task HandlePaymentOperationEventAsync(
+        private async Task<int> HandlePaymentOperationEventAsync(
             ProjectionBatchContext projectionBatch,
             EventStoreSubscriptionContext subscriptionContext,
             CancellationToken ct)
@@ -297,7 +310,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
 
             try
             {
-                await HandlePaymentOperationEventCoreAsync(projectionBatch, subscriptionContext, ct);
+                return await HandlePaymentOperationEventCoreAsync(projectionBatch, subscriptionContext, ct);
             }
             finally
             {
@@ -305,7 +318,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
             }
         }
 
-        private async Task HandlePaymentOperationEventCoreAsync(
+        private async Task<int> HandlePaymentOperationEventCoreAsync(
             ProjectionBatchContext projectionBatch,
             EventStoreSubscriptionContext subscriptionContext,
             CancellationToken ct)
@@ -406,16 +419,25 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                         [new("projection_name", "sync_operations_history")]);
                     TelemetryMetrics.SetProjectionLagSeconds((long)(projectionDelay / 1000));
                     activity?.SetTag("projection.delay_ms", projectionDelay);
-                    await SendSyncOperationsHistoryAsync(
-                        accountId,
-                        events,
-                        new ProjectionCheckpoint
-                        {
-                            StreamId = subscriptionContext?.StreamId ?? paymentAccountStream,
-                            Revision = subscriptionContext?.Revision,
-                            Position = subscriptionContext?.Position
-                        },
-                        ct);
+                    try
+                    {
+                        await SendSyncOperationsHistoryAsync(
+                            accountId,
+                            events,
+                            new ProjectionCheckpoint
+                            {
+                                StreamId = paymentAccountStream,
+                                Revision = events.Max(static operation => operation.SequenceNumber)
+                                    .ToString(CultureInfo.InvariantCulture),
+                                Position = null
+                            },
+                            ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        activity?.RecordException(ex);
+                        throw;
+                    }
 
                     syncStopwatch.Stop();
                     TelemetryMetrics.ProjectionSyncDurationMs.Record(
@@ -424,6 +446,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     activity?.SetStatus(ActivityStatusCode.Ok);
                     activity?.AddEvent(new("payment.sync.operation.send"));
                 }
+
+                return events.Count;
             }
             catch (OperationCanceledException)
             {
@@ -518,7 +542,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                     .ReadAsync(paymentAccountStream, cancellationToken: ct)
                     .ToListAsync(ct);
 
-                if (events.Count > 0)
+                if (appearedEvent is not null &&
+                    ProjectionStreamReadValidator.IsComplete(events, appearedEvent.SequenceNumber))
                 {
                     return events;
                 }
@@ -526,9 +551,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
                 await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
             }
 
-            return appearedEvent is null
-                ? events ?? []
-                : [appearedEvent];
+            throw new InvalidOperationException(
+                $"Projection stream '{paymentAccountStream}' did not return a complete contiguous history covering revision '{appearedEvent?.SequenceNumber}'.");
         }
     }
 }

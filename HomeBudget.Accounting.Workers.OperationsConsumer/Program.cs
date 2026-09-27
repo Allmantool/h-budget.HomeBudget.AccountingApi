@@ -20,6 +20,7 @@ using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Infrastructure.HealthChecks;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
+using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
 using HomeBudget.Components.Categories.Configuration;
 using HomeBudget.Components.Contractors.Configuration;
 using HomeBudget.Components.Operations.Configuration;
@@ -50,8 +51,6 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.WebHost.UseUrls("http://127.0.0.1:0");
-
             if (!string.IsNullOrWhiteSpace(environmentName))
             {
                 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string>
@@ -77,9 +76,25 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .RegisterInfrastructureDependencies(configuration)
                 .RegisterContractorsDependencies()
                 .RegisterOperationsDependencies(environment.EnvironmentName)
-                .RegisterCategoriesDependencies()
-                .AddHostedService<KafkaPaymentsConsumerWorker>()
-                .AddHostedService<EventStoreDbPaymentsConsumerWorker>();
+                .RegisterCategoriesDependencies();
+
+            var rebuildOptions = configuration
+                .GetSection(ProjectionRebuildOptions.SectionName)
+                .Get<ProjectionRebuildOptions>() ?? new ProjectionRebuildOptions();
+            services.Configure<ProjectionRebuildOptions>(
+                configuration.GetSection(ProjectionRebuildOptions.SectionName));
+            if (rebuildOptions.Enabled)
+            {
+                services
+                    .AddSingleton<ProjectionRebuildRunner>()
+                    .AddHostedService<ProjectionRebuildWorker>();
+            }
+            else
+            {
+                services
+                    .AddHostedService<KafkaPaymentsConsumerWorker>()
+                    .AddHostedService<EventStoreDbPaymentsConsumerWorker>();
+            }
 
             services
                 .AddHealthChecks()
@@ -87,7 +102,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 .AddAccountingReadinessChecks();
 
             var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-            var isTracingEnabled = services.TryAddTracingSupport(
+            services.TryAddTracingSupport(
                 configuration,
                 environment,
                 HostServiceOptions.AccountConsumerWorkerName,
@@ -121,11 +136,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 Predicate = check => check.Tags.Contains("ready")
             });
 
-            if (isTracingEnabled)
-            {
-                app.UseOpenTelemetryPrometheusScrapingEndpoint();
-                app.MapPrometheusScrapingEndpoint("/metrics");
-            }
+            app.UseOpenTelemetryPrometheusScrapingEndpoint();
+            app.MapPrometheusScrapingEndpoint("/metrics");
 
             return app;
         }

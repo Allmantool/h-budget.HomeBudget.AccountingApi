@@ -7,9 +7,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Core;
 using Serilog.Enrichers.Span;
-using Serilog.Events;
 using Serilog.Exceptions;
-using Serilog.Formatting.Compact;
 using Serilog.Sinks.OpenTelemetry;
 
 using HomeBudget.Accounting.Infrastructure.Constants;
@@ -40,10 +38,11 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
                 .Enrich.WithProperty(LoggerTags.Environment, environment.EnvironmentName)
                 .Enrich.WithProperty(LoggerTags.HostService, hostServiceName)
                 .Enrich.WithProperty(LoggerTags.ApplicationName, environment.ApplicationName)
+                .Enrich.WithProperty("service.name", hostServiceName)
+                .Enrich.WithProperty("service.namespace", "HomeBudget")
+                .Enrich.WithProperty("service.instance.id", System.Environment.MachineName)
+                .Enrich.WithProperty("deployment.environment", environment.EnvironmentName)
                 .WriteTo.Debug()
-                .WriteTo.Console(
-                    new RenderedCompactJsonFormatter(),
-                    restrictedToMinimumLevel: LogEventLevel.Information)
                 .WriteTo.AddAndConfigureSentry(configuration, environment)
                 .TryAddSeqSupport(configuration)
                 .TryAddElasticSearchSupport(configuration, environment, hostServiceName);
@@ -51,7 +50,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
             var logsEndpoint = configuration.GetSection("ObservabilityOptions:LogsEndpoint")?.Value;
             if (!string.IsNullOrWhiteSpace(logsEndpoint))
             {
-                var serviceVersion = typeof(CustomLoggerExtensions).Assembly.GetName().Version?.ToString() ?? "unknown";
+                var serviceVersion = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
                 loggerConfiguration = loggerConfiguration.WriteTo.OpenTelemetry(o =>
                 {
                     o.Endpoint = logsEndpoint;
@@ -59,7 +58,10 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.Logs
                     o.ResourceAttributes = new Dictionary<string, object>
                     {
                         ["service.name"] = hostServiceName,
+                        ["service.namespace"] = "HomeBudget",
                         ["service.version"] = serviceVersion,
+                        ["service.instance.id"] = System.Environment.MachineName,
+                        ["deployment.environment"] = environment.EnvironmentName,
                         [LoggerTags.Environment] = environment.EnvironmentName,
                         [LoggerTags.HostService] = hostServiceName,
                         [LoggerTags.ApplicationName] = environment.ApplicationName,

@@ -107,34 +107,81 @@ namespace HomeBudget.Components.Accounts.Clients
             var targetCollection = await GetPaymentAccountsCollectionAsync();
 
             var paymentAccountIdForUpdate = Guid.Parse(requestPaymentAccountGuid);
+            var filter = Builders<PaymentAccountDocument>.Filter.Eq(
+                document => document.Payload.Key,
+                paymentAccountIdForUpdate);
+            var update = Builders<PaymentAccountDocument>.Update
+                .Set(document => document.Payload.Agent, paymentAccountForUpdate.Agent)
+                .Set(document => document.Payload.Currency, paymentAccountForUpdate.Currency)
+                .Set(document => document.Payload.Description, paymentAccountForUpdate.Description)
+                .Set(document => document.Payload.Type, paymentAccountForUpdate.Type)
+                .Set(document => document.UpdatedUtc, DateTime.UtcNow);
+            var result = await targetCollection.UpdateOneAsync(filter, update);
 
-            var documentResult = await GetByIdAsync(requestPaymentAccountGuid);
+            return result.MatchedCount == 1
+                ? Result<Guid>.Succeeded(paymentAccountIdForUpdate)
+                : Result<Guid>.Failure($"The payment account with '{requestPaymentAccountGuid}' hasn't been found");
+        }
 
-            if (!documentResult.IsSucceeded || documentResult.Payload == null)
+        public async Task<Result<Guid>> UpdateBalanceIfNewerAsync(
+            Guid paymentAccountId,
+            decimal balance,
+            long projectionFence,
+            CancellationToken cancellationToken)
+        {
+            if (projectionFence <= 0)
             {
-                return Result<Guid>.Failure($"The payment account with '{requestPaymentAccountGuid}' hasn't been found");
+                throw new ArgumentOutOfRangeException(nameof(projectionFence));
             }
 
-            var replacement = new PaymentAccountDocument
+            var collection = await GetPaymentAccountsCollectionAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                Builders<PaymentAccountDocument>.Filter.Eq(document => document.Payload.Key, paymentAccountId),
+                Builders<PaymentAccountDocument>.Filter.Or(
+                    Builders<PaymentAccountDocument>.Filter.Exists(
+                        document => document.PaymentHistoryProjectionFence,
+                        exists: false),
+                    Builders<PaymentAccountDocument>.Filter.Lt(
+                        document => document.PaymentHistoryProjectionFence,
+                        projectionFence)));
+            var update = Builders<PaymentAccountDocument>.Update
+                .Set(document => document.Payload.Balance, balance)
+                .Set(document => document.PaymentHistoryProjectionFence, projectionFence)
+                .Set(document => document.UpdatedUtc, DateTime.UtcNow);
+            var result = await collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+            if (result.MatchedCount == 1)
             {
-                Id = documentResult.Payload.Id,
-                Payload = paymentAccountForUpdate,
-                SourceSystem = documentResult.Payload.SourceSystem,
-                LegacyId = documentResult.Payload.LegacyId,
-                ImportBatchId = documentResult.Payload.ImportBatchId,
-                IdempotencyKeyHash = documentResult.Payload.IdempotencyKeyHash,
-                RequestFingerprint = documentResult.Payload.RequestFingerprint,
-                SourceReference = documentResult.Payload.SourceReference,
-                LastSeenUtc = documentResult.Payload.LastSeenUtc,
-                CreatedUtc = documentResult.Payload.CreatedUtc,
-                UpdatedUtc = DateTime.UtcNow
-            };
+                return Result<Guid>.Succeeded(paymentAccountId);
+            }
 
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Id, replacement.Id);
+            var existing = await collection
+                .Find(document => document.Payload.Key == paymentAccountId)
+                .SingleOrDefaultAsync(cancellationToken);
+            return existing is not null && existing.PaymentHistoryProjectionFence >= projectionFence
+                ? Result<Guid>.Succeeded(paymentAccountId)
+                : Result<Guid>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
+        }
 
-            await targetCollection.ReplaceOneAsync(filter, replacement);
+        public async Task<Result<Guid>> UpdateBalanceAsync(
+            Guid paymentAccountId,
+            decimal balance,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetPaymentAccountsCollectionAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.Eq(
+                document => document.Payload.Key,
+                paymentAccountId);
+            var update = Builders<PaymentAccountDocument>.Update
+                .Set(document => document.Payload.Balance, balance)
+                .Set(document => document.UpdatedUtc, DateTime.UtcNow);
+            var result = await collection.UpdateOneAsync(
+                filter,
+                update,
+                cancellationToken: cancellationToken);
 
-            return Result<Guid>.Succeeded(paymentAccountIdForUpdate);
+            return result.MatchedCount == 1
+                ? Result<Guid>.Succeeded(paymentAccountId)
+                : Result<Guid>.Failure($"The payment account with '{paymentAccountId}' hasn't been found");
         }
 
         private async Task<IMongoCollection<PaymentAccountDocument>> GetPaymentAccountsCollectionAsync()

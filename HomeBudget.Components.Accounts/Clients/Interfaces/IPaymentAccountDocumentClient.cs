@@ -27,5 +27,16 @@ namespace HomeBudget.Components.Accounts.Clients.Interfaces
         Task<Result<Guid>> RemoveAsync(string paymentAccountId);
 
         Task<Result<Guid>> UpdateAsync(string requestPaymentAccountGuid, PaymentAccount paymentAccountForUpdate);
+
+        Task<Result<Guid>> UpdateBalanceAsync(
+            Guid paymentAccountId,
+            decimal balance,
+            CancellationToken cancellationToken);
+
+        Task<Result<Guid>> UpdateBalanceIfNewerAsync(
+            Guid paymentAccountId,
+            decimal balance,
+            long projectionFence,
+            CancellationToken cancellationToken);
     }
 }

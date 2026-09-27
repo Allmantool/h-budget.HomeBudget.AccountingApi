@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -63,6 +64,22 @@ namespace HomeBudget.Components.Operations.Clients
                 throw new ArgumentException("Batch is empty", nameof(eventsForSending));
             }
 
+            var appendStartedAt = Stopwatch.StartNew();
+            var eventTypeName = TelemetryMetrics.NormalizePaymentEventType(
+                eventType ?? events[0].EventType.ToString());
+            using var activity = ActivityPropagation.StartActivity("eventstore.append", ActivityKind.Producer);
+
+            if (activity != null)
+            {
+                activity.SetTag(ActivityTags.MessagingSystem, "eventstore");
+                activity.SetTag(ActivityTags.MessagingOperation, "publish");
+                activity.SetTag(ActivityTags.EventStoreStream, streamName);
+                activity.SetTag("messaging.event_count", events.Count);
+                activity.SetTag("messaging.event_type", eventTypeName);
+            }
+
+            StampTraceMetadata(events, activity);
+
             try
             {
                 await _requestRateLimiter.WaitAsync(ctx);
@@ -70,15 +87,37 @@ namespace HomeBudget.Components.Operations.Clients
                 IWriteResult result = null;
                 foreach (var paymentEvent in events)
                 {
-                    result = await SendIdempotentAsync(paymentEvent, streamName, eventType, ctx);
+                    var writeOutcome = await SendIdempotentAsync(paymentEvent, streamName, eventType, ctx);
+                    result = writeOutcome.Result;
+                    TelemetryMetrics.EventStoreWriteOutcomes.Add(
+                        1,
+                        [
+                            new("event_type", eventTypeName),
+                            new("outcome", writeOutcome.WasAppended ? "appended" : "duplicate")
+                        ]);
                 }
+
+                appendStartedAt.Stop();
+                TelemetryMetrics.EventStoreWriteDurationMs.Record(
+                    appendStartedAt.Elapsed.TotalMilliseconds,
+                    [new("event_type", eventTypeName), new("outcome", "success")]);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                activity?.AddEvent(ActivityEvents.EventStorePersisted);
 
                 return result;
             }
             catch (Exception ex)
             {
+                appendStartedAt.Stop();
                 PaymentOperationsEventStoreWriteClientLogs.AppendFailed(_logger, ex.Message, ex);
-                TelemetryMetrics.EventStoreAppendFailures.Add(1, [new("stream_id", streamName ?? nameof(PaymentOperationEvent))]);
+                TelemetryMetrics.EventStoreWriteDurationMs.Record(
+                    appendStartedAt.Elapsed.TotalMilliseconds,
+                    [new("event_type", eventTypeName), new("outcome", "failure")]);
+                TelemetryMetrics.EventStoreWriteOutcomes.Add(
+                    1,
+                    [new("event_type", eventTypeName), new("outcome", "failure")]);
+                TelemetryMetrics.EventStoreAppendFailures.Add(1, [new("event_type", eventTypeName)]);
+                activity?.RecordException(ex);
                 throw;
             }
             finally
@@ -97,7 +136,7 @@ namespace HomeBudget.Components.Operations.Clients
 
             try
             {
-                return await SendIdempotentAsync(eventForSending, streamName, eventType, token);
+                return (await SendIdempotentAsync(eventForSending, streamName, eventType, token)).Result;
             }
             catch (Exception ex)
             {
@@ -106,7 +145,7 @@ namespace HomeBudget.Components.Operations.Clients
             }
         }
 
-        private async Task<IWriteResult> SendIdempotentAsync(
+        private async Task<(IWriteResult Result, bool WasAppended)> SendIdempotentAsync(
             PaymentOperationEvent eventForSending,
             string streamName,
             string eventType,
@@ -178,7 +217,7 @@ namespace HomeBudget.Components.Operations.Clients
             }
         }
 
-        private async Task<IWriteResult> AppendWithExpectedRevisionAsync(
+        private async Task<(IWriteResult Result, bool WasAppended)> AppendWithExpectedRevisionAsync(
             PaymentOperationEvent eventForSending,
             string streamName,
             string eventType,
@@ -191,7 +230,7 @@ namespace HomeBudget.Components.Operations.Clients
                 var streamState = await ReadStreamStateAsync(streamName, eventId, streamCache, token);
                 if (streamState.DuplicateResult != null)
                 {
-                    return streamState.DuplicateResult;
+                    return (streamState.DuplicateResult, false);
                 }
 
                 var eventData = CreateEventData(eventForSending, eventType, eventId);
@@ -215,7 +254,7 @@ namespace HomeBudget.Components.Operations.Clients
                     streamCache.LatestPosition = writeResult.LogPosition;
                     streamCache.IsInitialized = true;
 
-                    return writeResult;
+                    return (writeResult, true);
                 }
                 catch (WrongExpectedVersionException)
                 {
@@ -223,7 +262,7 @@ namespace HomeBudget.Components.Operations.Clients
                     var latestState = await ReadStreamStateAsync(streamName, eventId, streamCache, token);
                     if (latestState.DuplicateResult != null)
                     {
-                        return latestState.DuplicateResult;
+                        return (latestState.DuplicateResult, false);
                     }
 
                     continue;
@@ -282,6 +321,46 @@ namespace HomeBudget.Components.Operations.Clients
             streamCache.IsInitialized = true;
 
             return new PaymentStreamState(latestRevision, null);
+        }
+
+        private static void StampTraceMetadata(
+            IEnumerable<PaymentOperationEvent> paymentEvents,
+            Activity activity)
+        {
+            if (activity is null)
+            {
+                return;
+            }
+
+            var propagationCarrier = TraceContextPropagation.Capture(activity);
+            foreach (var paymentEvent in paymentEvents)
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceId] = activity.TraceId.ToString();
+                paymentEvent.Metadata[EventMetadataKeys.CausationId] = activity.SpanId.ToString();
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceParent, out var traceParent))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+                }
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceState, out var traceState))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.TraceState] = traceState;
+                }
+                else
+                {
+                    paymentEvent.Metadata.Remove(EventMetadataKeys.TraceState);
+                }
+
+                if (propagationCarrier.TryGetValue(TraceContextPropagation.Baggage, out var baggage))
+                {
+                    paymentEvent.Metadata[EventMetadataKeys.Baggage] = baggage;
+                }
+                else
+                {
+                    paymentEvent.Metadata.Remove(EventMetadataKeys.Baggage);
+                }
+            }
         }
 
         public override async Task SendToDeadLetterQueueAsync(BaseEvent eventForSending, Exception exception)

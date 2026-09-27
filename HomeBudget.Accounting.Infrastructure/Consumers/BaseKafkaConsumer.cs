@@ -21,6 +21,15 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
+    public enum KafkaMessageProcessingOutcome
+    {
+        Processed,
+        Persisted,
+        Duplicate,
+        DeadLetter,
+        Ignored
+    }
+
     public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
         public string ConsumerId { get; }
@@ -152,11 +161,18 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
             CancellationToken cancellationToken = default)
         {
-            await ConsumeAsync(processMessageAsync, null, cancellationToken);
+            await ConsumeWithOutcomeAsync(
+                async result =>
+                {
+                    await processMessageAsync(result);
+                    return KafkaMessageProcessingOutcome.Processed;
+                },
+                null,
+                cancellationToken);
         }
 
-        protected virtual async Task ConsumeAsync(
-            Func<ConsumeResult<TKey, TValue>, Task> processMessageAsync,
+        protected virtual async Task ConsumeWithOutcomeAsync(
+            Func<ConsumeResult<TKey, TValue>, Task<KafkaMessageProcessingOutcome>> processMessageAsync,
             Func<ConsumeResult<TKey, TValue>, Task> afterCommitCallbackAsync,
             CancellationToken cancellationToken = default)
         {
@@ -181,6 +197,8 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                             await Task.Delay((int)_consumerSettings.ConsumeDelayInMilliseconds, cancellationToken);
                             continue;
                         }
+
+                        TelemetryMetrics.KafkaMessagesReceived.Add(1);
 
                         var consumedMessage = consumeResult.Message;
 
@@ -243,21 +261,43 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
                                 activity.SetCorrelationId(correlationId);
                             }
 
-                            await processMessageAsync(consumeResult);
+                            var processingOutcome = await ProcessMessageWithMetricsAsync(
+                                processMessageAsync,
+                                consumeResult,
+                                activity,
+                                cancellationToken);
 
                             if (!_disposed)
                             {
-                                _consumer.Commit(consumeResult);
-                                TryRecordConsumerLag(consumeResult);
-
-                                if (afterCommitCallbackAsync is not null)
+                                try
                                 {
-                                    await afterCommitCallbackAsync(consumeResult);
+                                    _consumer.Commit(consumeResult);
+                                    TryRecordConsumerLag(consumeResult);
+
+                                    if (afterCommitCallbackAsync is not null)
+                                    {
+                                        await afterCommitCallbackAsync(consumeResult);
+                                    }
+
+                                    TelemetryMetrics.KafkaOffsetCommitOutcomes.Add(
+                                        1,
+                                        [new("outcome", "success"), new("processing_outcome", processingOutcome)]);
+                                    if (!string.Equals(processingOutcome, "deadletter", StringComparison.Ordinal))
+                                    {
+                                        activity?.SetStatus(ActivityStatusCode.Ok);
+                                    }
+
+                                    activity?.AddEvent(ActivityEvents.KafkaConsumed);
                                 }
-
-                                activity?.SetStatus(ActivityStatusCode.Ok);
-
-                                activity?.AddEvent(ActivityEvents.KafkaConsumed);
+                                catch (Exception ex)
+                                {
+                                    TelemetryMetrics.KafkaOffsetCommitOutcomes.Add(
+                                        1,
+                                        [new("outcome", "failure"), new("processing_outcome", processingOutcome)]);
+                                    TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "commit")]);
+                                    activity?.RecordException(ex);
+                                    throw;
+                                }
                             }
                         }
                     }
@@ -293,6 +333,53 @@ namespace HomeBudget.Accounting.Infrastructure.Consumers
             {
                 CloseConsumer();
             }
+        }
+
+        private static async Task<string> ProcessMessageWithMetricsAsync(
+            Func<ConsumeResult<TKey, TValue>, Task<KafkaMessageProcessingOutcome>> processMessageAsync,
+            ConsumeResult<TKey, TValue> consumeResult,
+            Activity activity,
+            CancellationToken cancellationToken)
+        {
+            var processingStartedAt = Stopwatch.StartNew();
+            try
+            {
+                var outcome = ToMetricValue(await processMessageAsync(consumeResult));
+                activity?.SetTag(ActivityTags.MessagingProcessingOutcome, outcome);
+                RecordKafkaProcessing(processingStartedAt, outcome);
+                return outcome;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                RecordKafkaProcessing(processingStartedAt, "canceled");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                RecordKafkaProcessing(processingStartedAt, "failure");
+                activity?.RecordException(ex);
+                throw;
+            }
+        }
+
+        private static string ToMetricValue(KafkaMessageProcessingOutcome outcome)
+            => outcome switch
+            {
+                KafkaMessageProcessingOutcome.Processed => "processed",
+                KafkaMessageProcessingOutcome.Persisted => "persisted",
+                KafkaMessageProcessingOutcome.Duplicate => "duplicate",
+                KafkaMessageProcessingOutcome.DeadLetter => "deadletter",
+                KafkaMessageProcessingOutcome.Ignored => "ignored",
+                _ => "unknown"
+            };
+
+        private static void RecordKafkaProcessing(Stopwatch processingStartedAt, string outcome)
+        {
+            processingStartedAt.Stop();
+            TelemetryMetrics.KafkaProcessingAttempts.Add(1, [new("outcome", outcome)]);
+            TelemetryMetrics.KafkaProcessingDurationMs.Record(
+                processingStartedAt.Elapsed.TotalMilliseconds,
+                [new("outcome", outcome)]);
         }
 
         private void TryRecordConsumerLag(ConsumeResult<TKey, TValue> consumeResult)

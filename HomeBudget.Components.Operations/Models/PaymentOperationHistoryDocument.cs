@@ -6,5 +6,6 @@ namespace HomeBudget.Components.Operations.Models
     public sealed class PaymentHistoryDocument : DocumentEntity<PaymentOperationHistoryRecord>
     {
         public System.Guid ProjectionRunId { get; init; }
+        public string GenerationId { get; init; }
     }
 }
