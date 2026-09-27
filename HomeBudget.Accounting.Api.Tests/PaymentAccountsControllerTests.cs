@@ -241,6 +241,40 @@ namespace HomeBudget.Accounting.Api.Tests
                 return Task.FromResult(Result<Guid>.Succeeded(paymentAccountGuid));
             }
 
+            public Task<Result<Guid>> UpdateBalanceIfNewerAsync(
+                Guid paymentAccountId,
+                decimal balance,
+                long projectionFence,
+                CancellationToken cancellationToken)
+            {
+                if (!documents.TryGetValue(paymentAccountId, out var document))
+                {
+                    return Task.FromResult(Result<Guid>.Failure());
+                }
+
+                document.Payload.Balance = balance;
+                documents[paymentAccountId] = new PaymentAccountDocument
+                {
+                    Payload = document.Payload,
+                    PaymentHistoryProjectionFence = projectionFence
+                };
+                return Task.FromResult(Result<Guid>.Succeeded(paymentAccountId));
+            }
+
+            public Task<Result<Guid>> UpdateBalanceAsync(
+                Guid paymentAccountId,
+                decimal balance,
+                CancellationToken cancellationToken)
+            {
+                if (!documents.TryGetValue(paymentAccountId, out var document))
+                {
+                    return Task.FromResult(Result<Guid>.Failure());
+                }
+
+                document.Payload.Balance = balance;
+                return Task.FromResult(Result<Guid>.Succeeded(paymentAccountId));
+            }
+
             public PaymentAccount GetStoredAccount(Guid paymentAccountId)
             {
                 return documents[paymentAccountId].Payload;

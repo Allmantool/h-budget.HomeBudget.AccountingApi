@@ -22,14 +22,29 @@ namespace HomeBudget.Components.Operations.Clients.Interfaces
 
         Task<PaymentHistoryDocument> GetByIdAsync(Guid accountId, Guid operationId);
 
-        Task RewriteAllAsync(
-            string financialPeriodIdentifier,
-            IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords,
-            Guid projectionRunId);
+        Task<ProjectionPublicationResult> PublishSnapshotAsync(
+            PaymentHistoryProjectionSnapshot snapshot,
+            Guid projectionRunId,
+            CancellationToken cancellationToken);
+
+        Task<AccountProjectionBalanceSnapshot> CreateAccountBalanceSnapshotAsync(
+            Guid accountId,
+            CancellationToken cancellationToken);
+
+        Task<IReadOnlyCollection<PaymentHistoryProjectionScope>> DiscoverProjectionScopesAsync(
+            CancellationToken cancellationToken);
 
         Task BeginProjectionRunAsync(ProjectionAuditRecord auditRecord);
 
-        Task CompleteProjectionRunAsync(Guid projectionRunId, string status, string error = null);
+        Task RecordProjectionPublicationAsync(
+            Guid projectionRunId,
+            string publicationState);
+
+        Task CompleteProjectionRunAsync(
+            Guid projectionRunId,
+            string status,
+            string error = null,
+            string publicationState = null);
 
         Task InsertOneAsync(string financialPeriodIdentifier, PaymentOperationHistoryRecord payload);
 

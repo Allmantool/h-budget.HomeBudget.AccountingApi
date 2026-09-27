@@ -18,6 +18,7 @@ public static class ActivityTags
     public static readonly string MessagingSystem = "messaging.system";
     public static readonly string KafkaTopic = "messaging.destination.name";
     public static readonly string MessagingOperation = "messaging.operation";
+    public static readonly string MessagingProcessingOutcome = "messaging.processing.outcome";
 
     public static readonly string DbSystem = "db.system";
     public static readonly string DbStatement = "db.statement";

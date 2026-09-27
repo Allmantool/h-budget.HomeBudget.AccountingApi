@@ -94,42 +94,44 @@ namespace HomeBudget.Components.Operations.Consumers
 
         public override Task ConsumeAsync(CancellationToken cancellationToken)
         {
-            return ConsumeAsync(
+            return ConsumeWithOutcomeAsync(
                 payload => ProcessMessageAsync(payload, cancellationToken),
+                null,
                 cancellationToken);
         }
 
-        private async Task ProcessMessageAsync(ConsumeResult<string, string> payload, CancellationToken cancellationToken)
+        private async Task<KafkaMessageProcessingOutcome> ProcessMessageAsync(
+            ConsumeResult<string, string> payload,
+            CancellationToken cancellationToken)
         {
             var message = payload.Message;
 
             if (message == null || string.IsNullOrWhiteSpace(message.Value))
             {
-                return;
+                return KafkaMessageProcessingOutcome.Ignored;
             }
 
             if (_messageInboxService is not null)
             {
-                await ProcessMessageAsync(payload, _messageInboxService, cancellationToken);
-                return;
+                return await ProcessMessageAsync(payload, _messageInboxService, cancellationToken);
             }
 
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var inboxService = scope.ServiceProvider.GetRequiredService<IPaymentMessageInboxService>();
 
             var outboxService = scope.ServiceProvider.GetRequiredService<IOutboxPaymentStatusService>();
-            await ProcessMessageAsync(payload, inboxService, outboxService, cancellationToken);
+            return await ProcessMessageAsync(payload, inboxService, outboxService, cancellationToken);
         }
 
-        private async Task ProcessMessageAsync(
+        private async Task<KafkaMessageProcessingOutcome> ProcessMessageAsync(
             ConsumeResult<string, string> payload,
             IPaymentMessageInboxService inboxService,
             CancellationToken cancellationToken)
         {
-            await ProcessMessageAsync(payload, inboxService, null, cancellationToken);
+            return await ProcessMessageAsync(payload, inboxService, null, cancellationToken);
         }
 
-        private async Task ProcessMessageAsync(
+        private async Task<KafkaMessageProcessingOutcome> ProcessMessageAsync(
             ConsumeResult<string, string> payload,
             IPaymentMessageInboxService inboxService,
             IOutboxPaymentStatusService outboxService,
@@ -154,7 +156,7 @@ namespace HomeBudget.Components.Operations.Consumers
             if (!processingDecision.ShouldProcess)
             {
                 _logger.DuplicateMessageSkipped(messageId, processingDecision.Status);
-                return;
+                return KafkaMessageProcessingOutcome.Duplicate;
             }
 
             message.Headers.Add(
@@ -171,19 +173,23 @@ namespace HomeBudget.Components.Operations.Consumers
             }
             catch (JsonException ex)
             {
-                _logger.DeserializationFailed(message.Value, ex.Message, ex);
+                Activity.Current?.RecordException(ex);
+                _logger.DeserializationFailed(messageId, ex.Message, ex);
                 await SendPoisonMessageToDeadLetterQueueAsync(payload, ex, cancellationToken);
                 await inboxService.MarkPoisonAsync(messageId, ex.Message, _dateTimeProvider.GetNowUtc());
-                return;
+                TelemetryMetrics.KafkaMessagesDeadLettered.Add(1, [new("reason", "malformed")]);
+                return KafkaMessageProcessingOutcome.DeadLetter;
             }
 
             if (paymentEvent?.Payload == null)
             {
                 var exception = new JsonException("Payment operation event or payload is empty.");
-                _logger.DeserializationFailed(message.Value, exception.Message, exception);
+                Activity.Current?.RecordException(exception);
+                _logger.DeserializationFailed(messageId, exception.Message, exception);
                 await SendPoisonMessageToDeadLetterQueueAsync(payload, exception, cancellationToken);
                 await inboxService.MarkPoisonAsync(messageId, exception.Message, _dateTimeProvider.GetNowUtc());
-                return;
+                TelemetryMetrics.KafkaMessagesDeadLettered.Add(1, [new("reason", "malformed")]);
+                return KafkaMessageProcessingOutcome.DeadLetter;
             }
 
             var correlationId = paymentEvent.Metadata.Get(EventMetadataKeys.CorrelationId) ?? string.Empty;
@@ -217,8 +223,8 @@ namespace HomeBudget.Components.Operations.Consumers
                 : null;
 
             using var activity = ActivityPropagation.StartActivity(
-                "payment.events.eventstore.process",
-                ActivityKind.Consumer,
+                "payment.process",
+                ActivityKind.Internal,
                 traceParent,
                 traceState);
 
@@ -304,7 +310,6 @@ namespace HomeBudget.Components.Operations.Consumers
             }
             catch (Exception ex)
             {
-                TelemetryMetrics.EventStoreAppendFailures.Add(1, [new("stream_id", streamName)]);
                 TelemetryMetrics.KafkaProcessingFailures.Add(1, [new("failure_type", "eventstore_append")]);
                 var failure = await inboxService.MarkFailedAsync(
                     messageId,
@@ -314,10 +319,12 @@ namespace HomeBudget.Components.Operations.Consumers
 
                 if (!failure.IsPoison)
                 {
+                    activity?.RecordException(ex);
                     _logger.TransientMessageFailure(messageId, failure.RetryCount, ex.Message, ex);
                     throw;
                 }
 
+                activity?.RecordException(ex);
                 _logger.PoisonMessageReachedDeadLetter(messageId, failure.RetryCount, ex.Message, ex);
                 await SendPoisonMessageToDeadLetterQueueAsync(payload, ex, cancellationToken);
                 if (outboxService is not null)
@@ -325,7 +332,8 @@ namespace HomeBudget.Components.Operations.Consumers
                     await outboxService.MarkDeadLetteredAsync(messageId, ex.Message, _dateTimeProvider.GetNowUtc());
                 }
 
-                return;
+                TelemetryMetrics.KafkaMessagesDeadLettered.Add(1, [new("reason", "retry_exhausted")]);
+                return KafkaMessageProcessingOutcome.DeadLetter;
             }
 
             if (outboxService is not null)
@@ -334,6 +342,8 @@ namespace HomeBudget.Components.Operations.Consumers
             }
 
             await inboxService.MarkProcessedAsync(messageId, _dateTimeProvider.GetNowUtc());
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return KafkaMessageProcessingOutcome.Persisted;
         }
 
         private async Task SendPoisonMessageToDeadLetterQueueAsync(

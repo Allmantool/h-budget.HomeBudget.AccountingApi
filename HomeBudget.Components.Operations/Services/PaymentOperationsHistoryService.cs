@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using HomeBudget.Accounting.Domain.Models;
@@ -29,7 +31,9 @@ namespace HomeBudget.Components.Operations.Services
         public async Task<Result<decimal>> SyncHistoryAsync(
             string financialPeriodIdentifier,
             IEnumerable<PaymentOperationEvent> eventsForAccount,
-            ProjectionCheckpoint checkpoint = null)
+            ProjectionCheckpoint checkpoint = null,
+            CancellationToken cancellationToken = default,
+            Guid? completionOwnerRunId = null)
         {
             if (string.IsNullOrWhiteSpace(financialPeriodIdentifier))
             {
@@ -46,13 +50,23 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<decimal>.Succeeded(0m);
             }
 
-            var projectionRunId = Guid.NewGuid();
+            var accountId = inputEvents[0].Payload.PaymentAccountId;
+            var sourceRevision = inputEvents.Max(static operation => operation.SequenceNumber);
+            if (checkpoint?.Revision is not null &&
+                (!long.TryParse(checkpoint.Revision, NumberStyles.None, CultureInfo.InvariantCulture, out var checkpointRevision) ||
+                 checkpointRevision != sourceRevision))
+            {
+                throw new InvalidOperationException(
+                    $"Projection checkpoint revision '{checkpoint.Revision}' does not match the complete source read revision '{sourceRevision}'.");
+            }
+
+            var projectionRunId = completionOwnerRunId ?? Guid.NewGuid();
             var now = DateTime.UtcNow;
             await _paymentsHistoryDocumentsClient.BeginProjectionRunAsync(new ProjectionAuditRecord
             {
                 ProjectionRunId = projectionRunId,
-                StreamId = checkpoint?.StreamId,
-                Revision = checkpoint?.Revision,
+                StreamId = checkpoint?.StreamId ?? financialPeriodIdentifier,
+                Revision = sourceRevision.ToString(CultureInfo.InvariantCulture),
                 Position = checkpoint?.Position,
                 Status = "Started",
                 StartedUtc = now,
@@ -66,26 +80,33 @@ namespace HomeBudget.Components.Operations.Services
                     .Where(static x => x?.Payload != null)
                     .ToList();
 
-                if (latestActiveEvents.Count == 0)
+                IReadOnlyList<PaymentOperationHistoryRecord> historyRecords = latestActiveEvents.Count == 0
+                    ? []
+                    : inputEvents.BuildHistoryRecords(await LoadCategoryMapAsync(latestActiveEvents));
+                var snapshot = new PaymentHistoryProjectionSnapshot(
+                    financialPeriodIdentifier,
+                    accountId,
+                    checkpoint?.StreamId ?? financialPeriodIdentifier,
+                    sourceRevision,
+                    checkpoint?.Position,
+                    PaymentHistoryProjectionFingerprint.Create(historyRecords),
+                    historyRecords);
+                var publication = await _paymentsHistoryDocumentsClient.PublishSnapshotAsync(
+                    snapshot,
+                    projectionRunId,
+                    cancellationToken);
+                await _paymentsHistoryDocumentsClient.RecordProjectionPublicationAsync(
+                    projectionRunId,
+                    publication.State.ToString());
+                if (completionOwnerRunId is null)
                 {
-                    await _paymentsHistoryDocumentsClient.RewriteAllAsync(
-                        financialPeriodIdentifier,
-                        [],
-                        projectionRunId);
-                    await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
-                    return Result<decimal>.Succeeded(0m);
+                    await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(
+                        projectionRunId,
+                        "Succeeded",
+                        publicationState: publication.State.ToString());
                 }
 
-                var categoryMap = await LoadCategoryMapAsync(latestActiveEvents);
-                var historyRecords = inputEvents.BuildHistoryRecords(categoryMap);
-
-                await _paymentsHistoryDocumentsClient.RewriteAllAsync(
-                    financialPeriodIdentifier,
-                    historyRecords,
-                    projectionRunId);
-                await _paymentsHistoryDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
-
-                return Result<decimal>.Succeeded(historyRecords[^1].Balance);
+                return Result<decimal>.Succeeded(snapshot.FinalBalance);
             }
             catch (Exception ex)
             {

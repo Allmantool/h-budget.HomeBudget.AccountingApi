@@ -15,6 +15,7 @@
     <PackageReference Include="Elastic.Apm.NetCoreAll" />
     <PackageReference Include="Elastic.Apm.SerilogEnricher" />
     <PackageReference Include="Elastic.Serilog.Sinks" />
+    <PackageReference Include="IdentityModel" />
     <PackageReference Include="Microsoft.AspNetCore.HeaderPropagation" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />

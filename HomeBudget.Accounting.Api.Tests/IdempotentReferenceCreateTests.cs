@@ -364,6 +364,15 @@ namespace HomeBudget.Accounting.Api.Tests
             public Task<Result<Guid>> InsertOneAsync(PaymentAccount payload) => Task.FromResult(legacyResult);
             public Task<Result<Guid>> RemoveAsync(string paymentAccountId) => throw new NotSupportedException();
             public Task<Result<Guid>> UpdateAsync(string requestPaymentAccountGuid, PaymentAccount paymentAccountForUpdate) => throw new NotSupportedException();
+            public Task<Result<Guid>> UpdateBalanceAsync(
+                Guid paymentAccountId,
+                decimal balance,
+                CancellationToken cancellationToken) => throw new NotSupportedException();
+            public Task<Result<Guid>> UpdateBalanceIfNewerAsync(
+                Guid paymentAccountId,
+                decimal balance,
+                long projectionFence,
+                CancellationToken cancellationToken) => throw new NotSupportedException();
         }
 
         private sealed class CategoryClientStub(
