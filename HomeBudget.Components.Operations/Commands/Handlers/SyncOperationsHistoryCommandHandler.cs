@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -75,6 +76,7 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             using (LogContext.PushProperty("projection_name", "sync_operations_history"))
             using (LogContext.PushProperty("aggregate_id", accountId))
             {
+                var projectionRunId = Guid.NewGuid();
                 using var activity = Activity.Current != null
                     ? ActivityPropagation.StartActivity(
                         "projection.sync_operations_history",
@@ -97,61 +99,75 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                     activity.SetTag("projection.name", "sync_operations_history");
                 }
 
-                await BenchmarkService.WithBenchmarkAsync(
-                    async () => await operationsHistoryService.SyncHistoryAsync(monthPeriodIdentifier, events, request.Checkpoint),
-                    $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events in scope of account '{accountId}'",
-                    logger,
-                    new { monthPeriodIdentifier });
-
-                var periodBalancesPaymentDocuments = await BenchmarkService.WithBenchmarkAsync(
-                    async () => await historyDocumentsClient.GetAllPeriodBalancesForAccountAsync(accountId),
-                    $"Retrieve balance for account '{accountId}'",
-                    logger,
-                    new { PaymentAccountId = accountId });
-
-                if (periodBalancesPaymentDocuments.IsNullOrEmpty())
+                try
                 {
-                    var initialBalance = await paymentAccountService.GetInitialBalanceAsync(accountId.ToString());
-                    await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, initialBalance), cancellationToken);
-                    await MarkCommandsProjectedAsync(events);
-                    activity?.SetStatus(ActivityStatusCode.Ok);
-                    return Result<decimal>.Succeeded(initialBalance);
-                }
+                    await BenchmarkService.WithBenchmarkAsync(
+                        async () => await operationsHistoryService.SyncHistoryAsync(
+                            monthPeriodIdentifier,
+                            events,
+                            request.Checkpoint,
+                            cancellationToken,
+                            projectionRunId),
+                        $"Execute {nameof(IPaymentOperationsHistoryService.SyncHistoryAsync)} for '{events.Count()}' events in scope of account '{accountId}'",
+                        logger,
+                        new { monthPeriodIdentifier });
 
-                var monthBalanceHistoryRecords = periodBalancesPaymentDocuments
-                    .Where(d => d != null)
-                    .Select(d => d.Payload);
+                    var balanceSnapshot = await BenchmarkService.WithBenchmarkAsync(
+                        async () => await historyDocumentsClient.CreateAccountBalanceSnapshotAsync(
+                            accountId,
+                            cancellationToken),
+                        $"Create fenced balance snapshot for account '{accountId}'",
+                        logger,
+                        new { PaymentAccountId = accountId });
+                    var finalBalance = await paymentAccountService.GetInitialBalanceAsync(accountId.ToString()) +
+                        balanceSnapshot.ProjectedBalance;
 
-                var totalBalanceForAccount = monthBalanceHistoryRecords.Sum(r => r.Balance);
-
-                var finalBalance = await paymentAccountService.GetInitialBalanceAsync(accountId.ToString()) + totalBalanceForAccount;
-
-                await BenchmarkService.WithBenchmarkAsync(
-                    async () =>
-                    {
-                        using var updateActivity = ActivityPropagation.StartActivity("mediatr.send.update_payment_balance", ActivityKind.Internal);
-                        if (updateActivity != null)
+                    await BenchmarkService.WithBenchmarkAsync(
+                        async () =>
                         {
-                            updateActivity.SetCorrelationId(correlationId);
-                            updateActivity.SetAccount(accountId);
-                            updateActivity.SetTag("messaging.message_id", messageId);
-                        }
+                            using var updateActivity = ActivityPropagation.StartActivity("mediatr.send.update_payment_balance", ActivityKind.Internal);
+                            if (updateActivity != null)
+                            {
+                                updateActivity.SetCorrelationId(correlationId);
+                                updateActivity.SetAccount(accountId);
+                                updateActivity.SetTag("messaging.message_id", messageId);
+                            }
 
-                        await sender.Send(new UpdatePaymentAccountBalanceCommand(accountId, finalBalance), cancellationToken);
+                            var updateResult = await sender.Send(
+                                new UpdatePaymentAccountBalanceCommand(
+                                    accountId,
+                                    finalBalance,
+                                    balanceSnapshot.Fence),
+                                cancellationToken);
+                            if (updateResult?.IsSucceeded != true)
+                            {
+                                throw new InvalidOperationException(
+                                    $"Fenced balance publication failed for account '{accountId}'.");
+                            }
 
-                        updateActivity?.SetStatus(ActivityStatusCode.Ok);
-                    },
-                    "Sending UpdatePaymentAccountBalanceCommand",
-                    logger,
-                    new { PaymentAccountId = accountId });
+                            updateActivity?.SetStatus(ActivityStatusCode.Ok);
+                        },
+                        "Sending UpdatePaymentAccountBalanceCommand",
+                        logger,
+                        new { PaymentAccountId = accountId });
 
-                await MarkCommandsProjectedAsync(events);
+                    await MarkCommandsProjectedAsync(events);
+                    await historyDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
 
-                activity?.SetStatus(ActivityStatusCode.Ok);
-                activity?.SetTag(ActivityTags.MongoCollection, "payments_projection");
-                activity?.AddEvent(ActivityEvents.ProjectionUpdated);
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                    activity?.SetTag(ActivityTags.MongoCollection, "payments_projection");
+                    activity?.AddEvent(ActivityEvents.ProjectionUpdated);
 
-                return Result<decimal>.Succeeded(finalBalance);
+                    return Result<decimal>.Succeeded(finalBalance);
+                }
+                catch (Exception ex)
+                {
+                    await historyDocumentsClient.CompleteProjectionRunAsync(
+                        projectionRunId,
+                        "Failed",
+                        ex.Message);
+                    throw;
+                }
             }
         }
 

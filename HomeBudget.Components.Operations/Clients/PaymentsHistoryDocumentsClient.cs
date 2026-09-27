@@ -1,19 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
+using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
+using HomeBudget.Components.Operations.Services;
 using HomeBudget.Core.Observability;
 using HomeBudget.Core.Options;
 
@@ -23,8 +28,15 @@ namespace HomeBudget.Components.Operations.Clients
     : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory), IPaymentsHistoryDocumentsClient
     {
         private const string ProjectionAuditCollectionName = "_projection_audit";
+        private const string ProjectionGenerationsCollectionName = "_payment_history_generations";
+        private const string ProjectionHeadsCollectionName = "_payment_history_projection_heads";
+        private const string ProjectionAccountsCollectionName = "_payment_history_projection_accounts";
         private const string ProjectionRunIdIndexName = "ix_payments_history_projection_run_id";
         private const string ProjectionAuditRunIdIndexName = "ux_projection_audit_run_id";
+        private const string ProjectionGenerationRecordIndexName = "ux_projection_generation_record";
+        private const string ProjectionHeadPeriodIndexName = "ux_projection_head_period";
+        private const string ProjectionHeadAccountIndexName = "ix_projection_head_account";
+        private const string ProjectionAccountIndexName = "ux_projection_account";
         private const string TimelineDateIndexName = "ix_payments_history_timeline_date_order";
         private const string TimelineAmountIndexName = "ix_payments_history_timeline_amount";
 
@@ -41,8 +53,8 @@ namespace HomeBudget.Components.Operations.Clients
                     collectionName,
                     async () =>
                     {
-                        var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(collectionName);
-                        var documents = await targetCollection.Find(_ => true).ToListAsync();
+                        var source = await GetPaymentAccountReadSourceForPeriodAsync(collectionName);
+                        var documents = await source.Collection.Find(source.ScopeFilter).ToListAsync();
                         return OrderHistoryDocuments(documents);
                     },
                     accountId);
@@ -53,8 +65,8 @@ namespace HomeBudget.Components.Operations.Clients
                 "payments_history",
                 async () =>
                 {
-                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-                    return await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(_ => true));
+                    var sources = await GetPaymentAccountReadSourcesAsync(accountId);
+                    return await FilterByAsync(sources, FilterDefinition<PaymentHistoryDocument>.Empty);
                 },
                 accountId);
         }
@@ -71,18 +83,20 @@ namespace HomeBudget.Components.Operations.Clients
                 "payments_history",
                 async () =>
                 {
-                    var collections = (await GetPaymentAccountCollectionsAsync(accountId)).ToArray();
-                    if (collections.Length == 0)
+                    var sources = (await GetPaymentAccountReadSourcesAsync(accountId)).ToArray();
+                    if (sources.Length == 0)
                     {
                         return new PaymentHistoryQueryResult(Array.Empty<PaymentHistoryDocument>(), 0);
                     }
 
                     var filter = CreateQueryFilter(query);
-                    var totalCounts = await Task.WhenAll(collections.Select(collection =>
-                        collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken)));
+                    var totalCounts = await Task.WhenAll(sources.Select(source =>
+                        source.Collection.CountDocumentsAsync(
+                            Combine(source.ScopeFilter, filter),
+                            cancellationToken: cancellationToken)));
                     var totalCount = totalCounts.Sum();
                     var skip = checked((query.Page - 1) * query.PageSize);
-                    var items = await MergePageAsync(collections, filter, query, skip, cancellationToken);
+                    var items = await MergePageAsync(sources, filter, query, skip, cancellationToken);
 
                     return new PaymentHistoryQueryResult(items, totalCount);
                 },
@@ -96,9 +110,8 @@ namespace HomeBudget.Components.Operations.Clients
                 financialPeriodIdentifier,
                 async () =>
                 {
-                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-
-                    var documents = await targetCollection.Find(FilterDefinition<PaymentHistoryDocument>.Empty).ToListAsync();
+                    var source = await GetPaymentAccountReadSourceForPeriodAsync(financialPeriodIdentifier);
+                    var documents = await source.Collection.Find(source.ScopeFilter).ToListAsync();
                     return OrderHistoryDocuments(documents).LastOrDefault();
                 });
         }
@@ -110,15 +123,15 @@ namespace HomeBudget.Components.Operations.Clients
                 "payments_history",
                 async () =>
                 {
-                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-                    var tasks = targetCollections.Select(async collection =>
+                    var sources = await GetPaymentAccountReadSourcesAsync(accountId);
+                    var tasks = sources.Select(async source =>
                     {
                         var sort = Builders<PaymentHistoryDocument>.Sort
                             .Descending(d => d.Payload.Record.OperationDay)
                             .Descending(d => d.Payload.Record.OperationUnixTime)
                             .Descending(d => d.Payload.StreamRevision)
                             .Descending(d => d.Payload.Record.Key);
-                        return await collection.Find(FilterDefinition<PaymentHistoryDocument>.Empty)
+                        return await source.Collection.Find(source.ScopeFilter)
                             .Sort(sort)
                             .Limit(1)
                             .FirstOrDefaultAsync();
@@ -136,8 +149,11 @@ namespace HomeBudget.Components.Operations.Clients
                 "payments_history",
                 async () =>
                 {
-                    var targetCollections = await GetPaymentAccountCollectionsAsync(accountId);
-                    var payload = await FilterByAsync(targetCollections, new ExpressionFilterDefinition<PaymentHistoryDocument>(d => d.Payload.Record.Key == operationId));
+                    var sources = await GetPaymentAccountReadSourcesAsync(accountId);
+                    var payload = await FilterByAsync(
+                        sources,
+                        new ExpressionFilterDefinition<PaymentHistoryDocument>(
+                            document => document.Payload.Record.Key == operationId));
 
                     return payload.SingleOrDefault();
                 },
@@ -233,56 +249,304 @@ namespace HomeBudget.Components.Operations.Clients
                 });
         }
 
-        public async Task RewriteAllAsync(
-            string financialPeriodIdentifier,
-            IEnumerable<PaymentOperationHistoryRecord> operationHistoryRecords,
-            Guid projectionRunId)
+        public async Task<ProjectionPublicationResult> PublishSnapshotAsync(
+            PaymentHistoryProjectionSnapshot snapshot,
+            Guid projectionRunId,
+            CancellationToken cancellationToken)
         {
-            var records = (operationHistoryRecords ?? [])
-                .Where(static x => x?.Record != null)
-                .ToList();
+            ArgumentNullException.ThrowIfNull(snapshot);
+            var generationId = CreateGenerationId(snapshot);
+            var records = snapshot.Records
+                .Where(static record => record?.Record != null)
+                .ToArray();
 
-            await TraceMongoAsync(
-                "projection_replace",
-                financialPeriodIdentifier,
-                async () =>
+            await StageGenerationAsync(generationId, projectionRunId, records, cancellationToken);
+            await ValidateStagedGenerationAsync(generationId, snapshot, cancellationToken);
+            return await PublishHeadAsync(snapshot, generationId, cancellationToken);
+        }
+
+        public async Task<AccountProjectionBalanceSnapshot> CreateAccountBalanceSnapshotAsync(
+            Guid accountId,
+            CancellationToken cancellationToken)
+        {
+            var fence = await AllocateAccountBalanceFenceAsync(accountId, cancellationToken);
+            var periodBalances = await GetAllPeriodBalancesForAccountAsync(accountId);
+            var projectedBalance = periodBalances
+                .Where(static document => document?.Payload != null)
+                .Sum(static document => document.Payload.Balance);
+
+            return new AccountProjectionBalanceSnapshot(fence, projectedBalance);
+        }
+
+        public async Task<IReadOnlyCollection<PaymentHistoryProjectionScope>> DiscoverProjectionScopesAsync(
+            CancellationToken cancellationToken)
+        {
+            using var namesCursor = await MongoDatabase.ListCollectionNamesAsync(
+                cancellationToken: cancellationToken);
+            var collectionNames = await namesCursor.ToListAsync(cancellationToken);
+            var heads = collectionNames.Contains(ProjectionHeadsCollectionName, StringComparer.Ordinal)
+                ? await MongoDatabase
+                    .GetCollection<PaymentHistoryProjectionHeadDocument>(ProjectionHeadsCollectionName)
+                    .Find(FilterDefinition<PaymentHistoryProjectionHeadDocument>.Empty)
+                    .ToListAsync(cancellationToken)
+                : [];
+            var scopes = heads.ToDictionary(
+                static document => document.Payload.FinancialPeriodIdentifier,
+                static document => new PaymentHistoryProjectionScope(
+                    document.Payload.PaymentAccountId,
+                    document.Payload.FinancialPeriodIdentifier,
+                    document.Payload.StreamId,
+                    document.Payload.SourceRevision),
+                StringComparer.Ordinal);
+            foreach (var name in collectionNames)
+            {
+                if (scopes.ContainsKey(name) || name.Length <= 36 ||
+                    !Guid.TryParse(name[..36], out var accountId) ||
+                    name[36] != '-')
                 {
-                    var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-                    var now = DateTime.UtcNow;
+                    continue;
+                }
 
-                    if (records.Count > 0)
+                scopes[name] = new PaymentHistoryProjectionScope(
+                    accountId,
+                    name,
+                    PaymentOperationNamesGenerator.GenerateForAccountMonthStream(name),
+                    null);
+            }
+
+            return scopes.Values
+                .OrderBy(static scope => scope.PaymentAccountId)
+                .ThenBy(static scope => scope.FinancialPeriodIdentifier, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private async Task StageGenerationAsync(
+            string generationId,
+            Guid projectionRunId,
+            IReadOnlyCollection<PaymentOperationHistoryRecord> records,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetProjectionGenerationsCollectionAsync();
+            if (records.Count == 0)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            var writes = records.Select(record =>
+                new UpdateOneModel<PaymentHistoryDocument>(
+                    Builders<PaymentHistoryDocument>.Filter.And(
+                        Builders<PaymentHistoryDocument>.Filter.Eq(
+                            document => document.GenerationId,
+                            generationId),
+                        Builders<PaymentHistoryDocument>.Filter.Eq(
+                            document => document.Payload.Record.Key,
+                            record.Record.Key)),
+                    Builders<PaymentHistoryDocument>.Update
+                        .SetOnInsert(document => document.Payload, record)
+                        .SetOnInsert(document => document.GenerationId, generationId)
+                        .SetOnInsert(document => document.ProjectionRunId, projectionRunId)
+                        .SetOnInsert(document => document.CreatedUtc, now)
+                        .SetOnInsert(document => document.UpdatedUtc, now))
+                {
+                    IsUpsert = true
+                })
+                .ToArray();
+
+            foreach (var chunk in writes.Chunk(DbOptions.BulkInsertChunkSize))
+            {
+                try
+                {
+                    await collection.BulkWriteAsync(
+                        chunk,
+                        new BulkWriteOptions { IsOrdered = false },
+                        cancellationToken);
+                }
+                catch (MongoBulkWriteException<PaymentHistoryDocument> ex)
+                    when (ex.WriteErrors.Count > 0 &&
+                        ex.WriteErrors.All(static error =>
+                            error.Category == ServerErrorCategory.DuplicateKey))
+                {
+                    // Concurrent identical generation writers may lose an upsert race.
+                    // Full generation validation below is the correctness boundary.
+                }
+            }
+        }
+
+        private async Task ValidateStagedGenerationAsync(
+            string generationId,
+            PaymentHistoryProjectionSnapshot snapshot,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetProjectionGenerationsCollectionAsync();
+            var documents = await collection
+                .Find(document => document.GenerationId == generationId)
+                .ToListAsync(cancellationToken);
+            var records = documents
+                .Where(static document => document?.Payload?.Record != null)
+                .Select(static document => document.Payload)
+                .ToArray();
+
+            if (records.Length != snapshot.Records.Count ||
+                !string.Equals(
+                    PaymentHistoryProjectionFingerprint.Create(records),
+                    snapshot.SnapshotHash,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Staged projection generation '{generationId}' is incomplete or does not match its source snapshot.");
+            }
+        }
+
+        private async Task<ProjectionPublicationResult> PublishHeadAsync(
+            PaymentHistoryProjectionSnapshot snapshot,
+            string generationId,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetProjectionHeadsCollectionAsync();
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var current = await collection
+                    .Find(document => document.Payload.FinancialPeriodIdentifier == snapshot.FinancialPeriodIdentifier)
+                    .SingleOrDefaultAsync(cancellationToken);
+                var decision = DecidePublication(current?.Payload, snapshot, generationId);
+                if (decision is not null)
+                {
+                    return decision;
+                }
+
+                var replacement = BuildHeadDocument(current, snapshot, generationId);
+                if (current is null)
+                {
+                    try
                     {
-                        var bulkOps = records.Select(r =>
-                            new UpdateOneModel<PaymentHistoryDocument>(
-                                Builders<PaymentHistoryDocument>.Filter
-                                    .Eq(d => d.Payload.Record.Key, r.Record.Key),
-                                Builders<PaymentHistoryDocument>.Update
-                                    .Set(d => d.Payload, r)
-                                    .Set(d => d.ProjectionRunId, projectionRunId)
-                                    .Set(d => d.UpdatedUtc, now)
-                                    .SetOnInsert(d => d.CreatedUtc, now))
-                            {
-                                IsUpsert = true
-                            })
-                            .ToList();
-
-                        foreach (var chunk in bulkOps.Chunk(DbOptions.BulkInsertChunkSize))
-                        {
-                            await targetCollection.BulkWriteAsync(
-                                chunk,
-                                new BulkWriteOptions
-                                {
-                                    IsOrdered = true
-                                });
-                        }
+                        await collection.InsertOneAsync(replacement, cancellationToken: cancellationToken);
+                        return new(ProjectionPublicationState.Published, generationId, snapshot.SourceRevision);
                     }
+                    catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+                    {
+                        continue;
+                    }
+                }
 
-                    await targetCollection.DeleteManyAsync(
-                        Builders<PaymentHistoryDocument>.Filter.Ne(d => d.ProjectionRunId, projectionRunId));
+                var filter = Builders<PaymentHistoryProjectionHeadDocument>.Filter.And(
+                    Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(document => document.Id, current.Id),
+                    Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
+                        document => document.Payload.SourceRevision,
+                        current.Payload.SourceRevision),
+                    Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
+                        document => document.Payload.GenerationId,
+                        current.Payload.GenerationId));
+                var result = await collection.ReplaceOneAsync(
+                    filter,
+                    replacement,
+                    cancellationToken: cancellationToken);
+                if (result.ModifiedCount == 1)
+                {
+                    return new(ProjectionPublicationState.Published, generationId, snapshot.SourceRevision);
+                }
+            }
 
-                    return true;
+            throw new InvalidOperationException(
+                $"Projection head for '{snapshot.FinancialPeriodIdentifier}' changed repeatedly during publication.");
+        }
+
+        private static ProjectionPublicationResult DecidePublication(
+            PaymentHistoryProjectionHead current,
+            PaymentHistoryProjectionSnapshot candidate,
+            string generationId)
+        {
+            if (current is null)
+            {
+                return null;
+            }
+
+            if (!string.Equals(current.StreamId, candidate.StreamId, StringComparison.Ordinal) ||
+                current.PaymentAccountId != candidate.PaymentAccountId)
+            {
+                throw new InvalidOperationException(
+                    $"Projection scope '{candidate.FinancialPeriodIdentifier}' is already bound to a different source stream or account.");
+            }
+
+            if (current.SourceRevision > candidate.SourceRevision)
+            {
+                return new(ProjectionPublicationState.Superseded, current.GenerationId, current.SourceRevision);
+            }
+
+            if (current.SourceRevision != candidate.SourceRevision)
+            {
+                return null;
+            }
+
+            if (!string.Equals(current.SnapshotHash, candidate.SnapshotHash, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Projection source revision {candidate.SourceRevision} for '{candidate.StreamId}' produced conflicting snapshot content.");
+            }
+
+            return new(ProjectionPublicationState.AlreadyPublished, generationId, current.SourceRevision);
+        }
+
+        private static PaymentHistoryProjectionHeadDocument BuildHeadDocument(
+            PaymentHistoryProjectionHeadDocument current,
+            PaymentHistoryProjectionSnapshot snapshot,
+            string generationId)
+        {
+            return new PaymentHistoryProjectionHeadDocument
+            {
+                Id = current?.Id ?? default,
+                CreatedUtc = current?.CreatedUtc ?? DateTime.UtcNow,
+                UpdatedUtc = DateTime.UtcNow,
+                Payload = new PaymentHistoryProjectionHead
+                {
+                    FinancialPeriodIdentifier = snapshot.FinancialPeriodIdentifier,
+                    PaymentAccountId = snapshot.PaymentAccountId,
+                    StreamId = snapshot.StreamId,
+                    SourceRevision = snapshot.SourceRevision,
+                    SourcePosition = snapshot.SourcePosition,
+                    SnapshotHash = snapshot.SnapshotHash,
+                    GenerationId = generationId,
+                    RecordCount = snapshot.Records.Count,
+                    FinalBalance = snapshot.FinalBalance,
+                    PublishedUtc = DateTime.UtcNow
+                }
+            };
+        }
+
+        private async Task<long> AllocateAccountBalanceFenceAsync(
+            Guid accountId,
+            CancellationToken cancellationToken)
+        {
+            var collection = await GetProjectionAccountsCollectionAsync();
+            var filter = Builders<PaymentHistoryProjectionAccountDocument>.Filter.Eq(
+                document => document.Payload.PaymentAccountId,
+                accountId);
+            var update = Builders<PaymentHistoryProjectionAccountDocument>.Update
+                .SetOnInsert(document => document.Payload.PaymentAccountId, accountId)
+                .SetOnInsert(document => document.CreatedUtc, DateTime.UtcNow)
+                .Set(document => document.UpdatedUtc, DateTime.UtcNow)
+                .Inc(document => document.Payload.NextBalanceFence, 1);
+            var updated = await collection.FindOneAndUpdateAsync(
+                filter,
+                update,
+                new FindOneAndUpdateOptions<PaymentHistoryProjectionAccountDocument>
+                {
+                    IsUpsert = true,
+                    ReturnDocument = ReturnDocument.After
                 },
-                records.FirstOrDefault()?.Record.PaymentAccountId);
+                cancellationToken);
+
+            return updated.Payload.NextBalanceFence;
+        }
+
+        private static string CreateGenerationId(PaymentHistoryProjectionSnapshot snapshot)
+        {
+            var value = string.Join(
+                "|",
+                snapshot.StreamId,
+                snapshot.SourceRevision.ToString(CultureInfo.InvariantCulture),
+                snapshot.SnapshotHash);
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
         }
 
         public async Task BeginProjectionRunAsync(ProjectionAuditRecord auditRecord)
@@ -304,7 +568,36 @@ namespace HomeBudget.Components.Operations.Clients
                 });
         }
 
-        public async Task CompleteProjectionRunAsync(Guid projectionRunId, string status, string error = null)
+        public async Task RecordProjectionPublicationAsync(
+            Guid projectionRunId,
+            string publicationState)
+        {
+            await TraceMongoAsync(
+                "projection_audit_publication",
+                ProjectionAuditCollectionName,
+                async () =>
+                {
+                    var collection = await GetProjectionAuditCollectionAsync();
+                    var now = DateTime.UtcNow;
+                    var filter = Builders<ProjectionAuditDocument>.Filter
+                        .Eq(document => document.Payload.ProjectionRunId, projectionRunId);
+                    var update = Builders<ProjectionAuditDocument>.Update
+                        .Set(document => document.Payload.Status, "Published")
+                        .Set(document => document.Payload.PublicationState, publicationState)
+                        .Set(document => document.Payload.UpdatedUtc, now)
+                        .Set(document => document.UpdatedUtc, now);
+
+                    await collection.UpdateOneAsync(filter, update);
+
+                    return true;
+                });
+        }
+
+        public async Task CompleteProjectionRunAsync(
+            Guid projectionRunId,
+            string status,
+            string error = null,
+            string publicationState = null)
         {
             await TraceMongoAsync(
                 "projection_audit_complete",
@@ -321,26 +614,150 @@ namespace HomeBudget.Components.Operations.Clients
                         .Set(d => d.Payload.UpdatedUtc, now)
                         .Set(d => d.Payload.CompletedUtc, now)
                         .Set(d => d.UpdatedUtc, now);
+                    var updates = new List<UpdateDefinition<ProjectionAuditDocument>> { update };
+                    if (publicationState is not null)
+                    {
+                        updates.Add(Builders<ProjectionAuditDocument>.Update
+                            .Set(d => d.Payload.PublicationState, publicationState));
+                    }
 
-                    await collection.UpdateOneAsync(filter, update);
+                    await collection.UpdateOneAsync(
+                        filter,
+                        Builders<ProjectionAuditDocument>.Update.Combine(updates));
 
                     return true;
                 });
         }
 
-        private async Task<IEnumerable<IMongoCollection<PaymentHistoryDocument>>> GetPaymentAccountCollectionsAsync(Guid accountId)
+        private async Task<IMongoCollection<PaymentHistoryDocument>> GetProjectionGenerationsCollectionAsync()
         {
+            var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(ProjectionGenerationsCollectionName);
+            await EnsureNamedIndexAsync(
+                collection,
+                ProjectionGenerationRecordIndexName,
+                Builders<PaymentHistoryDocument>.IndexKeys
+                    .Ascending(document => document.GenerationId)
+                    .Ascending(document => document.Payload.Record.Key),
+                unique: true);
+            await EnsureTimelineIndexesAsync(collection);
+            return collection;
+        }
+
+        private async Task<IMongoCollection<PaymentHistoryProjectionHeadDocument>> GetProjectionHeadsCollectionAsync()
+        {
+            var collection = MongoDatabase.GetCollection<PaymentHistoryProjectionHeadDocument>(ProjectionHeadsCollectionName);
+            await EnsureNamedIndexAsync(
+                collection,
+                ProjectionHeadPeriodIndexName,
+                Builders<PaymentHistoryProjectionHeadDocument>.IndexKeys.Ascending(
+                    document => document.Payload.FinancialPeriodIdentifier),
+                unique: true);
+            await EnsureNamedIndexAsync(
+                collection,
+                ProjectionHeadAccountIndexName,
+                Builders<PaymentHistoryProjectionHeadDocument>.IndexKeys.Ascending(
+                    document => document.Payload.PaymentAccountId),
+                unique: false);
+            return collection;
+        }
+
+        private async Task<IMongoCollection<PaymentHistoryProjectionAccountDocument>> GetProjectionAccountsCollectionAsync()
+        {
+            var collection = MongoDatabase.GetCollection<PaymentHistoryProjectionAccountDocument>(ProjectionAccountsCollectionName);
+            await EnsureNamedIndexAsync(
+                collection,
+                ProjectionAccountIndexName,
+                Builders<PaymentHistoryProjectionAccountDocument>.IndexKeys.Ascending(
+                    document => document.Payload.PaymentAccountId),
+                unique: true);
+            return collection;
+        }
+
+        private static async Task EnsureNamedIndexAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            string name,
+            IndexKeysDefinition<TDocument> keys,
+            bool unique)
+        {
+            var indexes = await collection.Indexes.List().ToListAsync();
+            if (indexes.Any(index => index.GetValue("name", string.Empty).AsString == name))
+            {
+                return;
+            }
+
+            try
+            {
+                await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(
+                    keys,
+                    new CreateIndexOptions { Name = name, Unique = unique }));
+            }
+            catch (MongoCommandException ex) when (ex.Code is 85 or 86)
+            {
+                var refreshed = await collection.Indexes.List().ToListAsync();
+                if (!refreshed.Any(index => index.GetValue("name", string.Empty).AsString == name))
+                {
+                    throw;
+                }
+            }
+        }
+
+        private async Task<IEnumerable<HistoryReadSource>> GetPaymentAccountReadSourcesAsync(Guid accountId)
+        {
+            var headsCollection = await GetProjectionHeadsCollectionAsync();
+            var heads = await headsCollection
+                .Find(document => document.Payload.PaymentAccountId == accountId)
+                .ToListAsync();
+            var publishedPeriods = heads
+                .Select(static document => document.Payload.FinancialPeriodIdentifier)
+                .ToHashSet(StringComparer.Ordinal);
             var databaseCollectionNames = await MongoDatabase.ListCollectionNamesAsync();
             var dbCollections = await databaseCollectionNames.ToListAsync();
-            var paymentAccountCollections = dbCollections.Where(name => name.StartsWith(accountId.ToString(), StringComparison.OrdinalIgnoreCase));
-
-            var collections = paymentAccountCollections
-                .Select(collectionName => MongoDatabase.GetCollection<PaymentHistoryDocument>(collectionName))
+            var legacyCollections = dbCollections
+                .Where(name => name.StartsWith(accountId.ToString(), StringComparison.OrdinalIgnoreCase))
+                .Where(name => !publishedPeriods.Contains(name))
+                .Select(name => MongoDatabase.GetCollection<PaymentHistoryDocument>(name))
                 .ToArray();
 
-            await Task.WhenAll(collections.Select(EnsureTimelineIndexesAsync));
+            await Task.WhenAll(legacyCollections.Select(EnsureTimelineIndexesAsync));
 
-            return collections;
+            var sources = legacyCollections
+                .Select(static collection => new HistoryReadSource(
+                    collection,
+                    FilterDefinition<PaymentHistoryDocument>.Empty))
+                .ToList();
+            if (heads.Count == 0)
+            {
+                return sources;
+            }
+
+            var generations = await GetProjectionGenerationsCollectionAsync();
+            sources.AddRange(heads.Select(head => new HistoryReadSource(
+                generations,
+                Builders<PaymentHistoryDocument>.Filter.Eq(
+                    document => document.GenerationId,
+                    head.Payload.GenerationId))));
+            return sources;
+        }
+
+        private async Task<HistoryReadSource> GetPaymentAccountReadSourceForPeriodAsync(
+            string financialPeriodIdentifier)
+        {
+            var heads = await GetProjectionHeadsCollectionAsync();
+            var head = await heads
+                .Find(document => document.Payload.FinancialPeriodIdentifier == financialPeriodIdentifier)
+                .SingleOrDefaultAsync();
+            if (head is null)
+            {
+                return new HistoryReadSource(
+                    await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier),
+                    FilterDefinition<PaymentHistoryDocument>.Empty);
+            }
+
+            return new HistoryReadSource(
+                await GetProjectionGenerationsCollectionAsync(),
+                Builders<PaymentHistoryDocument>.Filter.Eq(
+                    document => document.GenerationId,
+                    head.Payload.GenerationId));
         }
 
         private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionForPeriodAsync(string financialPeriodIdentifier)
@@ -362,13 +779,22 @@ namespace HomeBudget.Components.Operations.Clients
         }
 
         private static async Task<IReadOnlyCollection<PaymentHistoryDocument>> FilterByAsync(
-            IEnumerable<IMongoCollection<PaymentHistoryDocument>> collections,
+            IEnumerable<HistoryReadSource> sources,
             FilterDefinition<PaymentHistoryDocument> filter)
         {
-            var tasks = collections.Select(async collection => await collection.Find(filter).ToListAsync());
+            var tasks = sources.Select(async source => await source.Collection
+                .Find(Combine(source.ScopeFilter, filter))
+                .ToListAsync());
             var results = await Task.WhenAll(tasks);
 
             return OrderHistoryDocuments(results.SelectMany(static documents => documents)).AsReadOnly();
+        }
+
+        private static FilterDefinition<PaymentHistoryDocument> Combine(
+            FilterDefinition<PaymentHistoryDocument> left,
+            FilterDefinition<PaymentHistoryDocument> right)
+        {
+            return Builders<PaymentHistoryDocument>.Filter.And(left, right);
         }
 
         private static List<PaymentHistoryDocument> OrderHistoryDocuments(IEnumerable<PaymentHistoryDocument> documents)
@@ -420,7 +846,7 @@ namespace HomeBudget.Components.Operations.Clients
         }
 
         private static async Task<IReadOnlyCollection<PaymentHistoryDocument>> MergePageAsync(
-            IEnumerable<IMongoCollection<PaymentHistoryDocument>> collections,
+            IEnumerable<HistoryReadSource> sources,
             FilterDefinition<PaymentHistoryDocument> filter,
             PaymentHistoryQuery query,
             int skip,
@@ -432,10 +858,10 @@ namespace HomeBudget.Components.Operations.Clients
             try
             {
                 var sort = CreateQuerySort(query);
-                foreach (var collection in collections)
+                foreach (var source in sources)
                 {
-                    var cursor = await collection.FindAsync(
-                        filter,
+                    var cursor = await source.Collection.FindAsync(
+                        Combine(source.ScopeFilter, filter),
                         new FindOptions<PaymentHistoryDocument>
                         {
                             Sort = sort,
@@ -576,6 +1002,10 @@ namespace HomeBudget.Components.Operations.Clients
                     : leftRecord.Key.CompareTo(rightRecord.Key);
             }
         }
+
+        private sealed record HistoryReadSource(
+            IMongoCollection<PaymentHistoryDocument> Collection,
+            FilterDefinition<PaymentHistoryDocument> ScopeFilter);
 
         private static async Task<T> TraceMongoAsync<T>(
             string operation,

@@ -96,7 +96,7 @@ services
         HostServiceOptions.AccountingApiName));
 
 var serviceVersion = typeof(Program).Assembly.GetName().Version?.ToString();
-var isTracingEnabled = services.TryAddTracingSupport(
+services.TryAddTracingSupport(
     configuration,
     environment,
     HostServiceOptions.AccountingApiName,
@@ -117,11 +117,8 @@ app.MapNotifications();
 
 try
 {
-    if (isTracingEnabled)
-    {
-        app.UseOpenTelemetryPrometheusScrapingEndpoint();
-        app.MapPrometheusScrapingEndpoint("/metrics");
-    }
+    app.UseOpenTelemetryPrometheusScrapingEndpoint();
+    app.MapPrometheusScrapingEndpoint("/metrics");
 
     await app.RunAsync();
 }

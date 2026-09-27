@@ -31,24 +31,14 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
             var notificationPublisher = new Mock<INotificationPublisher>();
             ILogger<UpdatePaymentAccountBalanceCommandHandler> logger = NullLogger<UpdatePaymentAccountBalanceCommandHandler>.Instance;
             var updatedBalance = 42.25m;
-            PaymentAccount capturedAccount = null;
+            decimal? capturedBalance = null;
 
             documentClient
-                .Setup(client => client.GetByIdAsync(accountId.ToString()))
-                .ReturnsAsync(Result<PaymentAccountDocument>.Succeeded(new PaymentAccountDocument
-                {
-                    Id = ObjectId.GenerateNewId(),
-                    Payload = new PaymentAccount
-                    {
-                        Key = accountId,
-                        InitialBalance = 10m,
-                        Balance = 10m
-                    }
-                }));
-
-            documentClient
-                .Setup(client => client.UpdateAsync(accountId.ToString(), It.IsAny<PaymentAccount>()))
-                .Callback<string, PaymentAccount>((_, account) => capturedAccount = account)
+                .Setup(client => client.UpdateBalanceAsync(
+                    accountId,
+                    It.IsAny<decimal>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<Guid, decimal, CancellationToken>((_, balance, _) => capturedBalance = balance)
                 .ReturnsAsync(Result<Guid>.Succeeded(accountId));
 
             notificationPublisher
@@ -66,8 +56,7 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
 
             result.IsSucceeded.Should().BeTrue();
             result.Payload.Should().Be(accountId);
-            capturedAccount.Should().NotBeNull();
-            capturedAccount.Balance.Should().Be(updatedBalance);
+            capturedBalance.Should().Be(updatedBalance);
             notificationPublisher.Verify(
                 publisher => publisher.PublishAsync(It.IsAny<PaymentAccountNotification>()),
                 Times.Once);

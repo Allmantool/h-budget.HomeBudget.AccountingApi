@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using FluentAssertions;
@@ -239,19 +240,21 @@ namespace HomeBudget.Components.Operations.Tests.Services
             IReadOnlyCollection<PaymentOperationHistoryRecord> rewrittenRecords = null;
 
             paymentsHistoryClientMock
-                .Setup(c => c.RewriteAllAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
-                    It.IsAny<Guid>()))
-                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>, Guid>((_, records, _) => rewrittenRecords = records.ToList())
-                .Returns(Task.CompletedTask);
+                .Setup(c => c.PublishSnapshotAsync(
+                    It.IsAny<PaymentHistoryProjectionSnapshot>(),
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<PaymentHistoryProjectionSnapshot, Guid, CancellationToken>(
+                    (snapshot, _, _) => rewrittenRecords = snapshot.Records)
+                .ReturnsAsync((PaymentHistoryProjectionSnapshot snapshot, Guid _, CancellationToken _) =>
+                    Published(snapshot));
 
             paymentsHistoryClientMock
                 .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
                 .Returns(Task.CompletedTask);
 
             paymentsHistoryClientMock
-                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             var sut = new PaymentOperationsHistoryService(
@@ -318,15 +321,17 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
                 .Returns(Task.CompletedTask);
             paymentsHistoryClientMock
-                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
             paymentsHistoryClientMock
-                .Setup(c => c.RewriteAllAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
-                    It.IsAny<Guid>()))
-                .Callback<string, IEnumerable<PaymentOperationHistoryRecord>, Guid>((_, records, _) => rewrittenRecords = records.ToList())
-                .Returns(Task.CompletedTask);
+                .Setup(c => c.PublishSnapshotAsync(
+                    It.IsAny<PaymentHistoryProjectionSnapshot>(),
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<PaymentHistoryProjectionSnapshot, Guid, CancellationToken>(
+                    (snapshot, _, _) => rewrittenRecords = snapshot.Records)
+                .ReturnsAsync((PaymentHistoryProjectionSnapshot snapshot, Guid _, CancellationToken _) =>
+                    Published(snapshot));
 
             var sut = new PaymentOperationsHistoryService(
                 paymentsHistoryClientMock.Object,
@@ -567,11 +572,12 @@ namespace HomeBudget.Components.Operations.Tests.Services
             var categoriesClient = BuildCategoriesClientMock(Guid.Parse("ca44071a-1bab-455a-acf1-a578a4ffafb2"));
 
             paymentsHistoryClientMock
-                .Setup(c => c.RewriteAllAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
-                    It.IsAny<Guid>()))
-                .Returns(Task.CompletedTask);
+                .Setup(c => c.PublishSnapshotAsync(
+                    It.IsAny<PaymentHistoryProjectionSnapshot>(),
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((PaymentHistoryProjectionSnapshot snapshot, Guid _, CancellationToken _) =>
+                    Published(snapshot));
 
             paymentsHistoryClientMock
                 .Setup(c => c.RemoveAsync(It.IsAny<string>()))
@@ -582,7 +588,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Returns(Task.CompletedTask);
 
             paymentsHistoryClientMock
-                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             return new PaymentOperationsHistoryService(
@@ -651,18 +657,29 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 .Setup(c => c.BeginProjectionRunAsync(It.IsAny<ProjectionAuditRecord>()))
                 .Returns(Task.CompletedTask);
             paymentsHistoryClientMock
-                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.CompleteProjectionRunAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
             paymentsHistoryClientMock
-                .Setup(c => c.RewriteAllAsync(
-                    It.IsAny<string>(),
-                    It.IsAny<IEnumerable<PaymentOperationHistoryRecord>>(),
-                    It.IsAny<Guid>()))
-                .Callback(rewriteCallback)
-                .Returns(Task.CompletedTask);
+                .Setup(c => c.PublishSnapshotAsync(
+                    It.IsAny<PaymentHistoryProjectionSnapshot>(),
+                    It.IsAny<Guid>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<PaymentHistoryProjectionSnapshot, Guid, CancellationToken>(
+                    (snapshot, runId, _) => rewriteCallback(
+                        snapshot.FinancialPeriodIdentifier,
+                        snapshot.Records,
+                        runId))
+                .ReturnsAsync((PaymentHistoryProjectionSnapshot snapshot, Guid _, CancellationToken _) =>
+                    Published(snapshot));
 
             return paymentsHistoryClientMock;
         }
+
+        private static ProjectionPublicationResult Published(PaymentHistoryProjectionSnapshot snapshot)
+            => new(
+                ProjectionPublicationState.Published,
+                $"test-generation-{snapshot.SourceRevision}",
+                snapshot.SourceRevision);
 
         private static PaymentOperationEvent CreateEvent(
             Guid paymentAccountId,

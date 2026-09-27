@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Text.Json;
-
 using Microsoft.Extensions.Logging;
 
 namespace HomeBudget.Components.Operations.Logs
@@ -16,8 +14,8 @@ namespace HomeBudget.Components.Operations.Logs
         [LoggerMessage(
             EventId = 2002,
             Level = LogLevel.Error,
-            Message = "Failed to deserialize message: {Message}. Error: {Error}")]
-        public static partial void DeserializationFailed(this ILogger logger, string? message, string error, JsonException ex);
+            Message = "Failed to deserialize payment operation message. MessageId={MessageId}, Error={Error}")]
+        public static partial void DeserializationFailed(this ILogger logger, string messageId, string error, Exception ex);
 
         [LoggerMessage(
             EventId = 2003,

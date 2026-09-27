@@ -159,46 +159,70 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                                 {
                                     TelemetryMetrics.EventStoreRetries.Add(
                                         1,
-                                        [new KeyValuePair<string, object>("event_type", resolvedEvent.EventType)]);
+                                        [new KeyValuePair<string, object>(
+                                            "event_type",
+                                            TelemetryMetrics.NormalizePaymentEventType(resolvedEvent.EventType))]);
                                     activity?.AddEvent(ActivityEvents.RetryAttempt(retryAttempt));
                                 }
 
-                                // Call the handler
-                                if (handler is null)
+                                try
                                 {
-                                    var subscriptionContext = new EventStoreSubscriptionContext
+                                    // Call the handler
+                                    if (handler is null)
                                     {
-                                        StreamId = resolvedEvent.EventStreamId,
-                                        Revision = resolvedEvent.EventNumber.ToString(),
-                                        Position = resolvedEvent.Position.ToString(),
-                                        Acknowledge = () => sub.Ack(evt),
-                                        Retry = reason => sub.Nack(
-                                            PersistentSubscriptionNakEventAction.Retry,
-                                            reason,
-                                            evt)
-                                    };
+                                        var subscriptionContext = new EventStoreSubscriptionContext
+                                        {
+                                            StreamId = resolvedEvent.EventStreamId,
+                                            Revision = resolvedEvent.EventNumber.ToString(),
+                                            Position = resolvedEvent.Position.ToString(),
+                                            Acknowledge = () => sub.Ack(evt),
+                                            Retry = reason => sub.Nack(
+                                                PersistentSubscriptionNakEventAction.Retry,
+                                                reason,
+                                                evt)
+                                        };
 
-                                    await OnEventAppearedAsync(
-                                        eventData,
-                                        subscriptionContext);
+                                        await OnEventAppearedAsync(
+                                            eventData,
+                                            subscriptionContext);
 
-                                    if (!DefersAcknowledgement)
-                                    {
-                                        await subscriptionContext.AcknowledgeAsync();
+                                        if (!DefersAcknowledgement)
+                                        {
+                                            await subscriptionContext.AcknowledgeAsync();
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    await handler(evt);
-                                    await sub.Ack(evt);
-                                }
+                                    else
+                                    {
+                                        await handler(evt);
+                                        await sub.Ack(evt);
+                                    }
 
-                                consumeStopwatch.Stop();
-                                TelemetryMetrics.EventStoreConsumeDurationMs.Record(
-                                    consumeStopwatch.Elapsed.TotalMilliseconds,
-                                    [new KeyValuePair<string, object>("event_type", resolvedEvent.EventType)]);
-                                activity?.SetStatus(ActivityStatusCode.Ok);
-                                activity?.AddEvent(ActivityEvents.EventStorePersisted);
+                                    consumeStopwatch.Stop();
+                                    TelemetryMetrics.EventStoreConsumeDurationMs.Record(
+                                        consumeStopwatch.Elapsed.TotalMilliseconds,
+                                        [
+                                            new KeyValuePair<string, object>(
+                                                "event_type",
+                                                TelemetryMetrics.NormalizePaymentEventType(resolvedEvent.EventType)),
+                                            new KeyValuePair<string, object>("outcome", "success")
+                                        ]);
+                                    activity?.SetStatus(ActivityStatusCode.Ok);
+                                    activity?.AddEvent(ActivityEvents.EventStoreConsumed);
+                                }
+                                catch (Exception ex)
+                                {
+                                    consumeStopwatch.Stop();
+                                    TelemetryMetrics.EventStoreConsumeDurationMs.Record(
+                                        consumeStopwatch.Elapsed.TotalMilliseconds,
+                                        [
+                                            new KeyValuePair<string, object>(
+                                                "event_type",
+                                                TelemetryMetrics.NormalizePaymentEventType(resolvedEvent.EventType)),
+                                            new KeyValuePair<string, object>("outcome", "failure")
+                                        ]);
+                                    activity?.RecordException(ex);
+                                    throw;
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -226,7 +250,7 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
 
                 return subscription;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 subscription?.Dispose();
                 throw;

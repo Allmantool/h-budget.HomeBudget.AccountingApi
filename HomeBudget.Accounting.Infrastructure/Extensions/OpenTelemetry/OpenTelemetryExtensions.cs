@@ -28,65 +28,18 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
         {
             var alloyHost = configuration.GetValue<string>("ObservabilityOptions:TelemetryEndpoint");
 
-            if (string.IsNullOrWhiteSpace(alloyHost))
-            {
-                return false;
-            }
-
-            services
-               .AddOpenTelemetry()
-               .ConfigureResource(r => r
-                   .AddService(
-                       serviceName: serviceName,
-                       serviceVersion: serviceVersion,
-                       serviceInstanceId: Environment.MachineName)
+            var openTelemetry = services
+                .AddOpenTelemetry()
+                .ConfigureResource(r => r
+                    .AddService(
+                        serviceName: serviceName,
+                        serviceVersion: serviceVersion,
+                        serviceInstanceId: Environment.MachineName)
                     .AddAttributes(new Dictionary<string, object>
                     {
                         ["service.namespace"] = "HomeBudget",
                         [OpenTelemetryTags.DeploymentEnvironment] = environment.EnvironmentName
                     }))
-                .WithTracing(traceBuilder =>
-                {
-                    traceBuilder
-                        .AddSource(Telemetry.ActivitySource.Name)
-                        .AddAspNetCoreInstrumentation(options =>
-                        {
-                            options.RecordException = true;
-                            options.Filter = httpContext =>
-                            {
-                                var path = httpContext.Request.Path;
-                                return !path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)
-                                       && !path.StartsWithSegments("/metrics", StringComparison.OrdinalIgnoreCase);
-                            };
-
-                            options.EnrichWithHttpRequest = (activity, request) =>
-                            {
-                                if (request.Headers.TryGetValue(HttpHeaderKeys.CorrelationId, out var cid))
-                                {
-                                    activity.SetTag(ActivityTags.CorrelationId, cid.ToString());
-                                }
-                            };
-
-                            options.EnrichWithHttpResponse = (activity, response) =>
-                            {
-                                activity.SetTag(ActivityTags.HttpStatusCode, response.StatusCode);
-                            };
-
-                            options.EnrichWithException = (activity, exception) =>
-                            {
-                                activity.SetTag(ActivityTags.ExceptionMessage, exception.Message);
-                            };
-                        })
-                         .AddHttpClientInstrumentation(options =>
-                         {
-                             options.RecordException = true;
-                         })
-                         .AddOtlpExporter(o =>
-                         {
-                             o.Endpoint = new Uri(alloyHost);
-                             o.Protocol = OtlpExportProtocol.Grpc;
-                         });
-                })
                 .WithMetrics(metrics => metrics
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
@@ -99,8 +52,55 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                     .AddMeter(MetersTags.HealthChecks)
                     .AddMeter(TelemetryMetrics.Meter.Name)
                     .SetMaxMetricStreams(OpenTelemetryOptions.MaxMetricStreams)
-                    .AddPrometheusExporter()
-                );
+                    .AddPrometheusExporter());
+
+            if (string.IsNullOrWhiteSpace(alloyHost))
+            {
+                return false;
+            }
+
+            openTelemetry.WithTracing(traceBuilder =>
+            {
+                traceBuilder
+                    .AddSource(Telemetry.ActivitySource.Name)
+                    .AddAspNetCoreInstrumentation(options =>
+                    {
+                        options.RecordException = true;
+                        options.Filter = httpContext =>
+                        {
+                            var path = httpContext.Request.Path;
+                            return !path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)
+                                   && !path.StartsWithSegments("/metrics", StringComparison.OrdinalIgnoreCase);
+                        };
+
+                        options.EnrichWithHttpRequest = (activity, request) =>
+                        {
+                            if (request.Headers.TryGetValue(HttpHeaderKeys.CorrelationId, out var cid))
+                            {
+                                activity.SetTag(ActivityTags.CorrelationId, cid.ToString());
+                            }
+                        };
+
+                        options.EnrichWithHttpResponse = (activity, response) =>
+                        {
+                            activity.SetTag(ActivityTags.HttpStatusCode, response.StatusCode);
+                        };
+
+                        options.EnrichWithException = (activity, exception) =>
+                        {
+                            activity.SetTag(ActivityTags.ExceptionMessage, exception.Message);
+                        };
+                    })
+                    .AddHttpClientInstrumentation(options =>
+                    {
+                        options.RecordException = true;
+                    })
+                    .AddOtlpExporter(o =>
+                    {
+                        o.Endpoint = new Uri(alloyHost);
+                        o.Protocol = OtlpExportProtocol.Grpc;
+                    });
+            });
 
             return true;
         }

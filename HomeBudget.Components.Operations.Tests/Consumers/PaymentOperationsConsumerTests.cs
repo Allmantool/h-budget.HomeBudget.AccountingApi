@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -68,6 +72,14 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
         public async Task ConsumeAsync_WhenMessageCannotBeDeserialized_ThenWritesDeadLetterAndCommitsKafkaOffset()
         {
             using var cancellation = new CancellationTokenSource();
+            var stoppedActivities = new ConcurrentBag<Activity>();
+            using var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == "HomeBudget.Accounting",
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = stoppedActivities.Add
+            };
+            ActivitySource.AddActivityListener(listener);
             var dependencies = BuildDependencies(BuildConsumeResult("{ not-json }"));
             BaseEvent deadLetterEvent = null;
             Exception deadLetterException = null;
@@ -106,6 +118,9 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                     It.IsAny<CancellationToken>()),
                 Times.Never);
             dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
+            var consumeActivity = stoppedActivities.Single(activity => activity.OperationName == "kafka.consume");
+            consumeActivity.Status.Should().Be(ActivityStatusCode.Error);
+            consumeActivity.Events.Should().Contain(activityEvent => activityEvent.Name == "exception");
         }
 
         [Test]
@@ -167,6 +182,132 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
             dependencies.Inbox.Verify(
                 x => x.MarkProcessedAsync("message-42", It.IsAny<DateTime>()),
                 Times.Once);
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenKafkaCommitFails_ThenMarksConsumerSpanAsError()
+        {
+            var stoppedActivities = new ConcurrentBag<Activity>();
+            using var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == "HomeBudget.Accounting",
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = stoppedActivities.Add
+            };
+            ActivitySource.AddActivityListener(listener);
+
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            dependencies.KafkaConsumer
+                .Setup(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()))
+                .Throws(new KafkaException(new Error(ErrorCode.Local_Fail, "commit failed")));
+            using var sut = dependencies.BuildConsumer();
+
+            Func<Task> act = () => sut.ConsumeAsync(CancellationToken.None);
+
+            await act.Should().ThrowAsync<KafkaException>();
+            var consumeActivity = stoppedActivities.Single(activity => activity.OperationName == "kafka.consume");
+            consumeActivity.Status.Should().Be(ActivityStatusCode.Error);
+            consumeActivity.Events.Should().Contain(activityEvent => activityEvent.Name == "exception");
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenTraceHeadersArePresent_ThenPreservesCausalParentAcrossKafkaAndEventStore()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var stoppedActivities = new ConcurrentBag<Activity>();
+            using var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == "HomeBudget.Accounting",
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = stoppedActivities.Add
+            };
+            ActivitySource.AddActivityListener(listener);
+
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((events, _, _, _) =>
+                {
+                    var current = Activity.Current;
+                    current.Should().NotBeNull();
+                    current!.TraceId.ToString().Should().Be("4bf92f3577b34da6a3ce929d0e0e4736");
+                    events.Should().OnlyContain(paymentEvent =>
+                        paymentEvent.Metadata[EventMetadataKeys.TraceParent] == current.Id);
+                    cancellation.Cancel();
+                })
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            using var sut = dependencies.BuildConsumer();
+
+            await sut.ConsumeAsync(cancellation.Token);
+
+            var kafkaActivity = stoppedActivities.Single(activity => activity.OperationName == "kafka.consume");
+            var processingActivity = stoppedActivities.Single(activity => activity.OperationName == "payment.process");
+            kafkaActivity.ParentSpanId.ToString().Should().Be("00f067aa0ba902b7");
+            processingActivity.ParentSpanId.Should().Be(kafkaActivity.SpanId);
+            processingActivity.TraceId.Should().Be(kafkaActivity.TraceId);
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenProcessingSucceeds_ThenEmitsBoundedKafkaMetrics()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var measurements = new ConcurrentBag<(string Name, long Value, string Outcome)>();
+            using var listener = new MeterListener();
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == "HomeBudget.Accounting.Metrics"
+                    && instrument.Name is "homebudget.kafka.messages.received"
+                        or "homebudget.kafka.processing.attempts"
+                        or "homebudget.kafka.offset.commit.outcomes")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            {
+                var outcome = tags.ToArray()
+                    .SingleOrDefault(tag => tag.Key == "outcome")
+                    .Value?.ToString();
+                measurements.Add((instrument.Name, measurement, outcome));
+            });
+            listener.Start();
+
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback(() => cancellation.Cancel())
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            using var sut = dependencies.BuildConsumer();
+
+            await sut.ConsumeAsync(cancellation.Token);
+
+            measurements.Should().ContainSingle(measurement =>
+                measurement.Name == "homebudget.kafka.messages.received"
+                && measurement.Value == 1
+                && measurement.Outcome == null);
+            measurements.Should().ContainSingle(measurement =>
+                measurement.Name == "homebudget.kafka.processing.attempts"
+                && measurement.Value == 1
+                && measurement.Outcome == "persisted");
+            measurements.Should().ContainSingle(measurement =>
+                measurement.Name == "homebudget.kafka.offset.commit.outcomes"
+                && measurement.Value == 1
+                && measurement.Outcome == "success");
         }
 
         [Test]

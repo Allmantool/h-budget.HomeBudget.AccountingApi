@@ -14,12 +14,16 @@
 **/*.jfm
 **/azds.yaml
 **/bin
+**/bin/**
 **/charts
-**/dockerfile*
 **/node_modules
 **/npm-debug.log
 **/obj
 **/obj/*
+**/obj/**
+**/.dotnet/**
+**/publish/**
+**/TestResults/**
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE
