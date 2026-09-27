@@ -21,15 +21,6 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Consumers
 {
-    public enum KafkaMessageProcessingOutcome
-    {
-        Processed,
-        Persisted,
-        Duplicate,
-        DeadLetter,
-        Ignored
-    }
-
     public abstract class BaseKafkaConsumer<TKey, TValue> : IKafkaConsumer
     {
         public string ConsumerId { get; }
