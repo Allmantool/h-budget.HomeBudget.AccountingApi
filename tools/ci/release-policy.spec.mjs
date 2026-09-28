@@ -118,7 +118,7 @@ test('propagates normalized SemVer and the release SHA into both release images'
 	const [workflow, apiDockerfile, workerDockerfile] = await Promise.all([
 		readFile(new URL('../../.github/workflows/release-tag.yml', import.meta.url), 'utf8'),
 		readFile(new URL('../../dockerfile', import.meta.url), 'utf8'),
-		readFile(new URL('../../HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile', import.meta.url), 'utf8'),
+		readFile(new URL('../../worker.dockerfile', import.meta.url), 'utf8'),
 	]);
 
 	assert.match(workflow, /BUILD_VERSION=\$\{\{ needs\.verify-release\.outputs\.release_version \}\}/);

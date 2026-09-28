@@ -87,6 +87,51 @@ jobs:
           echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
           echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Verify release build inputs
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          repository_root="$(cd -- "$GITHUB_WORKSPACE" && pwd -P)"
+          required_inputs=(
+            'dockerfile'
+            'worker.dockerfile'
+            'HomeBudget.Accounting.Workers.OperationsConsumer/HomeBudget.Accounting.Workers.OperationsConsumer.csproj'
+          )
+          missing_inputs=()
+
+          for relative_path in "${required_inputs[@]}"; do
+            parent_path="${relative_path%/*}"
+            file_name="${relative_path##*/}"
+            if [[ "$parent_path" == "$relative_path" ]]; then
+              parent_path='.'
+            fi
+
+            absolute_parent="$repository_root/$parent_path"
+            exact_name=''
+            if [[ -d "$absolute_parent" ]]; then
+              exact_name="$(find "$absolute_parent" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | grep -Fx -- "$file_name" || true)"
+            fi
+
+            if [[ -z "$exact_name" || ! -s "$absolute_parent/$file_name" ]]; then
+              missing_inputs+=("$relative_path")
+            fi
+          done
+
+          if (( ${#missing_inputs[@]} > 0 )); then
+            echo "Selected release tag: $RELEASE_TAG" >&2
+            echo "Selected release SHA: $RELEASE_SHA" >&2
+            echo "Repository/build context: $repository_root" >&2
+            for missing_input in "${missing_inputs[@]}"; do
+              echo "Missing required release input: $missing_input" >&2
+            done
+            exit 1
+          fi
+
+          echo "Release build inputs verified for $RELEASE_TAG at $RELEASE_SHA in $repository_root."
+
   build-api-image:
     name: Build Accounting API image
     runs-on: ubuntu-latest
@@ -136,7 +181,7 @@ jobs:
     name: Publish Accounting API image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [verify-release, build-api-image]
+    needs: [verify-release, build-api-image, build-worker-image]
     outputs:
       image_ref: ${{ steps.publish.outputs.image_ref }}
       image_digest: ${{ steps.publish.outputs.image_digest }}
@@ -228,7 +273,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
-          file: ./HomeBudget.Accounting.Workers.OperationsConsumer/Dockerfile
+          file: ./worker.dockerfile
           target: final
           build-args: |
             BUILD_VERSION=${{ needs.verify-release.outputs.release_version }}
@@ -257,7 +302,7 @@ jobs:
     name: Publish Accounting worker image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [verify-release, build-worker-image]
+    needs: [verify-release, build-api-image, build-worker-image]
     outputs:
       image_ref: ${{ steps.publish.outputs.image_ref }}
       image_digest: ${{ steps.publish.outputs.image_digest }}
