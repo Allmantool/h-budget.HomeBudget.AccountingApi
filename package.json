@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test:release-policy": "node --test tools/ci/release-policy.spec.mjs"
+    "test:release-policy": "node --test tools/ci/release-policy.spec.mjs tools/ci/release-workflow.spec.mjs"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

@@ -75,6 +75,19 @@ jobs:
             Directory.Packages.props
             **/*.csproj
 
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24.10.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install release-policy test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate release workflow policy
+        run: npm run test:release-policy
+
       - name: Restore .NET packages
         id: restore
         run: dotnet restore HomeBudgetAccountingApi.sln
