@@ -27,7 +27,7 @@ Prefer the smallest production-safe change that satisfies the request. Do not op
 
 ## Codex Engineering Harness
 
-Use the repository skills in `.codex/skills` for their matching workflows. Keep these root rules mandatory and the detailed procedure in the skills.
+Use the natively discovered repository skills in `.agents/skills` for their matching workflows. Keep these root rules mandatory and the detailed procedure in the skills.
 
 - Classify work before editing. Tiny non-behavioral changes may use the lightweight path; default to full SDD when behavior, contracts, persistence, architecture, security, performance, or cross-project dependencies can change.
 - For full SDD, inspect the affected production code, tests, configuration, and CI first. Record confirmed facts, assumptions, and open questions in a task specification under `docs/specs/` using its template. The specification is the persistent task state for work that may span sessions.
