@@ -1,3 +1,8 @@
+---
+name: clean-code-review
+description: Review or refactor Accounting C# code for maintainability and testability while preserving financial and distributed invariants.
+---
+
 # Clean Code Review
 
 ## When To Use

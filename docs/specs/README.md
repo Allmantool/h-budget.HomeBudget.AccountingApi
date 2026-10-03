@@ -8,4 +8,4 @@ For full SDD, copy [TEMPLATE.md](TEMPLATE.md) to a concise, feature-specific fil
 
 Keep the specification current during implementation. Use `Draft`, `Ready`, `In Progress`, `Implemented`, and `Verified` status accurately. `Verified` requires evidence for every applicable acceptance criterion, not only a successful build or test command.
 
-The `.codex/skills/home-ledger-sdd`, `home-ledger-tdd`, and `home-ledger-distributed-verification` skills provide the detailed workflow. Existing operational runbooks remain authoritative for current operational behavior.
+The `.agents/skills/home-ledger-sdd`, `home-ledger-tdd`, and `home-ledger-distributed-verification` skills provide the detailed workflow. Existing operational runbooks remain authoritative for current operational behavior.
