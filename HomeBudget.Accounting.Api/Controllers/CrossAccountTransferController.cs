@@ -1,6 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 using System;
+using System.Collections.Generic;
 
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Models;
@@ -18,23 +20,41 @@ namespace HomeBudget.Accounting.Api.Controllers
     [ApiController]
     public class CrossAccountTransferController(
         IMapper mapper,
-        ICrossAccountsTransferService crossAccountsTransferService) : ControllerBase
+        ICrossAccountsTransferService crossAccountsTransferService,
+        IActiveLedgerGenerationResolver activeGenerationResolver) : ControllerBase
     {
         [HttpPost]
         public async Task<ActionResult<Result<CrossAccountsTransferResponse>>> ApplyAsync(
             CrossAccountsTransferRequest request,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             var operationPayload = mapper.Map<CrossAccountsTransferPayload>(request);
 
             var idempotencyKey = Request.Headers["Idempotency-Key"].ToString();
             if (!string.IsNullOrWhiteSpace(idempotencyKey))
             {
-                var registration = await crossAccountsTransferService.ApplyIdempotentAsync(
-                    operationPayload,
-                    idempotencyKey,
-                    HttpContext.TraceIdentifier,
-                    token);
+                Result<TransferCommandResult> registration;
+                try
+                {
+                    registration = await crossAccountsTransferService.ApplyIdempotentAsync(
+                        operationPayload,
+                        idempotencyKey,
+                        HttpContext.TraceIdentifier,
+                        generation,
+                        token);
+                }
+                catch (LedgerGenerationChangedException)
+                {
+                    return await CurrentStaleGenerationAsync(token);
+                }
+
                 if (!registration.IsSucceeded)
                 {
                     return BadRequest(Result<CrossAccountsTransferResponse>.Failure(registration.StatusMessage));
@@ -54,11 +74,23 @@ namespace HomeBudget.Accounting.Api.Controllers
                     SenderCommandId = registration.Payload.SenderCommandId,
                     RecipientCommandId = registration.Payload.RecipientCommandId,
                     Status = registration.Payload.Status.ToString(),
-                    IsDuplicate = registration.Payload.IsDuplicate
+                    IsDuplicate = registration.Payload.IsDuplicate,
+                    LedgerId = generation.LedgerId,
+                    LedgerGenerationId = generation.LedgerGenerationId,
+                    GenerationToken = generation.GenerationToken
                 });
             }
 
-            var responseResult = await crossAccountsTransferService.ApplyAsync(operationPayload, token);
+            Result<Guid> responseResult;
+            try
+            {
+                responseResult = await crossAccountsTransferService.ApplyAsync(operationPayload, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                return await CurrentStaleGenerationAsync(token);
+            }
+
             if (!responseResult.IsSucceeded)
             {
                 return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
@@ -71,7 +103,10 @@ namespace HomeBudget.Accounting.Api.Controllers
                 [
                     request.Sender,
                     request.Recipient
-                ]
+                ],
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             return Result<CrossAccountsTransferResponse>.Succeeded(response);
@@ -80,40 +115,60 @@ namespace HomeBudget.Accounting.Api.Controllers
         [HttpGet("{transferId}/commands/{commandId}")]
         public async Task<ActionResult<Result<TransferCommandStatusResponse>>> GetCommandStatusAsync(
             string transferId,
-            string commandId)
+            string commandId,
+            CancellationToken token = default)
         {
             if (!Guid.TryParse(transferId, out var targetTransferId) || string.IsNullOrWhiteSpace(commandId))
             {
                 return BadRequest(Result<TransferCommandStatusResponse>.Failure("Invalid transfer command route identifiers."));
             }
 
-            var command = await crossAccountsTransferService.GetCommandAsync(targetTransferId, commandId);
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
+            var command = await crossAccountsTransferService.GetCommandAsync(targetTransferId, commandId, generation);
             return command is null
                 ? NotFound(Result<TransferCommandStatusResponse>.Failure("The transfer command has not been found."))
-                : Result<TransferCommandStatusResponse>.Succeeded(ToStatusResponse(command));
+                : Result<TransferCommandStatusResponse>.Succeeded(ToStatusResponse(command, generation.GenerationToken));
         }
 
         [HttpGet("byId/{transferId}")]
-        public async Task<ActionResult<Result<TransferCommandStatusResponse>>> GetByIdAsync(string transferId)
+        public async Task<ActionResult<Result<TransferCommandStatusResponse>>> GetByIdAsync(
+            string transferId,
+            CancellationToken token = default)
         {
             if (!Guid.TryParse(transferId, out var targetTransferId))
             {
                 return BadRequest(Result<TransferCommandStatusResponse>.Failure("Invalid transfer identifier."));
             }
 
-            var command = await crossAccountsTransferService.GetByIdAsync(targetTransferId);
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
+            var command = await crossAccountsTransferService.GetByIdAsync(targetTransferId, generation);
             return command is null
                 ? NotFound(Result<TransferCommandStatusResponse>.Failure("The transfer has not been found."))
-                : Result<TransferCommandStatusResponse>.Succeeded(ToStatusResponse(command));
+                : Result<TransferCommandStatusResponse>.Succeeded(ToStatusResponse(command, generation.GenerationToken));
         }
 
-        private static TransferCommandStatusResponse ToStatusResponse(TransferCommandRecord command)
+        private static TransferCommandStatusResponse ToStatusResponse(TransferCommandRecord command, string generationToken)
         {
             var status = TransferCommandLifecycle.Evaluate(command);
             return new TransferCommandStatusResponse
             {
                 TransferId = command.TransferId,
                 CommandId = command.CommandId,
+                LedgerId = command.LedgerId,
+                LedgerGenerationId = command.LedgerGenerationId,
+                GenerationToken = generationToken,
                 Status = status.ToString(),
                 SenderAccountId = command.SenderAccountId,
                 RecipientAccountId = command.RecipientAccountId,
@@ -141,13 +196,29 @@ namespace HomeBudget.Accounting.Api.Controllers
                 : null;
 
         [HttpDelete]
-        public async Task<Result<CrossAccountsTransferResponse>> RemoveAsync(
+        public async Task<ActionResult<Result<CrossAccountsTransferResponse>>> RemoveAsync(
             RemoveTransferRequest request,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             var removeTransferPayload = mapper.Map<RemoveTransferPayload>(request);
 
-            var responseResult = await crossAccountsTransferService.RemoveAsync(removeTransferPayload, token);
+            Result<IEnumerable<Guid>> responseResult;
+            try
+            {
+                responseResult = await crossAccountsTransferService.RemoveAsync(removeTransferPayload, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                return await CurrentStaleGenerationAsync(token);
+            }
+
             if (!responseResult.IsSucceeded)
             {
                 return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
@@ -156,20 +227,39 @@ namespace HomeBudget.Accounting.Api.Controllers
             var response = new CrossAccountsTransferResponse
             {
                 PaymentOperationId = removeTransferPayload.TransferOperationId,
-                PaymentAccountIds = responseResult.Payload
+                PaymentAccountIds = responseResult.Payload,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             return Result<CrossAccountsTransferResponse>.Succeeded(response);
         }
 
         [HttpPatch]
-        public async Task<Result<CrossAccountsTransferResponse>> UpdateAsync(
+        public async Task<ActionResult<Result<CrossAccountsTransferResponse>>> UpdateAsync(
             UpdateTransferRequest request,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             var updateTransferPayload = mapper.Map<UpdateTransferPayload>(request);
 
-            var responseResult = await crossAccountsTransferService.UpdateAsync(updateTransferPayload, token);
+            Result<Guid> responseResult;
+            try
+            {
+                responseResult = await crossAccountsTransferService.UpdateAsync(updateTransferPayload, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                return await CurrentStaleGenerationAsync(token);
+            }
+
             if (!responseResult.IsSucceeded)
             {
                 return Result<CrossAccountsTransferResponse>.Failure(responseResult.StatusMessage);
@@ -182,10 +272,46 @@ namespace HomeBudget.Accounting.Api.Controllers
                 [
                     request.Sender,
                     request.Recipient
-                ]
+                ],
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             return Result<CrossAccountsTransferResponse>.Succeeded(response);
+        }
+
+        private bool IsStalePrecondition(LedgerGenerationScope generation)
+        {
+            var expected = Request.Headers.IfMatch.ToString();
+            if (string.IsNullOrWhiteSpace(expected))
+            {
+                return generation.GenerationNumber != 0;
+            }
+
+            return !string.Equals(expected, generation.GenerationToken, StringComparison.Ordinal);
+        }
+
+        private ObjectResult StaleGeneration(LedgerGenerationScope generation)
+        {
+            return StatusCode(
+                412,
+                new Result<LedgerGenerationResponse>(
+                    LedgerGenerationResponse.From(generation),
+                    "The ledger generation precondition is stale or missing.",
+                    false));
+        }
+
+        private async Task<ObjectResult> CurrentStaleGenerationAsync(CancellationToken token)
+        {
+            var currentGeneration = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(currentGeneration);
+            return StaleGeneration(currentGeneration);
+        }
+
+        private void SetGenerationHeader(LedgerGenerationScope generation)
+        {
+            Response.Headers.ETag = generation.GenerationToken;
         }
     }
 }

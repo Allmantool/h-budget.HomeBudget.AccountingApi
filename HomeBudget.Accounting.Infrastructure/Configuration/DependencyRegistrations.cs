@@ -72,6 +72,7 @@ namespace HomeBudget.Accounting.Infrastructure.Configuration
                 {
                     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
                 })
+                .RegisterDataProtectionControlPlane(configuration)
                 .RegistryDapperIoCDependencies();
 
             // .RegisterBackgroundServices();

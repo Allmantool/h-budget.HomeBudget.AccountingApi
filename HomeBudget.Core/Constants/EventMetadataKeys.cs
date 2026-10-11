@@ -27,5 +27,9 @@
         public static readonly string ImportBatchId = "import-batch-id";
 
         public static readonly string SourceSystem = "source-system";
+
+        public static readonly string LedgerId = "ledger-id";
+
+        public static readonly string LedgerGenerationId = "ledger-generation-id";
     }
 }

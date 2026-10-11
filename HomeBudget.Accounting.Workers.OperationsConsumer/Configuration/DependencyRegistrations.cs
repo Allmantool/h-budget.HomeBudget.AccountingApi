@@ -9,6 +9,7 @@ using MongoDB.Bson.Serialization.Serializers;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Infrastructure.Factories;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
@@ -40,6 +41,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
 
             services
                 .RegisterBackgroundServices()
+                .RegisterDataProtectionWorker()
                 .RegisterPaymentAccountsDependencies()
                 .RegisterCategoriesDependencies()
                 .RegisterCommandHandlers()
@@ -71,6 +73,9 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Configuration
                 {
                     configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
                     configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(MaintenanceAdmissionBehavior<,>));
                     configuration.AddBehavior(
                         typeof(IPipelineBehavior<,>),
                         typeof(TracingBehavior<,>));

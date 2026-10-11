@@ -6,7 +6,15 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
 {
     public sealed record OutboxAccountPaymentsEntity : IDbEntity
     {
+        public string EnvironmentId { get; init; } = "default";
+
+        public string GenerationTokenValue { get; init; } = "legacy-token-v1";
+
         public Guid Id { get; init; }
+
+        public string LedgerId { get; init; } = "default";
+
+        public string LedgerGenerationId { get; init; } = "legacy";
 
         public string AggregateId { get; init; }
 

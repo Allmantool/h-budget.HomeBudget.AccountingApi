@@ -5,6 +5,7 @@
         public const string SectionName = "ProjectionRebuild";
 
         public bool Enabled { get; init; }
+        public bool ManagedExecutionEnabled { get; init; }
         public bool Execute { get; init; }
         public bool OldWritersStopped { get; init; }
         public string ExpectedTarget { get; init; }

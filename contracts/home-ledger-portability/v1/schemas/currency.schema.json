@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:currency",
+  "title": "Home Ledger currency v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "code", "name", "minorUnit", "archived"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "code": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "minorUnit": { "type": "integer", "minimum": 0, "maximum": 8 },
+    "archived": { "type": "boolean" }
+  }
+}

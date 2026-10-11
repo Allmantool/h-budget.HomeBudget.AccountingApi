@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Services.Interfaces;
 using HomeBudget.Components.Accounts.Models;
@@ -23,7 +24,8 @@ namespace HomeBudget.Components.Accounts.Services
     internal class PaymentAccountProducerService(
         ILogger<PaymentAccountProducerService> logger,
         IDateTimeProvider dateTimeProvider,
-        IKafkaProducer<string, string> accountProducer)
+        IKafkaProducer<string, string> accountProducer,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : IPaymentAccountProducerService
     {
         public async Task SendAsync(AccountRecord accountRecord, CancellationToken token)
@@ -41,6 +43,9 @@ namespace HomeBudget.Components.Accounts.Services
                 };
 
                 var enquiredAt = dateTimeProvider.GetNowUtc();
+                var generation = activeGenerationResolver is null
+                    ? LedgerGenerationScope.Legacy
+                    : await activeGenerationResolver.GetActiveAsync(token);
                 var messagePayload = JsonSerializer.Serialize(accountEvent);
                 var messageId = Guid.NewGuid().ToString("N");
 
@@ -51,6 +56,8 @@ namespace HomeBudget.Components.Accounts.Services
                     new Header(KafkaMessageHeaders.Source, Encoding.UTF8.GetBytes(nameof(PaymentAccountProducerService))),
                     new Header(KafkaMessageHeaders.EnvelopId, Encoding.UTF8.GetBytes(messageId)),
                     new Header(KafkaMessageHeaders.OccuredOn, Encoding.UTF8.GetBytes(enquiredAt.ToString("O"))),
+                    new Header(KafkaMessageHeaders.LedgerId, Encoding.UTF8.GetBytes(generation.LedgerId)),
+                    new Header(KafkaMessageHeaders.LedgerGenerationId, Encoding.UTF8.GetBytes(generation.LedgerGenerationId)),
                 };
 
                 if (Activity.Current is not null)

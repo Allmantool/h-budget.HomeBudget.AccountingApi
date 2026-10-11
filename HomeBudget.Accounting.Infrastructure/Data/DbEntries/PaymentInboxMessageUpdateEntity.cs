@@ -6,6 +6,10 @@ namespace HomeBudget.Accounting.Infrastructure.Data.DbEntries
     {
         public string MessageId { get; init; }
 
+        public string LedgerId { get; init; } = "default";
+
+        public string LedgerGenerationId { get; init; } = "legacy";
+
         public string Status { get; init; }
 
         public string LastError { get; init; }

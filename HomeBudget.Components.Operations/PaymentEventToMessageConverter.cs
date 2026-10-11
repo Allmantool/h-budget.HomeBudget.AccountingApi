@@ -70,6 +70,12 @@ namespace HomeBudget.Components.Operations
                 .With(
                     KafkaMessageHeaders.Source,
                     paymentEvent.Metadata.Get(EventMetadataKeys.SourceSystem))
+                .With(
+                    KafkaMessageHeaders.LedgerId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.LedgerId))
+                .With(
+                    KafkaMessageHeaders.LedgerGenerationId,
+                    paymentEvent.Metadata.Get(EventMetadataKeys.LedgerGenerationId))
                 .With(KafkaMessageHeaders.Type, nameof(PaymentOperationEvent))
                 .With(KafkaMessageHeaders.Version, "2.0")
                 .With(

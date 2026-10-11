@@ -20,6 +20,8 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
 
         Task MarkPoisonAsync(string messageId, string lastError, DateTime updatedUtc);
 
+        Task MarkStaleGenerationAsync(PaymentInboxMessageEntity message, DateTime updatedUtc);
+
         Task RequestReplayAsync(string messageId, DateTime updatedUtc);
     }
 }

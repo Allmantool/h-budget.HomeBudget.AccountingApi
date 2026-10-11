@@ -6,7 +6,11 @@ namespace HomeBudget.Components.Operations.Models
 {
     internal sealed record TransferCommandRegistrationRequest
     {
+        public string EnvironmentId { get; init; } = "default";
+        public string GenerationTokenValue { get; init; } = "legacy-token-v1";
         public Guid TransferId { get; init; }
+        public string LedgerId { get; init; } = "default";
+        public string LedgerGenerationId { get; init; } = "legacy";
         public string CommandId { get; init; }
         public string IdempotencyKeyHash { get; init; }
         public string RequestFingerprint { get; init; }

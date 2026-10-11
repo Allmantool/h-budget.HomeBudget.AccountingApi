@@ -12,5 +12,8 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Responses
         public string RecipientCommandId { get; init; }
         public string Status { get; init; }
         public bool IsDuplicate { get; init; }
+        public string LedgerId { get; init; }
+        public string LedgerGenerationId { get; init; }
+        public string GenerationToken { get; init; }
     }
 }

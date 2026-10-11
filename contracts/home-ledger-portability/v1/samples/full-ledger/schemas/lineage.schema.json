@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:lineage",
+  "title": "Home Ledger migration lineage v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "entityType", "entityId", "sourceSystem", "sourceEntityId", "sourceRunId", "sourceBatchId", "mappingId", "migratedUtc"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "entityType": { "enum": ["account", "category", "contractor", "operation", "rate", "setting"] },
+    "entityId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "sourceSystem": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "sourceEntityId": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "sourceRunId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "sourceBatchId": { "type": ["string", "null"], "maxLength": 200 },
+    "mappingId": { "type": ["string", "null"], "maxLength": 200 },
+    "migratedUtc": { "type": "string", "format": "date-time", "pattern": "Z$" }
+  }
+}

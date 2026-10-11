@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
 
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -16,19 +17,25 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     internal class ApplyTransferCommandHandler(
         IMapper mapper,
         IDateTimeProvider dateTimeProvider,
-        IOutboxPaymentStatusService outboxPaymentStatusService)
+        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : BasePaymentCommandHandler(
             mapper,
             dateTimeProvider,
-            outboxPaymentStatusService),
+            outboxPaymentStatusService,
+            activeGenerationResolver),
         IRequestHandler<ApplyTransferCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(ApplyTransferCommand request, CancellationToken cancellationToken)
         {
-            var transferOperationTasks = request.PaymentOperations
-                .Select(op => HandleAsync(new AddPaymentOperationCommand(op), cancellationToken));
+            var childCommands = request.PaymentOperations
+                .Select(op => new AddPaymentOperationCommand(op)
+                {
+                    CorrelationId = request.CorrelationId,
+                    ExpectedGeneration = request.ExpectedGeneration
+                });
 
-            await Task.WhenAll(transferOperationTasks);
+            await WriteTransferRecordsAsync(childCommands, cancellationToken);
 
             return Result<Guid>.Succeeded(request.Key);
         }

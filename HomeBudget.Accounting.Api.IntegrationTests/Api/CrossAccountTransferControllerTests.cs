@@ -268,6 +268,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             Assert.Multiple(() =>
             {
+                first.Data.Payload.LedgerId.Should().Be("default");
+                first.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+                first.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+                first.Headers
+                    .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                    .Value?.ToString()
+                    .Should().Be("\"legacy-token-v1\"");
                 senderHistory.Single(record => record.Record.Key == transferId).Record.Amount.Should().Be(-1800m);
                 recipientHistory.Single(record => record.Record.Key == transferId).Record.Amount.Should().Be(6030m);
                 status.IsSuccessful.Should().BeTrue(DescribeResponse(status));
@@ -276,7 +283,46 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
                 status.Data.Payload.RecipientAmount.Should().Be(6030m);
                 status.Data.Payload.SenderCurrency.Should().Be("USD");
                 status.Data.Payload.RecipientCurrency.Should().Be("BYN");
+                status.Data.Payload.LedgerId.Should().Be("default");
+                status.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+                status.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+                status.Headers
+                    .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                    .Value?.ToString()
+                    .Should().Be("\"legacy-token-v1\"");
             });
+        }
+
+        [Test]
+        public async Task ApplyTransfer_WhenExpectedGenerationTokenIsStale_ShouldRejectBeforeAcceptance()
+        {
+            var senderAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Deposit, CurrencyTypes.Usd)).Payload;
+            var recipientAccountId = (await SavePaymentAccountAsync(0m, AccountTypes.Cash, CurrencyTypes.Usd)).Payload;
+            var request = new RestRequest(CrossAccountsTransferApiHost, Method.Post)
+                .AddHeader("If-Match", "\"stale-ledger-generation\"")
+                .AddJsonBody(new CrossAccountsTransferRequest
+                {
+                    Sender = senderAccountId,
+                    Recipient = recipientAccountId,
+                    Amount = 10m,
+                    Multiplier = 1m,
+                    OperationAt = new DateOnly(2026, 10, 5)
+                });
+
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<LedgerGenerationResponse>>(
+                request,
+                [HttpStatusCode.PreconditionFailed]);
+
+            response.StatusCode.Should().Be(HttpStatusCode.PreconditionFailed, DescribeResponse(response));
+            response.Data.Payload.LedgerId.Should().Be("default");
+            response.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+            response.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+            response.Headers
+                .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                .Value?.ToString()
+                .Should().Be("\"legacy-token-v1\"");
+            (await GetHistoryByPaymentAccountIdAsync(senderAccountId)).Should().BeEmpty();
+            (await GetHistoryByPaymentAccountIdAsync(recipientAccountId)).Should().BeEmpty();
         }
 
         [Test]

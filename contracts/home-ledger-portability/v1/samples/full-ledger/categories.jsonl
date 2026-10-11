@@ -1,0 +1,5 @@
+{"id":"20000000-0000-4000-8000-000000000001","name":"Salary","direction":"income","parentId":null,"archived":false,"archivedUtc":null,"legacyReference":"FamilyPro12:CATEGORY:10"}
+{"id":"20000000-0000-4000-8000-000000000002","name":"Groceries","direction":"expense","parentId":null,"archived":false,"archivedUtc":null,"legacyReference":"FamilyPro12:CATEGORY:20"}
+{"id":"20000000-0000-4000-8000-000000000003","name":"Food","direction":"expense","parentId":"20000000-0000-4000-8000-000000000002","archived":false,"archivedUtc":null,"legacyReference":"FamilyPro12:CATEGORY:21"}
+{"id":"20000000-0000-4000-8000-000000000004","name":"Household","direction":"expense","parentId":"20000000-0000-4000-8000-000000000002","archived":false,"archivedUtc":null,"legacyReference":"FamilyPro12:CATEGORY:22"}
+{"id":"20000000-0000-4000-8000-000000000005","name":"Bank fees","direction":"expense","parentId":null,"archived":false,"archivedUtc":null,"legacyReference":null}

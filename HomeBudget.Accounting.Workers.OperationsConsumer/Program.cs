@@ -18,6 +18,7 @@ using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Extensions.Logs;
 using HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry;
 using HomeBudget.Accounting.Infrastructure.HealthChecks;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Extensions;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Services;
@@ -88,6 +89,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer
                 services
                     .AddSingleton<ProjectionRebuildRunner>()
                     .AddHostedService<ProjectionRebuildWorker>();
+            }
+            else if (rebuildOptions.ManagedExecutionEnabled)
+            {
+                services
+                    .AddScoped<ProjectionRebuildRunner>()
+                    .AddScoped<IDataProtectionOperationExecutor, ProjectionRebuildDataProtectionExecutor>();
             }
             else
             {

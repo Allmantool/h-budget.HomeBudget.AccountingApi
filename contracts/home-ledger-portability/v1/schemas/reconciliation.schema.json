@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:reconciliation",
+  "title": "Home Ledger reconciliation data v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["commonCutoffUtc", "counts", "accountBalances", "periodTotals", "operationIdentitySha256"],
+  "properties": {
+    "commonCutoffUtc": { "$ref": "#/$defs/utc" },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accounts", "currencies", "categories", "contractors", "settings", "operations", "openingBalances", "incomeOperations", "expenseOperations", "adjustmentOperations", "transferOperations", "splitLines", "rates", "lineage"],
+      "properties": {
+        "accounts": { "type": "integer", "minimum": 0 },
+        "currencies": { "type": "integer", "minimum": 0 },
+        "categories": { "type": "integer", "minimum": 0 },
+        "contractors": { "type": "integer", "minimum": 0 },
+        "settings": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "operations": { "type": "integer", "minimum": 0 },
+        "openingBalances": { "type": "integer", "minimum": 0 },
+        "incomeOperations": { "type": "integer", "minimum": 0 },
+        "expenseOperations": { "type": "integer", "minimum": 0 },
+        "adjustmentOperations": { "type": "integer", "minimum": 0 },
+        "transferOperations": { "type": "integer", "minimum": 0 },
+        "splitLines": { "type": "integer", "minimum": 0 },
+        "rates": { "type": "integer", "minimum": 0 },
+        "lineage": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "accountBalances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accountId", "currencyId", "balance"],
+        "properties": {
+          "accountId": { "$ref": "#/$defs/uuid" },
+          "currencyId": { "$ref": "#/$defs/uuid" },
+          "balance": { "$ref": "#/$defs/signedDecimal" }
+        }
+      }
+    },
+    "periodTotals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accountId", "period", "currencyId", "income", "expense", "adjustmentCredit", "adjustmentDebit", "transferIn", "transferOut", "fees"],
+        "properties": {
+          "accountId": { "$ref": "#/$defs/uuid" },
+          "period": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+          "currencyId": { "$ref": "#/$defs/uuid" },
+          "income": { "$ref": "#/$defs/decimal" },
+          "expense": { "$ref": "#/$defs/decimal" },
+          "adjustmentCredit": { "$ref": "#/$defs/decimal" },
+          "adjustmentDebit": { "$ref": "#/$defs/decimal" },
+          "transferIn": { "$ref": "#/$defs/decimal" },
+          "transferOut": { "$ref": "#/$defs/decimal" },
+          "fees": { "$ref": "#/$defs/decimal" }
+        }
+      }
+    },
+    "operationIdentitySha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "signedDecimal": { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "utc": { "type": "string", "format": "date-time", "pattern": "Z$" }
+  }
+}

@@ -274,7 +274,7 @@ namespace HomeBudget.Accounting.Api.IntegrationTests
 
         private static void EnsureExpectedMigrationsDiscovered(string migrationsFolder, IReadOnlyCollection<string> migrationFiles)
         {
-            var missingMigrations = Enumerable.Range(0, 6)
+            var missingMigrations = Enumerable.Range(0, 13)
                 .Select(version => $"V{version}__")
                 .Where(prefix => migrationFiles.All(file =>
                     !Path.GetFileName(file).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))

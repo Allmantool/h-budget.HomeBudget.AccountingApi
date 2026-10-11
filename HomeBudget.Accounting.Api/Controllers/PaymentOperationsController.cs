@@ -10,6 +10,7 @@ using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Core.Models;
 
 namespace HomeBudget.Accounting.Api.Controllers
@@ -20,7 +21,8 @@ namespace HomeBudget.Accounting.Api.Controllers
         IMapper mapper,
         IPaymentOperationsService paymentOperationsService,
         IOutboxPaymentStatusService outboxPaymentStatusService,
-        IIdempotencyPreflightService idempotencyPreflightService
+        IIdempotencyPreflightService idempotencyPreflightService,
+        IActiveLedgerGenerationResolver activeGenerationResolver
         ) : ControllerBase
     {
         [HttpPost]
@@ -29,6 +31,13 @@ namespace HomeBudget.Accounting.Api.Controllers
             [FromBody] CreateOperationRequest request,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return Result<CreateOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
@@ -39,7 +48,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 targetAccountGuid,
                 PaymentCommandTypes.Create,
                 PaymentCommandFingerprint.Create(PaymentCommandTypes.Create, targetAccountGuid, null, operationPayload),
-                Request.Headers["Idempotency-Key"].ToString());
+                Request.Headers["Idempotency-Key"].ToString(),
+                generation);
 
             if (preflight.IsConflict)
             {
@@ -48,10 +58,20 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<CreateOperationResponse>.Succeeded(CreateOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true));
+                return Result<CreateOperationResponse>.Succeeded(CreateOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true, generation));
             }
 
-            var createResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, preflight.Context, token);
+            Result<Guid> createResponseResult;
+            try
+            {
+                createResponseResult = await paymentOperationsService.CreateAsync(targetAccountGuid, operationPayload, preflight.Context, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                var currentGeneration = await activeGenerationResolver.GetActiveAsync(token);
+                SetGenerationHeader(currentGeneration);
+                return StaleGeneration(currentGeneration);
+            }
 
             var response = new CreateOperationResponse
             {
@@ -59,7 +79,10 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PaymentOperationId = createResponseResult.Payload.ToString(),
                 CommandId = preflight.Context?.CommandId,
                 Status = PaymentCommandStatus.Accepted.ToString(),
-                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false
+                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             if (createResponseResult.IsSucceeded)
@@ -81,6 +104,13 @@ namespace HomeBudget.Accounting.Api.Controllers
             string operationId,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return Result<RemoveOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
@@ -95,7 +125,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 targetAccountGuid,
                 PaymentCommandTypes.Delete,
                 PaymentCommandFingerprint.CreateDelete(PaymentCommandTypes.Delete, targetAccountGuid, targetOperationGuid),
-                Request.Headers["Idempotency-Key"].ToString());
+                Request.Headers["Idempotency-Key"].ToString(),
+                generation);
 
             if (preflight.IsConflict)
             {
@@ -104,10 +135,20 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<RemoveOperationResponse>.Succeeded(RemoveOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true));
+                return Result<RemoveOperationResponse>.Succeeded(RemoveOperationResponse.From(paymentAccountId, preflight.ExistingCommand, true, generation));
             }
 
-            var removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, targetOperationGuid, preflight.Context, token);
+            Result<Guid> removeResponseResult;
+            try
+            {
+                removeResponseResult = await paymentOperationsService.RemoveAsync(targetAccountGuid, targetOperationGuid, preflight.Context, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                var currentGeneration = await activeGenerationResolver.GetActiveAsync(token);
+                SetGenerationHeader(currentGeneration);
+                return StaleGeneration(currentGeneration);
+            }
 
             var response = new RemoveOperationResponse
             {
@@ -115,7 +156,10 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PaymentOperationId = removeResponseResult.Payload.ToString(),
                 CommandId = preflight.Context?.CommandId,
                 Status = PaymentCommandStatus.Accepted.ToString(),
-                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false
+                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             if (removeResponseResult.IsSucceeded)
@@ -133,6 +177,13 @@ namespace HomeBudget.Accounting.Api.Controllers
             [FromBody] UpdateOperationRequest request,
             CancellationToken token = default)
         {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
             if (!Guid.TryParse(paymentAccountId, out var targetAccountGuid))
             {
                 return Result<UpdateOperationResponse>.Failure($"Invalid payment account '{paymentAccountId}' has been provided");
@@ -148,7 +199,8 @@ namespace HomeBudget.Accounting.Api.Controllers
                 targetAccountGuid,
                 PaymentCommandTypes.Update,
                 PaymentCommandFingerprint.Create(PaymentCommandTypes.Update, targetAccountGuid, targetOperationGuid, operationPayload),
-                Request.Headers["Idempotency-Key"].ToString());
+                Request.Headers["Idempotency-Key"].ToString(),
+                generation);
 
             if (preflight.IsConflict)
             {
@@ -157,10 +209,20 @@ namespace HomeBudget.Accounting.Api.Controllers
 
             if (preflight.ExistingCommand is not null)
             {
-                return Result<UpdateOperationResponse>.Succeeded(UpdateOperationResponse.From(paymentAccountId, operationId, preflight.ExistingCommand, true));
+                return Result<UpdateOperationResponse>.Succeeded(UpdateOperationResponse.From(paymentAccountId, operationId, preflight.ExistingCommand, true, generation));
             }
 
-            var updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, targetOperationGuid, operationPayload, preflight.Context, token);
+            Result<Guid> updateResponseResult;
+            try
+            {
+                updateResponseResult = await paymentOperationsService.UpdateAsync(targetAccountGuid, targetOperationGuid, operationPayload, preflight.Context, generation, token);
+            }
+            catch (LedgerGenerationChangedException)
+            {
+                var currentGeneration = await activeGenerationResolver.GetActiveAsync(token);
+                SetGenerationHeader(currentGeneration);
+                return StaleGeneration(currentGeneration);
+            }
 
             var response = new UpdateOperationResponse
             {
@@ -170,12 +232,24 @@ namespace HomeBudget.Accounting.Api.Controllers
                     : updateResponseResult.Payload.ToString(),
                 CommandId = preflight.Context?.CommandId,
                 Status = PaymentCommandStatus.Accepted.ToString(),
-                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false
+                IsDuplicate = preflight.Context?.WasAlreadyAccepted ?? false,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
 
             return updateResponseResult.IsSucceeded
                 ? Result<UpdateOperationResponse>.Succeeded(response)
                 : Result<UpdateOperationResponse>.Failure(updateResponseResult.StatusMessage);
+        }
+
+        [HttpGet("generation")]
+        public async Task<ActionResult<Result<LedgerGenerationResponse>>> GetActiveGenerationAsync(
+            CancellationToken token = default)
+        {
+            var generation = await activeGenerationResolver.GetActiveAsync(token);
+            SetGenerationHeader(generation);
+            return Result<LedgerGenerationResponse>.Succeeded(LedgerGenerationResponse.From(generation));
         }
 
         [HttpGet("commands/{commandId}")]
@@ -188,7 +262,14 @@ namespace HomeBudget.Accounting.Api.Controllers
                 return Result<PaymentCommandStatusResponse>.Failure("Invalid payment command route identifiers have been provided.");
             }
 
-            var command = await outboxPaymentStatusService.GetCommandAsync(targetAccountGuid, commandId);
+            var generation = await activeGenerationResolver.GetActiveAsync();
+            SetGenerationHeader(generation);
+            if (IsStalePrecondition(generation))
+            {
+                return StaleGeneration(generation);
+            }
+
+            var command = await outboxPaymentStatusService.GetCommandAsync(targetAccountGuid, commandId, generation);
             if (command is null)
             {
                 return NotFound(Result<PaymentCommandStatusResponse>.Failure($"The payment command '{commandId}' hasn't been found."));
@@ -197,6 +278,9 @@ namespace HomeBudget.Accounting.Api.Controllers
             return Result<PaymentCommandStatusResponse>.Succeeded(new PaymentCommandStatusResponse
             {
                 CommandId = command.CommandId,
+                LedgerId = command.LedgerId,
+                LedgerGenerationId = command.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken,
                 PaymentOperationId = command.PaymentOperationId.ToString(),
                 CommandType = command.CommandType,
                 Status = command.Status.ToString(),
@@ -205,6 +289,32 @@ namespace HomeBudget.Accounting.Api.Controllers
                 PersistedAt = command.PersistedUtc,
                 ProjectedAt = command.ProjectedUtc
             });
+        }
+
+        private bool IsStalePrecondition(LedgerGenerationScope generation)
+        {
+            var expected = Request.Headers.IfMatch.ToString();
+            if (string.IsNullOrWhiteSpace(expected))
+            {
+                return generation.GenerationNumber != 0;
+            }
+
+            return !string.Equals(expected, generation.GenerationToken, StringComparison.Ordinal);
+        }
+
+        private ObjectResult StaleGeneration(LedgerGenerationScope generation)
+        {
+            return StatusCode(
+                412,
+                new Result<LedgerGenerationResponse>(
+                    LedgerGenerationResponse.From(generation),
+                    "The ledger generation precondition is stale or missing.",
+                    false));
+        }
+
+        private void SetGenerationHeader(LedgerGenerationScope generation)
+        {
+            Response.Headers.ETag = generation.GenerationToken;
         }
     }
 }

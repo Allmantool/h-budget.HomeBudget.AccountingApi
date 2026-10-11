@@ -8,6 +8,8 @@ using MediatR;
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
@@ -24,14 +26,31 @@ namespace HomeBudget.Components.Operations.Services
         IFinancialTransactionFactory financialTransactionFactory,
         ICrossAccountsTransferBuilder crossAccountsTransferBuilder,
         ITransferCommandStore transferCommandStore,
-        ITransferOutboxRegistrationFactory transferRegistrationFactory)
+        ITransferOutboxRegistrationFactory transferRegistrationFactory,
+        IActiveLedgerGenerationResolver activeGenerationResolver,
+        IMaintenanceAdmissionFence admissionFence)
         : ICrossAccountsTransferService
     {
         public async Task<Result<Guid>> ApplyAsync(CrossAccountsTransferPayload payload, CancellationToken token)
         {
+            var generation = await (activeGenerationResolver?.GetActiveAsync(token)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await ApplyAsync(payload, generation, token);
+        }
+
+        public async Task<Result<Guid>> ApplyAsync(
+            CrossAccountsTransferPayload payload,
+            LedgerGenerationScope expectedGeneration,
+            CancellationToken token)
+        {
             var transferOperation = await BuildTransferAsync(payload);
             return transferOperation.IsSucceeded
-                ? await mediator.Send(new ApplyTransferCommand(transferOperation.Payload), token)
+                ? await mediator.Send(
+                    new ApplyTransferCommand(transferOperation.Payload)
+                    {
+                        ExpectedGeneration = expectedGeneration
+                    },
+                    token)
                 : Result<Guid>.Failure(transferOperation.StatusMessage);
         }
 
@@ -39,6 +58,18 @@ namespace HomeBudget.Components.Operations.Services
             CrossAccountsTransferPayload payload,
             string idempotencyKey,
             string correlationId,
+            CancellationToken token)
+        {
+            var generation = await (activeGenerationResolver?.GetActiveAsync(token)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await ApplyIdempotentAsync(payload, idempotencyKey, correlationId, generation, token);
+        }
+
+        public async Task<Result<TransferCommandResult>> ApplyIdempotentAsync(
+            CrossAccountsTransferPayload payload,
+            string idempotencyKey,
+            string correlationId,
+            LedgerGenerationScope expectedGeneration,
             CancellationToken token)
         {
             if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200 ||
@@ -52,7 +83,8 @@ namespace HomeBudget.Components.Operations.Services
 
             var keyHash = PaymentCommandFingerprint.HashIdempotencyKey(idempotencyKey);
             var fingerprint = TransferCommandFingerprint.Create(payload);
-            var existing = await transferCommandStore.GetByIdempotencyKeyAsync(keyHash);
+            var generation = expectedGeneration;
+            var existing = await transferCommandStore.GetByIdempotencyKeyAsync(keyHash, generation);
             if (existing is not null)
             {
                 return Result<TransferCommandResult>.Succeeded(ToResult(
@@ -75,7 +107,15 @@ namespace HomeBudget.Components.Operations.Services
                 payload.RecipientAmount.Value,
                 payload.SenderCurrency.Trim(),
                 payload.RecipientCurrency.Trim());
-            var request = transferRegistrationFactory.Create(transferOperation.Payload, context, correlationId);
+            var request = transferRegistrationFactory.Create(
+                transferOperation.Payload,
+                context,
+                correlationId,
+                generation);
+            await using var admissionPermit = await admissionFence.AcquireAdmissionPermitAsync(
+                MaintenanceScopeKey.ForLedger(generation),
+                generation.LedgerGenerationId,
+                token).ConfigureAwait(false);
             var registration = await transferCommandStore.RegisterAsync(request);
             var conflict = !string.Equals(registration.RequestFingerprint, fingerprint, StringComparison.Ordinal);
             return Result<TransferCommandResult>.Succeeded(new TransferCommandResult(
@@ -182,11 +222,34 @@ namespace HomeBudget.Components.Operations.Services
             duplicate,
             conflict);
 
-        public Task<TransferCommandRecord> GetCommandAsync(Guid transferId, string commandId) =>
-            transferCommandStore.GetAsync(transferId, commandId);
+        public async Task<TransferCommandRecord> GetCommandAsync(Guid transferId, string commandId)
+        {
+            var generation = await (activeGenerationResolver?.GetActiveAsync()
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await GetCommandAsync(transferId, commandId, generation);
+        }
 
-        public Task<TransferCommandRecord> GetByIdAsync(Guid transferId) =>
-            transferCommandStore.GetByTransferIdAsync(transferId);
+        public Task<TransferCommandRecord> GetCommandAsync(
+            Guid transferId,
+            string commandId,
+            LedgerGenerationScope expectedGeneration)
+        {
+            return transferCommandStore.GetAsync(transferId, commandId, expectedGeneration);
+        }
+
+        public async Task<TransferCommandRecord> GetByIdAsync(Guid transferId)
+        {
+            var generation = await (activeGenerationResolver?.GetActiveAsync()
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await GetByIdAsync(transferId, generation);
+        }
+
+        public Task<TransferCommandRecord> GetByIdAsync(
+            Guid transferId,
+            LedgerGenerationScope expectedGeneration)
+        {
+            return transferCommandStore.GetByTransferIdAsync(transferId, expectedGeneration);
+        }
 
         private async Task<Result<bool>> IsSameCurrencyTransferAsync(Guid senderAccountId, Guid recipientAccountId)
         {
@@ -206,6 +269,16 @@ namespace HomeBudget.Components.Operations.Services
         }
 
         public async Task<Result<IEnumerable<Guid>>> RemoveAsync(RemoveTransferPayload removeTransferPayload, CancellationToken token)
+        {
+            var generation = await (activeGenerationResolver?.GetActiveAsync(token)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await RemoveAsync(removeTransferPayload, generation, token);
+        }
+
+        public async Task<Result<IEnumerable<Guid>>> RemoveAsync(
+            RemoveTransferPayload removeTransferPayload,
+            LedgerGenerationScope expectedGeneration,
+            CancellationToken token)
         {
             var transferOperationDocumentForRemove = await documentsClient
                 .GetByIdAsync(
@@ -241,7 +314,12 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<IEnumerable<Guid>>.Failure(transferOperation.StatusMessage);
             }
 
-            await mediator.Send(new RemoveTransferCommand(transferOperation.Payload), token);
+            await mediator.Send(
+                new RemoveTransferCommand(transferOperation.Payload)
+                {
+                    ExpectedGeneration = expectedGeneration
+                },
+                token);
 
             return Result<IEnumerable<Guid>>.Succeeded([
                 transferSenderOperationForRemove.PaymentAccountId,
@@ -250,6 +328,16 @@ namespace HomeBudget.Components.Operations.Services
         }
 
         public async Task<Result<Guid>> UpdateAsync(UpdateTransferPayload updateTransferPayload, CancellationToken token)
+        {
+            var generation = await (activeGenerationResolver?.GetActiveAsync(token)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            return await UpdateAsync(updateTransferPayload, generation, token);
+        }
+
+        public async Task<Result<Guid>> UpdateAsync(
+            UpdateTransferPayload updateTransferPayload,
+            LedgerGenerationScope expectedGeneration,
+            CancellationToken token)
         {
             var senderOperationDocument = await documentsClient
                 .GetByIdAsync(
@@ -282,7 +370,12 @@ namespace HomeBudget.Components.Operations.Services
                 return Result<Guid>.Failure(transferOperation.StatusMessage);
             }
 
-            return await mediator.Send(new UpdateTransferCommand(transferOperation.Payload), token);
+            return await mediator.Send(
+                new UpdateTransferCommand(transferOperation.Payload)
+                {
+                    ExpectedGeneration = expectedGeneration
+                },
+                token);
         }
     }
 }

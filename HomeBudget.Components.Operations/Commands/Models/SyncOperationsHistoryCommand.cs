@@ -19,5 +19,6 @@ namespace HomeBudget.Components.Operations.Commands.Models
         public Guid PaymentAccountId { get; } = paymentAccountId;
         public IEnumerable<PaymentOperationEvent> Events { get; } = events;
         public ProjectionCheckpoint Checkpoint { get; } = checkpoint;
+        public bool SuppressExternalSideEffects { get; init; }
     }
 }

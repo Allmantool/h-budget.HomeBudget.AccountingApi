@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 
 namespace HomeBudget.Components.Operations.Services
 {
@@ -13,6 +14,21 @@ namespace HomeBudget.Components.Operations.Services
             string commandType,
             string requestFingerprint,
             string idempotencyKey)
+        {
+            return await GetIdempotencyPreflightAsync(
+                paymentAccountId,
+                commandType,
+                requestFingerprint,
+                idempotencyKey,
+                null);
+        }
+
+        public async Task<IdempotencyPreflight> GetIdempotencyPreflightAsync(
+            Guid paymentAccountId,
+            string commandType,
+            string requestFingerprint,
+            string idempotencyKey,
+            LedgerGenerationScope expectedGeneration)
         {
             if (string.IsNullOrWhiteSpace(idempotencyKey))
             {
@@ -25,7 +41,9 @@ namespace HomeBudget.Components.Operations.Services
             }
 
             var keyHash = PaymentCommandFingerprint.HashIdempotencyKey(idempotencyKey);
-            var existingCommand = await outboxPaymentStatusService.GetCommandByIdempotencyKeyAsync(paymentAccountId, keyHash);
+            var existingCommand = expectedGeneration is null
+                ? await outboxPaymentStatusService.GetCommandByIdempotencyKeyAsync(paymentAccountId, keyHash)
+                : await outboxPaymentStatusService.GetCommandByIdempotencyKeyAsync(paymentAccountId, keyHash, expectedGeneration);
             if (existingCommand is not null)
             {
                 return new IdempotencyPreflight

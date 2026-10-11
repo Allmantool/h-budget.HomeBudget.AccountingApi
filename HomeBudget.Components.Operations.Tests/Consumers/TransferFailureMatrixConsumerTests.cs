@@ -18,6 +18,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Consumers;
 using HomeBudget.Components.Operations.Models;
@@ -232,6 +233,12 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                 Kafka = kafka;
                 EventStore = eventStore;
                 Inbox = inbox;
+                var admissionFence = new Mock<IMaintenanceAdmissionFence>();
+                admissionFence.Setup(service => service.AcquireAdmissionPermitAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Mock.Of<IMaintenanceAdmissionPermit>());
                 Consumer = new PaymentOperationsConsumer(
                     Mock.Of<ILogger<PaymentOperationsConsumer>>(),
                     clock.Object,
@@ -247,7 +254,8 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                     }),
                     Microsoft.Extensions.Options.Options.Create(new PaymentInboxOptions { MaxRetryAttempts = 5 }),
                     inbox.Object,
-                    kafka.Object);
+                    kafka.Object,
+                    admissionFence.Object);
             }
 
             public PaymentOperationsConsumer Consumer { get; }

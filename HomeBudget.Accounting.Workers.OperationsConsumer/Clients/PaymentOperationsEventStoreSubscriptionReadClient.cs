@@ -19,6 +19,8 @@ using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Factories;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
@@ -507,6 +509,13 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Clients
         {
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+            var generationResolver = scope.ServiceProvider.GetRequiredService<IActiveLedgerGenerationResolver>();
+            var admissionFence = scope.ServiceProvider.GetRequiredService<IMaintenanceAdmissionFence>();
+            var generation = await generationResolver.GetActiveAsync(ct).ConfigureAwait(false);
+            await using var admissionPermit = await admissionFence.AcquireAdmissionPermitAsync(
+                MaintenanceScopeKey.ForLedger(generation),
+                generation.LedgerGenerationId,
+                ct).ConfigureAwait(false);
 
             _logger.DispatchingSync(paymentAccountId.ToString(), events.Count());
 

@@ -1,0 +1,14 @@
+{
+  "contract": "home-ledger-portability",
+  "currentVersion": "1.0.0",
+  "schemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "supportedImportVersions": [
+    "1.0.x"
+  ],
+  "unknownVersionPolicy": "reject",
+  "fullStateImport": "supported",
+  "partialImport": "dependency-closed-analysis-only",
+  "partialReplacement": "rejected",
+  "historyRecreation": "not-claimed",
+  "attachments": "unsupported-not-present"
+}

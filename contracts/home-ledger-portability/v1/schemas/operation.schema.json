@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:operation",
+  "title": "Home Ledger financial operation v1",
+  "oneOf": [
+    { "$ref": "#/$defs/accountOperation" },
+    { "$ref": "#/$defs/transferOperation" }
+  ],
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "utc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "nullableUuid": { "type": ["string", "null"], "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "split": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "categoryId", "amount", "memo"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "categoryId": { "$ref": "#/$defs/uuid" },
+        "amount": { "$ref": "#/$defs/decimal" },
+        "memo": { "type": ["string", "null"], "maxLength": 1000 }
+      }
+    },
+    "accountOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "accountId", "amount", "direction", "currencyId", "businessDate", "originalCreatedUtc", "updatedUtc", "categoryId", "contractorId", "note", "splits", "archived", "archivedUtc", "lineageId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "kind": { "enum": ["income", "expense", "adjustment", "opening-balance"] },
+        "accountId": { "$ref": "#/$defs/uuid" },
+        "amount": { "$ref": "#/$defs/decimal" },
+        "direction": { "enum": ["credit", "debit"] },
+        "currencyId": { "$ref": "#/$defs/uuid" },
+        "businessDate": { "type": "string", "format": "date" },
+        "originalCreatedUtc": { "$ref": "#/$defs/utc" },
+        "updatedUtc": { "$ref": "#/$defs/utc" },
+        "categoryId": { "$ref": "#/$defs/nullableUuid" },
+        "contractorId": { "$ref": "#/$defs/nullableUuid" },
+        "note": { "type": ["string", "null"], "maxLength": 2000 },
+        "splits": { "type": "array", "items": { "$ref": "#/$defs/split" }, "maxItems": 1000 },
+        "archived": { "type": "boolean" },
+        "archivedUtc": { "anyOf": [{ "$ref": "#/$defs/utc" }, { "type": "null" }] },
+        "lineageId": { "$ref": "#/$defs/nullableUuid" }
+      }
+    },
+    "transferSide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accountId", "amount", "direction", "currencyId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "accountId": { "$ref": "#/$defs/uuid" },
+        "amount": { "$ref": "#/$defs/decimal" },
+        "direction": { "enum": ["credit", "debit"] },
+        "currencyId": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "transferFee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accountId", "amount", "direction", "currencyId", "categoryId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "accountId": { "$ref": "#/$defs/uuid" },
+        "amount": { "$ref": "#/$defs/decimal" },
+        "direction": { "const": "debit" },
+        "currencyId": { "$ref": "#/$defs/uuid" },
+        "categoryId": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "exchangeRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "basis", "rateId"],
+      "properties": {
+        "value": { "$ref": "#/$defs/decimal" },
+        "basis": { "const": "destination-per-source" },
+        "rateId": { "$ref": "#/$defs/nullableUuid" }
+      }
+    },
+    "transferOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "businessDate", "originalCreatedUtc", "updatedUtc", "source", "destination", "exchangeRate", "fee", "note", "archived", "archivedUtc", "lineageId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "kind": { "const": "transfer" },
+        "businessDate": { "type": "string", "format": "date" },
+        "originalCreatedUtc": { "$ref": "#/$defs/utc" },
+        "updatedUtc": { "$ref": "#/$defs/utc" },
+        "source": { "$ref": "#/$defs/transferSide" },
+        "destination": { "$ref": "#/$defs/transferSide" },
+        "exchangeRate": { "anyOf": [{ "$ref": "#/$defs/exchangeRate" }, { "type": "null" }] },
+        "fee": { "anyOf": [{ "$ref": "#/$defs/transferFee" }, { "type": "null" }] },
+        "note": { "type": ["string", "null"], "maxLength": 2000 },
+        "archived": { "type": "boolean" },
+        "archivedUtc": { "anyOf": [{ "$ref": "#/$defs/utc" }, { "type": "null" }] },
+        "lineageId": { "$ref": "#/$defs/nullableUuid" }
+      }
+    }
+  }
+}

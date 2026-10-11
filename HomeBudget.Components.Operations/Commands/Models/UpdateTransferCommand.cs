@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Core.Commands;
 using HomeBudget.Core.Models;
 
@@ -17,5 +18,7 @@ namespace HomeBudget.Components.Operations.Commands.Models
         public Guid Key { get; } = crossAccountsTransferOperations.Key;
 
         public IReadOnlyCollection<FinancialTransaction> PaymentOperations { get; } = crossAccountsTransferOperations.PaymentOperations;
+
+        public LedgerGenerationScope ExpectedGeneration { get; init; }
     }
 }

@@ -41,6 +41,8 @@ namespace HomeBudget.Components.Operations.Tests.Services
             result.ShouldProcess.Should().BeTrue();
             capturedSql.Should().Contain("Status = 'ReplayRequested'");
             capturedSql.Should().Contain("Status NOT IN ('Processed', 'Poison')");
+            capturedSql.Should().Contain("LedgerId = @LedgerId");
+            capturedSql.Should().Contain("LedgerGenerationId = @LedgerGenerationId");
         }
 
         [Test]

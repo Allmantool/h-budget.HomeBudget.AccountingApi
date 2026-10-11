@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -11,8 +12,12 @@ using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
 
+using HomeBudget.Accounting.Domain;
+using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Handlers;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
@@ -24,6 +29,31 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Workers
     [TestFixture]
     public class PaymentOperationsDeliveryHandlerTracingTests
     {
+        [Test]
+        public async Task HandleAsync_WhenMaintenanceIsClosed_DoesNotAppendToEventStore()
+        {
+            var writeClient = new Mock<IEventStoreDbWriteClient<PaymentOperationEvent>>();
+            var fence = new Mock<IMaintenanceAdmissionFence>();
+            fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new MaintenanceAdmissionClosedException());
+            var sut = new PaymentOperationsDeliveryHandler(
+                Mock.Of<ILogger<PaymentOperationsDeliveryHandler>>(),
+                Options.Create(new EventStoreDbOptions()),
+                writeClient.Object,
+                fence.Object,
+                CreateGenerationResolver());
+
+            var act = () => sut.HandleAsync(
+                new[] { ActivityEnvelope<PaymentOperationEvent>.Capture(CreatePaymentEvent()) },
+                CancellationToken.None);
+
+            await act.Should().ThrowAsync<MaintenanceAdmissionClosedException>();
+            writeClient.VerifyNoOtherCalls();
+        }
+
         [Test]
         public async Task HandleAsync_WhenWritingEventStoreBatch_ThenPersistsActiveProducerTraceContext()
         {
@@ -82,7 +112,9 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Workers
                 var sut = new PaymentOperationsDeliveryHandler(
                     Mock.Of<ILogger<PaymentOperationsDeliveryHandler>>(),
                     Options.Create(new EventStoreDbOptions()),
-                    writeClient.Object);
+                    writeClient.Object,
+                    CreateAdmissionFence(),
+                    CreateGenerationResolver());
 
                 await sut.HandleAsync(
                     new[]
@@ -106,6 +138,48 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Workers
             }
         }
 
+        [Test]
+        public async Task HandleAsync_WhenSameAccountMonthExistsInTwoLedgerGenerations_UsesDistinctStreamsAndPreservesLegacyName()
+        {
+            var legacy = CreatePaymentEvent();
+            legacy.Metadata["ledger-id"] = "default";
+            legacy.Metadata["ledger-generation-id"] = "legacy";
+            var replacement = CreatePaymentEvent();
+            replacement.Metadata["ledger-id"] = "default";
+            replacement.Metadata["ledger-generation-id"] = "replacement-1";
+            var streams = new ConcurrentBag<string>();
+            var writeClient = new Mock<IEventStoreDbWriteClient<PaymentOperationEvent>>();
+            writeClient
+                .Setup(client => client.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((_, stream, _, _) =>
+                    streams.Add(stream))
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            var sut = new PaymentOperationsDeliveryHandler(
+                Mock.Of<ILogger<PaymentOperationsDeliveryHandler>>(),
+                Options.Create(new EventStoreDbOptions()),
+                writeClient.Object,
+                CreateAdmissionFence(),
+                CreateGenerationResolver());
+
+            await sut.HandleAsync(
+                new[]
+                {
+                    ActivityEnvelope<PaymentOperationEvent>.Capture(legacy),
+                    ActivityEnvelope<PaymentOperationEvent>.Capture(replacement)
+                },
+                CancellationToken.None);
+
+            var exactLegacyStream = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(
+                legacy.Payload.GetMonthPeriodPaymentAccountIdentifier());
+            streams.Should().Contain(exactLegacyStream, "generation zero stream identities cannot be renamed");
+            streams.Should().HaveCount(2, "event identity and idempotency are isolated by ledger generation");
+            streams.Should().OnlyHaveUniqueItems();
+        }
+
         private static PaymentOperationEvent CreatePaymentEvent()
         {
             return new PaymentOperationEvent
@@ -122,6 +196,25 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Workers
                     OperationDay = new System.DateOnly(2025, 1, 2)
                 }
             };
+        }
+
+        private static IMaintenanceAdmissionFence CreateAdmissionFence()
+        {
+            var fence = new Mock<IMaintenanceAdmissionFence>();
+            fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Mock.Of<IMaintenanceAdmissionPermit>());
+            return fence.Object;
+        }
+
+        private static IActiveLedgerGenerationResolver CreateGenerationResolver()
+        {
+            var resolver = new Mock<IActiveLedgerGenerationResolver>();
+            resolver.Setup(service => service.GetActiveAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(LedgerGenerationScope.Legacy);
+            return resolver.Object;
         }
     }
 }

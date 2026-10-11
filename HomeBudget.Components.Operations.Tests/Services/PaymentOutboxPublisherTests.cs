@@ -15,6 +15,8 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Options;
@@ -139,6 +141,57 @@ namespace HomeBudget.Components.Operations.Tests.Services
             System.Text.Encoding.UTF8.GetString(messageIdBytes).Should().Be(row.MessageId);
         }
 
+        [Test]
+        public async Task PublishRetryableRowsAsync_WhenLedgerScopeIsPresent_ThenPublishesGenerationHeaders()
+        {
+            var row = BuildOutboxRow(OutboxStatus.Pending);
+            var paymentEvent = JsonSerializer.Deserialize<PaymentOperationEvent>(row.Payload);
+            paymentEvent!.Metadata["ledger-id"] = "default";
+            paymentEvent.Metadata["ledger-generation-id"] = "legacy";
+            row = row with { Payload = JsonSerializer.Serialize(paymentEvent) };
+            var dependencies = BuildDependencies([row]);
+            Message<string, string> publishedMessage = null;
+            dependencies.KafkaProducer
+                .Setup(x => x.ProduceAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Message<string, string>>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<string, Message<string, string>, CancellationToken>((_, message, _) => publishedMessage = message)
+                .ReturnsAsync(new DeliveryResult<string, string>());
+
+            await dependencies.BuildPublisher().PublishRetryableRowsAsync(CancellationToken.None);
+
+            publishedMessage.Headers.TryGetLastBytes("ledger-id", out var ledgerBytes).Should().BeTrue();
+            publishedMessage.Headers.TryGetLastBytes("ledger-generation-id", out var generationBytes).Should().BeTrue();
+            System.Text.Encoding.UTF8.GetString(ledgerBytes).Should().Be("default");
+            System.Text.Encoding.UTF8.GetString(generationBytes).Should().Be("legacy");
+        }
+
+        [Test]
+        public async Task PublishRetryableRowsAsync_WhenMaintenanceIsClosed_DoesNotLockOrPublishPendingRows()
+        {
+            var dependencies = BuildDependencies([BuildOutboxRow(OutboxStatus.Pending)]);
+            var fence = new Mock<IMaintenanceAdmissionFence>();
+            fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new MaintenanceAdmissionClosedException());
+
+            var act = () => dependencies.BuildPublisher(fence.Object)
+                .PublishRetryableRowsAsync(CancellationToken.None);
+
+            await act.Should().ThrowAsync<MaintenanceAdmissionClosedException>();
+            dependencies.Outbox.Verify(
+                service => service.LockRetryableRowsAsync(
+                It.IsAny<string>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<int>(),
+                It.IsAny<int>()), Times.Never);
+            dependencies.KafkaProducer.VerifyNoOtherCalls();
+        }
+
         private static OutboxPublisherDependencies BuildDependencies(IReadOnlyCollection<OutboxAccountPaymentsEntity> rows)
         {
             var nowUtc = new DateTime(2026, 05, 09, 12, 0, 0, DateTimeKind.Utc);
@@ -220,14 +273,30 @@ namespace HomeBudget.Components.Operations.Tests.Services
 
             public DateTime NowUtc { get; } = nowUtc;
 
-            public PaymentOutboxPublisher BuildPublisher()
+            public PaymentOutboxPublisher BuildPublisher(IMaintenanceAdmissionFence admissionFence = null)
             {
+                admissionFence ??= CreateOpenFence();
                 return new PaymentOutboxPublisher(
                     Mock.Of<ILogger<PaymentOutboxPublisher>>(),
                     Outbox.Object,
                     KafkaProducer.Object,
                     dateTimeProvider.Object,
-                    Microsoft.Extensions.Options.Options.Create(Options));
+                    Microsoft.Extensions.Options.Options.Create(Options),
+                    admissionFence,
+                    Mock.Of<IActiveLedgerGenerationResolver>(resolver =>
+                        resolver.GetActiveAsync(It.IsAny<CancellationToken>()) ==
+                        Task.FromResult(LedgerGenerationScope.Legacy)));
+            }
+
+            private static IMaintenanceAdmissionFence CreateOpenFence()
+            {
+                var fence = new Mock<IMaintenanceAdmissionFence>();
+                fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Mock.Of<IMaintenanceAdmissionPermit>());
+                return fence.Object;
             }
         }
     }

@@ -12,6 +12,7 @@ using OpenTelemetry.Trace;
 
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Infrastructure.Constants;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Telemetry;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Observability;
 
@@ -51,6 +52,7 @@ namespace HomeBudget.Accounting.Infrastructure.Extensions.OpenTelemetry
                     .AddMeter(MetersTags.HttpConnections)
                     .AddMeter(MetersTags.HealthChecks)
                     .AddMeter(TelemetryMetrics.Meter.Name)
+                    .AddMeter(DataProtectionTelemetry.MeterName)
                     .SetMaxMetricStreams(OpenTelemetryOptions.MaxMetricStreams)
                     .AddPrometheusExporter());
 

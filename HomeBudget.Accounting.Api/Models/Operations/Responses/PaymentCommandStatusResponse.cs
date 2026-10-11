@@ -5,6 +5,9 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Responses
     public record PaymentCommandStatusResponse
     {
         public string CommandId { get; init; }
+        public string LedgerId { get; init; }
+        public string LedgerGenerationId { get; init; }
+        public string GenerationToken { get; init; }
         public string PaymentOperationId { get; init; }
         public string CommandType { get; init; }
         public string Status { get; init; }

@@ -5,6 +5,8 @@ namespace HomeBudget.Components.Operations.Models
     public sealed record TransferCommandRecord
     {
         public Guid TransferId { get; init; }
+        public string LedgerId { get; init; } = "default";
+        public string LedgerGenerationId { get; init; } = "legacy";
         public string CommandId { get; init; }
         public string RequestFingerprint { get; init; }
         public Guid SenderAccountId { get; init; }
