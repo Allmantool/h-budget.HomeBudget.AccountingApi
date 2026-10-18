@@ -10,6 +10,8 @@ using NUnit.Framework;
 using HomeBudget.Accounting.Domain.Builders;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
@@ -68,7 +70,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 financialTransactionFactory.Object,
                 builder.Object,
                 Mock.Of<ITransferCommandStore>(),
-                Mock.Of<ITransferOutboxRegistrationFactory>());
+                Mock.Of<ITransferOutboxRegistrationFactory>(),
+                CreateGenerationResolver(),
+                Mock.Of<IMaintenanceAdmissionFence>());
 
             var result = await sut.ApplyAsync(
                 new CrossAccountsTransferPayload
@@ -109,7 +113,9 @@ namespace HomeBudget.Components.Operations.Tests.Services
                 Mock.Of<IFinancialTransactionFactory>(),
                 Mock.Of<ICrossAccountsTransferBuilder>(),
                 Mock.Of<ITransferCommandStore>(),
-                Mock.Of<ITransferOutboxRegistrationFactory>());
+                Mock.Of<ITransferOutboxRegistrationFactory>(),
+                CreateGenerationResolver(),
+                Mock.Of<IMaintenanceAdmissionFence>());
 
             var result = await sut.ApplyAsync(
                 new CrossAccountsTransferPayload
@@ -127,6 +133,82 @@ namespace HomeBudget.Components.Operations.Tests.Services
             result.StatusMessage.Should().Contain("same-currency");
         }
 
+        [Test]
+        public async Task ApplyIdempotentAsync_WhenMaintenanceAdmissionIsClosed_DoesNotRegisterTransfer()
+        {
+            var senderAccountId = Guid.NewGuid();
+            var recipientAccountId = Guid.NewGuid();
+            var financialTransactionFactory = new Mock<IFinancialTransactionFactory>();
+            financialTransactionFactory
+                .Setup(factory => factory.CreateTransfer(It.IsAny<Guid>(), It.IsAny<decimal>(), It.IsAny<DateOnly>()))
+                .Returns((Guid accountId, decimal amount, DateOnly operationDate) =>
+                    Result<FinancialTransaction>.Succeeded(new FinancialTransaction
+                    {
+                        Amount = amount,
+                        OperationDay = operationDate,
+                        PaymentAccountId = accountId
+                    }));
+            var builder = new Mock<ICrossAccountsTransferBuilder>();
+            builder.Setup(value => value.WithSender(It.IsAny<FinancialTransaction>())).Returns(builder.Object);
+            builder.Setup(value => value.WithRecipient(It.IsAny<FinancialTransaction>())).Returns(builder.Object);
+            builder.Setup(value => value.BuildAsync())
+                .ReturnsAsync(Result<CrossAccountsTransferOperation>.Succeeded(new CrossAccountsTransferOperation()));
+            var accounts = new Mock<IPaymentAccountDocumentClient>();
+            accounts.Setup(value => value.GetByIdAsync(senderAccountId.ToString()))
+                .ReturnsAsync(Result<PaymentAccountDocument>.Succeeded(CreateAccountDocument("USD")));
+            accounts.Setup(value => value.GetByIdAsync(recipientAccountId.ToString()))
+                .ReturnsAsync(Result<PaymentAccountDocument>.Succeeded(CreateAccountDocument("BYN")));
+            var commandStore = new Mock<ITransferCommandStore>();
+            commandStore.Setup(value => value.GetByIdempotencyKeyAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<LedgerGenerationScope>()))
+                .ReturnsAsync((TransferCommandRecord)null);
+            var registrationFactory = new Mock<ITransferOutboxRegistrationFactory>();
+            registrationFactory.Setup(value => value.Create(
+                    It.IsAny<CrossAccountsTransferOperation>(),
+                    It.IsAny<TransferCommandContext>(),
+                    It.IsAny<string>(),
+                    It.IsAny<LedgerGenerationScope>()))
+                .Returns(new TransferCommandRegistrationRequest());
+            var fence = new Mock<IMaintenanceAdmissionFence>();
+            fence.Setup(value => value.AcquireAdmissionPermitAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new MaintenanceAdmissionClosedException());
+            var sut = new CrossAccountsTransferService(
+                Mock.Of<ISender>(),
+                Mock.Of<IPaymentsHistoryDocumentsClient>(),
+                accounts.Object,
+                financialTransactionFactory.Object,
+                builder.Object,
+                commandStore.Object,
+                registrationFactory.Object,
+                CreateGenerationResolver(),
+                fence.Object);
+
+            var act = () => sut.ApplyIdempotentAsync(
+                new CrossAccountsTransferPayload
+                {
+                    Sender = senderAccountId,
+                    Recipient = recipientAccountId,
+                    SenderAmount = 15m,
+                    RecipientAmount = 45m,
+                    SenderCurrency = "USD",
+                    RecipientCurrency = "BYN",
+                    SourceReference = "maintenance-fence-test",
+                    OperationAt = new DateOnly(2026, 10, 5)
+                },
+                "transfer-idempotency-key",
+                "correlation-id",
+                CancellationToken.None);
+
+            await act.Should().ThrowAsync<MaintenanceAdmissionClosedException>();
+            commandStore.Verify(
+                value => value.RegisterAsync(It.IsAny<TransferCommandRegistrationRequest>()),
+                Times.Never);
+        }
+
         private static PaymentAccountDocument CreateAccountDocument(string currency)
         {
             return new PaymentAccountDocument
@@ -136,6 +218,14 @@ namespace HomeBudget.Components.Operations.Tests.Services
                     Currency = currency
                 }
             };
+        }
+
+        private static IActiveLedgerGenerationResolver CreateGenerationResolver()
+        {
+            var resolver = new Mock<IActiveLedgerGenerationResolver>();
+            resolver.Setup(service => service.GetActiveAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(LedgerGenerationScope.Legacy);
+            return resolver.Object;
         }
     }
 }

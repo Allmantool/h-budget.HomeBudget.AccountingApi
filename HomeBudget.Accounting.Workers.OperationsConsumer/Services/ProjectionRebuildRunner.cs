@@ -14,6 +14,7 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Clients;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Configuration;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Models;
@@ -31,7 +32,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
         IOptions<ProjectionRebuildOptions> rebuildOptions,
         IOptions<MongoDbOptions> mongoOptions,
         IOptions<EventStoreDbOptions> eventStoreOptions,
-        ILogger<ProjectionRebuildRunner> logger)
+        ILogger<ProjectionRebuildRunner> logger,
+        IActiveLedgerGenerationResolver generationResolver = null)
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
         {
@@ -57,6 +59,7 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
 
         private async Task CreateDryRunPlanAsync(CancellationToken cancellationToken)
         {
+            var generation = await ResolveActiveGenerationAsync(cancellationToken);
             var scopes = await historyClient.DiscoverProjectionScopesAsync(cancellationToken);
             EnsureBoundedScope(scopes.Count);
             var items = new List<ProjectionRebuildPlanItem>(scopes.Count);
@@ -80,7 +83,17 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
                 _mongoDatabase,
                 _eventStoreEndpoint,
                 DateTime.UtcNow,
-                items);
+                items)
+            {
+                EnvironmentId = generation.EnvironmentId,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                ExternalSideEffectsSuppressed = true
+            };
+            plan = plan with
+            {
+                InventoryFingerprint = ProjectionRebuildInventoryFingerprint.Compute(plan)
+            };
             var outputPath = Path.GetFullPath(_options.PlanOutputFile);
             await using (var output = new FileStream(
                 outputPath,
@@ -117,13 +130,83 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
                 throw new InvalidOperationException("Projection rebuild execution requires an immutable dry-run scope file.");
             }
 
-            var plan = JsonSerializer.Deserialize<ProjectionRebuildPlan>(
-                await File.ReadAllTextAsync(Path.GetFullPath(_options.ScopeFile), cancellationToken),
-                JsonOptions) ?? throw new InvalidOperationException("Projection rebuild scope file is empty or invalid.");
+            var plan = await LoadPlanAsync(cancellationToken);
+            ValidatePlanTarget(plan);
+            var activeGeneration = await ResolveActiveGenerationAsync(cancellationToken);
+            ValidatePlanGeneration(plan, activeGeneration);
+            EnsureBoundedScope(plan.Items.Count);
+            await ExecutePlanAsync(
+                plan,
+                activeGeneration,
+                static _ => Task.FromResult(true),
+                cancellationToken);
+            await ValidatePublishedScopesAsync(plan.Items, cancellationToken);
+
+            logger.LogInformation(
+                "Projection rebuild executed {ScopeCount} planned scopes for target {Target}.",
+                plan.Items.Count,
+                plan.Target);
+        }
+
+        internal async Task<ProjectionRebuildPlan> LoadManagedPlanAsync(CancellationToken cancellationToken)
+        {
+            ValidateBaseOptions();
+            EnsureExecutionGuards();
+            var plan = await LoadPlanAsync(cancellationToken);
             ValidatePlanTarget(plan);
             EnsureBoundedScope(plan.Items.Count);
+            if (!plan.ExternalSideEffectsSuppressed)
+            {
+                throw new InvalidOperationException(
+                    "Managed projection rebuild requires explicit external-side-effect suppression.");
+            }
+
+            var actualFingerprint = ProjectionRebuildInventoryFingerprint.Compute(plan);
+            if (!string.Equals(plan.InventoryFingerprint, actualFingerprint, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Projection rebuild scope inventory fingerprint does not match its contents.");
+            }
+
+            return plan;
+        }
+
+        internal async Task<bool> ExecuteManagedAsync(
+            ProjectionRebuildPlan plan,
+            LedgerGenerationScope expectedGeneration,
+            Func<CancellationToken, Task<bool>> continueExecution,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+            ArgumentNullException.ThrowIfNull(expectedGeneration);
+            ArgumentNullException.ThrowIfNull(continueExecution);
+            ValidatePlanGeneration(plan, expectedGeneration);
+            return await ExecutePlanAsync(plan, expectedGeneration, continueExecution, cancellationToken);
+        }
+
+        internal async Task ReconcileManagedAsync(
+            ProjectionRebuildPlan plan,
+            LedgerGenerationScope expectedGeneration,
+            CancellationToken cancellationToken)
+        {
+            ValidatePlanGeneration(plan, expectedGeneration);
+            await EnsureGenerationStillActiveAsync(expectedGeneration, cancellationToken);
+            await ValidatePublishedScopesAsync(plan.Items, cancellationToken);
+        }
+
+        private async Task<bool> ExecutePlanAsync(
+            ProjectionRebuildPlan plan,
+            LedgerGenerationScope expectedGeneration,
+            Func<CancellationToken, Task<bool>> continueExecution,
+            CancellationToken cancellationToken)
+        {
             foreach (var item in plan.Items)
             {
+                if (!await continueExecution(cancellationToken))
+                {
+                    return false;
+                }
+
+                await EnsureGenerationStillActiveAsync(expectedGeneration, cancellationToken);
                 if (item.PublishedRevision > item.ExpectedRevision)
                 {
                     throw new InvalidOperationException(
@@ -150,7 +233,10 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
                         {
                             StreamId = item.StreamId,
                             Revision = item.ExpectedRevision.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                        }),
+                        })
+                    {
+                        SuppressExternalSideEffects = true
+                    },
                     cancellationToken);
                 if (result?.IsSucceeded != true)
                 {
@@ -159,12 +245,14 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
                 }
             }
 
-            await ValidatePublishedScopesAsync(plan.Items, cancellationToken);
+            return await continueExecution(cancellationToken);
+        }
 
-            logger.LogInformation(
-                "Projection rebuild executed {ScopeCount} planned scopes for target {Target}.",
-                plan.Items.Count,
-                plan.Target);
+        private async Task<ProjectionRebuildPlan> LoadPlanAsync(CancellationToken cancellationToken)
+        {
+            return JsonSerializer.Deserialize<ProjectionRebuildPlan>(
+                await File.ReadAllTextAsync(Path.GetFullPath(_options.ScopeFile), cancellationToken),
+                JsonOptions) ?? throw new InvalidOperationException("Projection rebuild scope file is empty or invalid.");
         }
 
         private async Task<IReadOnlyList<PaymentOperationEvent>> ReadCompleteStreamAsync(
@@ -241,6 +329,64 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Services
             if (_options.MaxScopes <= 0)
             {
                 throw new InvalidOperationException("Projection rebuild MaxScopes must be positive.");
+            }
+        }
+
+        private void EnsureExecutionGuards()
+        {
+            if (!_options.OldWritersStopped)
+            {
+                throw new InvalidOperationException(
+                    "Projection rebuild execution requires explicit confirmation that old projection writers are stopped.");
+            }
+
+            if (!string.Equals(_options.ExpectedTarget, _options.ConfirmTarget, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Projection rebuild target confirmation does not match the expected target.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_options.ScopeFile))
+            {
+                throw new InvalidOperationException("Projection rebuild execution requires an immutable dry-run scope file.");
+            }
+        }
+
+        private async Task<LedgerGenerationScope> ResolveActiveGenerationAsync(CancellationToken cancellationToken)
+        {
+            return generationResolver is null
+                ? LedgerGenerationScope.Legacy
+                : await generationResolver.GetActiveAsync(cancellationToken);
+        }
+
+        private async Task EnsureGenerationStillActiveAsync(
+            LedgerGenerationScope expected,
+            CancellationToken cancellationToken)
+        {
+            var active = await ResolveActiveGenerationAsync(cancellationToken);
+            EnsureSameGeneration(expected, active);
+        }
+
+        private static void ValidatePlanGeneration(
+            ProjectionRebuildPlan plan,
+            LedgerGenerationScope expected)
+        {
+            if (!string.Equals(plan.EnvironmentId, expected.EnvironmentId, StringComparison.Ordinal) ||
+                !string.Equals(plan.LedgerId, expected.LedgerId, StringComparison.Ordinal) ||
+                !string.Equals(plan.LedgerGenerationId, expected.LedgerGenerationId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Projection rebuild plan does not match the exact ledger generation.");
+            }
+        }
+
+        private static void EnsureSameGeneration(LedgerGenerationScope expected, LedgerGenerationScope active)
+        {
+            if (!string.Equals(expected.EnvironmentId, active.EnvironmentId, StringComparison.Ordinal) ||
+                !string.Equals(expected.LedgerId, active.LedgerId, StringComparison.Ordinal) ||
+                !string.Equals(expected.LedgerGenerationId, active.LedgerGenerationId, StringComparison.Ordinal) ||
+                expected.GenerationNumber != active.GenerationNumber ||
+                !string.Equals(expected.GenerationTokenValue, active.GenerationTokenValue, StringComparison.Ordinal))
+            {
+                throw new LedgerGenerationChangedException();
             }
         }
 

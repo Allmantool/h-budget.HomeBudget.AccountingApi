@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Threading;
@@ -7,9 +8,11 @@ using System.Threading.Tasks;
 using AutoMapper;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Extensions;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
+using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Commands;
@@ -22,7 +25,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     internal abstract class BasePaymentCommandHandler(
         IMapper mapper,
         IDateTimeProvider dateTimeProvider,
-        IOutboxPaymentStatusService outboxPaymentStatusService)
+        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
     {
         protected async Task<Result<Guid>> HandleAsync<T>(
             T request,
@@ -32,6 +36,9 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             using var activity = Telemetry.ActivitySource.StartActivity(ActivityNames.Database.OutboxInsert, ActivityKind.Internal);
 
             var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
+            var expectedGeneration = (request as ILedgerGenerationBoundCommand)?.ExpectedGeneration;
+            var generation = expectedGeneration ?? await (activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
             if (paymentEvent.EnvelopId == Guid.Empty)
             {
                 paymentEvent.EnvelopId = Guid.NewGuid();
@@ -49,6 +56,8 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             paymentEvent.Metadata[EventMetadataKeys.CommandId] = messageId;
             paymentEvent.Metadata[EventMetadataKeys.CausationId] = causationId ?? string.Empty;
             paymentEvent.Metadata[EventMetadataKeys.SourceSystem] = PaymentOperationEventIdentity.DefaultSourceSystem;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerId] = generation.LedgerId;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerGenerationId] = generation.LedgerGenerationId;
 
             if (activity != null)
             {
@@ -81,6 +90,10 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
 
             var dbEntity = new OutboxAccountPaymentsEntity
             {
+                EnvironmentId = generation.EnvironmentId,
+                GenerationTokenValue = generation.GenerationTokenValue,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 EventType = paymentEvent.EventType.ToString(),
                 AggregateId = paymentAccountId.ToString(),
                 OperationId = paymentEvent.Payload.Key.ToString(),
@@ -148,6 +161,87 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
             activity?.SetStatus(ActivityStatusCode.Ok);
 
             return Result<Guid>.Succeeded(paymentEvent.Payload.Key);
+        }
+
+        protected async Task WriteTransferRecordsAsync<T>(
+            IEnumerable<T> requests,
+            CancellationToken cancellationToken)
+            where T : ICorrelatedCommand
+        {
+            var records = new List<OutboxAccountPaymentsEntity>(2);
+            foreach (var request in requests)
+            {
+                records.Add(await BuildOutboxRecordAsync(request, cancellationToken));
+            }
+
+            if (records.Count != 2)
+            {
+                throw new InvalidOperationException("A canonical transfer must contain exactly two payment sides.");
+            }
+
+            await outboxPaymentStatusService.WriteTransferRecordsAsync(records[0], records[1]);
+        }
+
+        private async Task<OutboxAccountPaymentsEntity> BuildOutboxRecordAsync<T>(
+            T request,
+            CancellationToken cancellationToken)
+            where T : ICorrelatedCommand
+        {
+            var paymentEvent = mapper.Map<PaymentOperationEvent>(request);
+            var expectedGeneration = (request as ILedgerGenerationBoundCommand)?.ExpectedGeneration;
+            var generation = expectedGeneration ?? await (activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy));
+            if (paymentEvent.EnvelopId == Guid.Empty)
+            {
+                paymentEvent.EnvelopId = Guid.NewGuid();
+            }
+
+            var payload = paymentEvent.Payload;
+            var createdAt = dateTimeProvider.GetNowUtc();
+            var messageId = paymentEvent.EnvelopId.ToString();
+            var activity = Activity.Current;
+            var causationId = activity?.SpanId.ToString();
+            var propagationCarrier = TraceContextPropagation.Capture(activity);
+
+            paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = request.CorrelationId;
+            paymentEvent.Metadata[EventMetadataKeys.MessageId] = messageId;
+            paymentEvent.Metadata[EventMetadataKeys.CommandId] = messageId;
+            paymentEvent.Metadata[EventMetadataKeys.CausationId] = causationId ?? string.Empty;
+            paymentEvent.Metadata[EventMetadataKeys.SourceSystem] = PaymentOperationEventIdentity.DefaultSourceSystem;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerId] = generation.LedgerId;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerGenerationId] = generation.LedgerGenerationId;
+
+            if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceParent, out var traceParent))
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceParent] = traceParent;
+            }
+
+            if (propagationCarrier.TryGetValue(TraceContextPropagation.TraceState, out var traceState))
+            {
+                paymentEvent.Metadata[EventMetadataKeys.TraceState] = traceState;
+            }
+
+            return new OutboxAccountPaymentsEntity
+            {
+                EnvironmentId = generation.EnvironmentId,
+                GenerationTokenValue = generation.GenerationTokenValue,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
+                EventType = paymentEvent.EventType.ToString(),
+                AggregateId = payload.PaymentAccountId.ToString(),
+                OperationId = payload.Key.ToString(),
+                PartitionKey = payload.GetPaymentAccountIdentifier(),
+                CorrelationId = request.CorrelationId,
+                MessageId = messageId,
+                CausationId = causationId,
+                TraceParent = paymentEvent.Metadata.Get(EventMetadataKeys.TraceParent),
+                TraceState = paymentEvent.Metadata.Get(EventMetadataKeys.TraceState),
+                Payload = JsonSerializer.Serialize(paymentEvent),
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt,
+                CreatedUtc = createdAt,
+                UpdatedUtc = createdAt
+            };
         }
     }
 }

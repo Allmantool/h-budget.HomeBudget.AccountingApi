@@ -38,6 +38,7 @@ services
     {
         o.Conventions.Add(new SwaggerControllerDocConvention());
         o.Filters.Add<ResultToHttpStatusFilter>();
+        o.Filters.Add<MaintenanceAdmissionActionFilter>();
     })
     .AddJsonOptions(configure =>
     {

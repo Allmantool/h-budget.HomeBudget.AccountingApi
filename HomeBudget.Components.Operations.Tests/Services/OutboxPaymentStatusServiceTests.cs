@@ -53,7 +53,7 @@ namespace HomeBudget.Components.Operations.Tests.Services
             await sut.WriteRecordAsync(BuildOutboxRow());
 
             capturedSql.Should().Contain("IF NOT EXISTS");
-            capturedSql.Should().Contain("WHERE MessageId = @MessageId");
+            capturedSql.Should().Contain("AND MessageId = @MessageId");
             dependencies.WriteRepository.Verify(
                 x => x.ExecuteAsync(
                     It.IsAny<string>(),
@@ -120,7 +120,43 @@ namespace HomeBudget.Components.Operations.Tests.Services
 
             capturedSql.Should().Contain("WITH (UPDLOCK, HOLDLOCK)");
             capturedSql.Should().Contain("IdempotencyKeyHash = @IdempotencyKeyHash");
+            capturedSql.Should().Contain("LedgerId = @LedgerId");
+            capturedSql.Should().Contain("LedgerGenerationId = @LedgerGenerationId");
+            capturedSql.Should().Contain("[HomeBudget.DataProtection].dbo.ActiveLedgerGenerations");
+            capturedSql.Should().Contain("GenerationToken = @GenerationTokenValue");
+            capturedSql.Should().Contain("THROW 51001");
             capturedSql.Should().Contain("WasAlreadyAccepted");
+        }
+
+        [Test]
+        public async Task WriteTransferRecordsAsync_WhenGenerationCanSwitch_ThenBothSidesUseOneGuardedTransaction()
+        {
+            var dependencies = BuildDependencies();
+            string capturedSql = null;
+            dependencies.ReadRepository
+                .Setup(x => x.SingleAsync<int>(It.IsAny<string>(), It.IsAny<object>()))
+                .Callback<string, object>((sql, _) => capturedSql = sql)
+                .ReturnsAsync(2);
+            var sut = dependencies.BuildService();
+
+            await sut.WriteTransferRecordsAsync(BuildOutboxRow(), BuildOutboxRow());
+
+            capturedSql.Should().Contain("BEGIN TRANSACTION");
+            capturedSql.Should().Contain("[HomeBudget.DataProtection].dbo.ActiveLedgerGenerations WITH (HOLDLOCK)");
+            capturedSql.Should().Contain("THROW 51001");
+            capturedSql.Should().Contain("@SenderMessageId");
+            capturedSql.Should().Contain("@RecipientMessageId");
+            capturedSql.IndexOf("ActiveLedgerGenerations", StringComparison.Ordinal)
+                .Should().BeLessThan(capturedSql.IndexOf("INSERT INTO dbo.OutboxAccountPayments", StringComparison.Ordinal));
+            capturedSql.LastIndexOf("COMMIT TRANSACTION", StringComparison.Ordinal)
+                .Should().BeGreaterThan(capturedSql.IndexOf("@RecipientMessageId", StringComparison.Ordinal));
+            dependencies.WriteRepository.Verify(
+                x => x.ExecuteAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<OutboxAccountPaymentsEntity>(),
+                    It.IsAny<IDbTransaction>()),
+                Times.Never,
+                "two independently committed child writes would permit a split-brain transfer");
         }
 
         private static OutboxStatusServiceDependencies BuildDependencies()

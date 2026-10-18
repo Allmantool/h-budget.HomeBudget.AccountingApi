@@ -1,4 +1,5 @@
 ﻿using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Components.Operations.Services.Interfaces
@@ -8,6 +9,7 @@ namespace HomeBudget.Components.Operations.Services.Interfaces
         TransferCommandRegistrationRequest Create(
             CrossAccountsTransferOperation transfer,
             TransferCommandContext context,
-            string correlationId);
+            string correlationId,
+            LedgerGenerationScope generation);
     }
 }

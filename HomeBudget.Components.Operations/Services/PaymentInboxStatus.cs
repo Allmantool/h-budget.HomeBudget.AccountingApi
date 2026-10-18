@@ -11,5 +11,7 @@
         public const string Poison = nameof(Poison);
 
         public const string ReplayRequested = nameof(ReplayRequested);
+
+        internal const string StaleGeneration = nameof(StaleGeneration);
     }
 }

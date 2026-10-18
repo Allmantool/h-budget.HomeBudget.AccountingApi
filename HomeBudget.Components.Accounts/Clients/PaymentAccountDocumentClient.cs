@@ -9,6 +9,7 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Accounts.Models;
 using HomeBudget.Core.Models;
@@ -16,7 +17,9 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Accounts.Clients
 {
-    internal class PaymentAccountDocumentClient(IOptions<MongoDbOptions> dbOptions)
+    internal class PaymentAccountDocumentClient(
+        IOptions<MongoDbOptions> dbOptions,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.LedgerDatabase),
         IPaymentAccountDocumentClient
     {
@@ -27,8 +30,8 @@ namespace HomeBudget.Components.Accounts.Clients
         public async Task<Result<IReadOnlyCollection<PaymentAccountDocument>>> GetAsync()
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(_ => true);
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(BuildScopeFilter(generation));
 
             return Result<IReadOnlyCollection<PaymentAccountDocument>>.Succeeded(await payload.ToListAsync());
         }
@@ -36,8 +39,10 @@ namespace HomeBudget.Components.Accounts.Clients
         public async Task<Result<PaymentAccountDocument>> GetByIdAsync(string paymentAccountId)
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
-
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, Guid.Parse(paymentAccountId));
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, Guid.Parse(paymentAccountId)));
 
             var payload = await targetCollection.FindAsync(filter);
 
@@ -47,9 +52,14 @@ namespace HomeBudget.Components.Accounts.Clients
         public async Task<Result<Guid>> InsertOneAsync(PaymentAccount payload)
         {
             var targetCollection = await GetPaymentAccountsCollectionAsync();
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, payload.Key);
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, payload.Key));
             var now = DateTime.UtcNow;
             var update = Builders<PaymentAccountDocument>.Update
+                .SetOnInsert(d => d.LedgerId, generation.LedgerId)
+                .SetOnInsert(d => d.LedgerGenerationId, generation.LedgerGenerationId)
                 .SetOnInsert(d => d.Payload, payload)
                 .SetOnInsert(d => d.CreatedUtc, now)
                 .SetOnInsert(d => d.UpdatedUtc, now);
@@ -81,11 +91,14 @@ namespace HomeBudget.Components.Accounts.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetPaymentAccountsCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             return await UpsertIdempotentAsync(
                 collection,
                 payload,
                 static account => account.Key,
                 context,
+                generation.LedgerId,
+                generation.LedgerGenerationId,
                 cancellationToken);
         }
 
@@ -94,8 +107,10 @@ namespace HomeBudget.Components.Accounts.Clients
             var targetCollection = await GetPaymentAccountsCollectionAsync();
 
             var paymentAccountIdForDelete = Guid.Parse(paymentAccountId);
-
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, paymentAccountIdForDelete);
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<PaymentAccountDocument>.Filter.Eq(d => d.Payload.Key, paymentAccountIdForDelete));
 
             await targetCollection.DeleteOneAsync(filter);
 
@@ -107,9 +122,12 @@ namespace HomeBudget.Components.Accounts.Clients
             var targetCollection = await GetPaymentAccountsCollectionAsync();
 
             var paymentAccountIdForUpdate = Guid.Parse(requestPaymentAccountGuid);
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(
-                document => document.Payload.Key,
-                paymentAccountIdForUpdate);
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<PaymentAccountDocument>.Filter.Eq(
+                    document => document.Payload.Key,
+                    paymentAccountIdForUpdate));
             var update = Builders<PaymentAccountDocument>.Update
                 .Set(document => document.Payload.Agent, paymentAccountForUpdate.Agent)
                 .Set(document => document.Payload.Currency, paymentAccountForUpdate.Currency)
@@ -135,7 +153,9 @@ namespace HomeBudget.Components.Accounts.Clients
             }
 
             var collection = await GetPaymentAccountsCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
                 Builders<PaymentAccountDocument>.Filter.Eq(document => document.Payload.Key, paymentAccountId),
                 Builders<PaymentAccountDocument>.Filter.Or(
                     Builders<PaymentAccountDocument>.Filter.Exists(
@@ -155,7 +175,9 @@ namespace HomeBudget.Components.Accounts.Clients
             }
 
             var existing = await collection
-                .Find(document => document.Payload.Key == paymentAccountId)
+                .Find(Builders<PaymentAccountDocument>.Filter.And(
+                    BuildScopeFilter(generation),
+                    Builders<PaymentAccountDocument>.Filter.Eq(document => document.Payload.Key, paymentAccountId)))
                 .SingleOrDefaultAsync(cancellationToken);
             return existing is not null && existing.PaymentHistoryProjectionFence >= projectionFence
                 ? Result<Guid>.Succeeded(paymentAccountId)
@@ -168,9 +190,12 @@ namespace HomeBudget.Components.Accounts.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetPaymentAccountsCollectionAsync();
-            var filter = Builders<PaymentAccountDocument>.Filter.Eq(
-                document => document.Payload.Key,
-                paymentAccountId);
+            var generation = await GetActiveGenerationAsync(cancellationToken);
+            var filter = Builders<PaymentAccountDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<PaymentAccountDocument>.Filter.Eq(
+                    document => document.Payload.Key,
+                    paymentAccountId));
             var update = Builders<PaymentAccountDocument>.Update
                 .Set(document => document.Payload.Balance, balance)
                 .Set(document => document.UpdatedUtc, DateTime.UtcNow);
@@ -187,12 +212,28 @@ namespace HomeBudget.Components.Accounts.Clients
         private async Task<IMongoCollection<PaymentAccountDocument>> GetPaymentAccountsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<PaymentAccountDocument>(LedgerDbCollections.PaymentAccounts);
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
 
-            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
+            await EnsureUniqueCompoundIndexAsync(collection, PayloadKeyIndexName, "LedgerId", "LedgerGenerationId", "Payload.Key");
             await EnsureNonUniqueIndexAsync(collection, "Payload.Type", TypeIndexName);
-            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
+            await EnsureUniqueScopedPartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
+        }
+
+        private static FilterDefinition<PaymentAccountDocument> BuildScopeFilter(LedgerGenerationScope generation)
+        {
+            return Builders<PaymentAccountDocument>.Filter.And(
+                Builders<PaymentAccountDocument>.Filter.Eq(document => document.LedgerId, generation.LedgerId),
+                Builders<PaymentAccountDocument>.Filter.Eq(
+                    document => document.LedgerGenerationId,
+                    generation.LedgerGenerationId));
+        }
+
+        private Task<LedgerGenerationScope> GetActiveGenerationAsync(CancellationToken cancellationToken = default)
+        {
+            return activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy);
         }
     }
 }

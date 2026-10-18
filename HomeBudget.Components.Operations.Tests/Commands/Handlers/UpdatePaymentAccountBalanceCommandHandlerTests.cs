@@ -61,5 +61,34 @@ namespace HomeBudget.Components.Operations.Tests.Commands.Handlers
                 publisher => publisher.PublishAsync(It.IsAny<PaymentAccountNotification>()),
                 Times.Once);
         }
+
+        [Test]
+        public async Task Handle_WhenManagedRebuildSuppressesExternalEffects_DoesNotPublishNotification()
+        {
+            var accountId = Guid.NewGuid();
+            var documentClient = new Mock<IPaymentAccountDocumentClient>();
+            documentClient.Setup(client => client.UpdateBalanceAsync(
+                    accountId,
+                    75m,
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Result<Guid>.Succeeded(accountId));
+            var notificationPublisher = new Mock<INotificationPublisher>();
+            var sut = new UpdatePaymentAccountBalanceCommandHandler(
+                documentClient.Object,
+                notificationPublisher.Object,
+                NullLogger<UpdatePaymentAccountBalanceCommandHandler>.Instance);
+
+            var result = await sut.Handle(
+                new UpdatePaymentAccountBalanceCommand(accountId, 75m)
+                {
+                    SuppressExternalSideEffects = true
+                },
+                CancellationToken.None);
+
+            result.IsSucceeded.Should().BeTrue();
+            notificationPublisher.Verify(
+                publisher => publisher.PublishAsync(It.IsAny<PaymentAccountNotification>()),
+                Times.Never);
+        }
     }
 }

@@ -11,7 +11,10 @@ using Microsoft.Extensions.Options;
 using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Workers.OperationsConsumer.Logs;
+using HomeBudget.Components.Operations;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Core.Constants;
 using HomeBudget.Core.Exstensions;
@@ -25,15 +28,21 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
         private readonly ILogger<PaymentOperationsDeliveryHandler> _logger;
         private readonly EventStoreDbOptions _options;
         private readonly IEventStoreDbWriteClient<PaymentOperationEvent> _eventStoreDbWriteClient;
+        private readonly IMaintenanceAdmissionFence _admissionFence;
+        private readonly IActiveLedgerGenerationResolver _generationResolver;
 
         public PaymentOperationsDeliveryHandler(
             ILogger<PaymentOperationsDeliveryHandler> logger,
             IOptions<EventStoreDbOptions> options,
-            IEventStoreDbWriteClient<PaymentOperationEvent> eventStoreDbWriteClient)
+            IEventStoreDbWriteClient<PaymentOperationEvent> eventStoreDbWriteClient,
+            IMaintenanceAdmissionFence admissionFence,
+            IActiveLedgerGenerationResolver generationResolver)
         {
             _logger = logger;
             _options = options.Value;
             _eventStoreDbWriteClient = eventStoreDbWriteClient;
+            _admissionFence = admissionFence;
+            _generationResolver = generationResolver;
         }
 
         public async Task HandleAsync(IEnumerable<ActivityEnvelope<PaymentOperationEvent>> paymentEvents, CancellationToken cancellationToken)
@@ -42,6 +51,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
             {
                 return;
             }
+
+            var generation = await _generationResolver.GetActiveAsync(cancellationToken).ConfigureAwait(false);
+            await using var admissionPermit = await _admissionFence.AcquireAdmissionPermitAsync(
+                MaintenanceScopeKey.ForLedger(generation),
+                generation.LedgerGenerationId,
+                cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -112,7 +127,8 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Handlers
         private static string GenerateStreamName(ActivityEnvelope<PaymentOperationEvent> paymentEvent)
         {
             var accountPerMonthIdentifier = paymentEvent.Item.Payload.GetMonthPeriodPaymentAccountIdentifier();
-            return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
+            var legacyStreamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
+            return LedgerGenerationStreamNameResolver.Resolve(paymentEvent.Item, legacyStreamName);
         }
 
         private static void StampTraceMetadata(IEnumerable<PaymentOperationEvent> paymentEvents, Activity activity)

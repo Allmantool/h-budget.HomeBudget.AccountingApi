@@ -279,12 +279,12 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
             var accounts = _ledgerDatabase.GetCollection<PaymentAccountDocument>(LedgerDbCollections.PaymentAccounts);
             var history = _historyDatabase.GetCollection<PaymentHistoryDocument>(historyCollectionName);
 
-            (await HasUniqueIndexAsync(categories, "Payload.Key")).Should().BeTrue();
-            (await HasUniqueIndexAsync(categories, "Payload.CategoryKey")).Should().BeTrue();
-            (await HasUniqueIndexAsync(contractors, "Payload.Key")).Should().BeTrue();
-            (await HasUniqueIndexAsync(contractors, "Payload.ContractorKey")).Should().BeTrue();
-            (await HasUniqueIndexAsync(accounts, "Payload.Key")).Should().BeTrue();
-            (await HasUniqueIndexAsync(history, "Payload.Record.Key")).Should().BeTrue();
+            (await HasUniqueIndexAsync(categories, "LedgerId", "LedgerGenerationId", "Payload.Key")).Should().BeTrue();
+            (await HasUniqueIndexAsync(categories, "LedgerId", "LedgerGenerationId", "Payload.CategoryKey")).Should().BeTrue();
+            (await HasUniqueIndexAsync(contractors, "LedgerId", "LedgerGenerationId", "Payload.Key")).Should().BeTrue();
+            (await HasUniqueIndexAsync(contractors, "LedgerId", "LedgerGenerationId", "Payload.ContractorKey")).Should().BeTrue();
+            (await HasUniqueIndexAsync(accounts, "LedgerId", "LedgerGenerationId", "Payload.Key")).Should().BeTrue();
+            (await HasUniqueIndexAsync(history, "LedgerId", "LedgerGenerationId", "Payload.Record.Key")).Should().BeTrue();
         }
 
         [Test]
@@ -507,15 +507,15 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Clients
 
         private static async Task<bool> HasUniqueIndexAsync<TDocument>(
             IMongoCollection<TDocument> collection,
-            string fieldPath)
+            params string[] fieldPaths)
         {
             var indexesCursor = await collection.Indexes.ListAsync();
             var indexes = await indexesCursor.ToListAsync();
 
             return indexes.Any(index =>
                 index.GetValue("unique", false).ToBoolean() &&
-                index.GetValue("key").AsBsonDocument.ElementCount == 1 &&
-                index.GetValue("key").AsBsonDocument.Contains(fieldPath));
+                index.GetValue("key").AsBsonDocument.ElementCount == fieldPaths.Length &&
+                fieldPaths.All(index.GetValue("key").AsBsonDocument.Contains));
         }
     }
 }

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:manifest",
+  "title": "Home Ledger portability manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "profile", "completeness", "exportId", "environmentId", "ledgerId", "sourceGeneration", "createdUtc", "commonCutoffUtc", "projectionWatermarkUtc", "attachments", "reconciliationEntry", "files"],
+  "properties": {
+    "format": { "const": "home-ledger-portability" },
+    "formatVersion": { "type": "string", "pattern": "^1\\.0\\.[0-9]+$" },
+    "profile": { "const": "business-state" },
+    "completeness": { "enum": ["full", "partial"] },
+    "exportId": { "$ref": "#/$defs/uuid" },
+    "environmentId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "ledgerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "sourceGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "number"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "number": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "createdUtc": { "$ref": "#/$defs/utc" },
+    "commonCutoffUtc": { "$ref": "#/$defs/utc" },
+    "projectionWatermarkUtc": { "$ref": "#/$defs/utc" },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "const": "unsupported-not-present" } }
+    },
+    "reconciliationEntry": { "const": "reconciliation.json" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "mediaType", "byteSize", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$", "maxLength": 512 },
+          "mediaType": { "enum": ["application/json", "application/x-ndjson", "text/markdown", "text/csv"] },
+          "schema": { "type": ["string", "null"], "pattern": "^schemas/[A-Za-z0-9._-]+\\.json$" },
+          "recordCount": { "type": "integer", "minimum": 0 },
+          "byteSize": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "utc": { "type": "string", "format": "date-time", "pattern": "Z$" }
+  }
+}

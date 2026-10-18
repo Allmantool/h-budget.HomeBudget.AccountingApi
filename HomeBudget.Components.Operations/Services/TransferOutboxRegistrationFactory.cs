@@ -8,6 +8,7 @@ using AutoMapper;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients;
 using HomeBudget.Components.Operations.Commands.Models;
@@ -25,7 +26,8 @@ namespace HomeBudget.Components.Operations.Services
         public TransferCommandRegistrationRequest Create(
             CrossAccountsTransferOperation transfer,
             TransferCommandContext context,
-            string correlationId)
+            string correlationId,
+            LedgerGenerationScope generation)
         {
             var operations = transfer.PaymentOperations.ToArray();
             var createdUtc = dateTimeProvider.GetNowUtc();
@@ -34,6 +36,10 @@ namespace HomeBudget.Components.Operations.Services
             var parentCommandId = Guid.NewGuid().ToString();
             return new TransferCommandRegistrationRequest
             {
+                EnvironmentId = generation.EnvironmentId,
+                GenerationTokenValue = generation.GenerationTokenValue,
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 TransferId = transfer.Key,
                 CommandId = parentCommandId,
                 IdempotencyKeyHash = context.IdempotencyKeyHash,
@@ -46,8 +52,10 @@ namespace HomeBudget.Components.Operations.Services
                 SenderCurrency = context.SenderCurrency,
                 RecipientCurrency = context.RecipientCurrency,
                 OperationDate = operations[0].OperationDay,
-                SenderOutbox = CreateOutbox(operations[0], senderCommandId, context, "sender", correlationId, createdUtc),
-                RecipientOutbox = CreateOutbox(operations[1], recipientCommandId, context, "recipient", correlationId, createdUtc)
+                SenderOutbox = CreateOutbox(
+                    operations[0], senderCommandId, context, "sender", correlationId, generation, createdUtc),
+                RecipientOutbox = CreateOutbox(
+                    operations[1], recipientCommandId, context, "recipient", correlationId, generation, createdUtc)
             };
         }
 
@@ -57,6 +65,7 @@ namespace HomeBudget.Components.Operations.Services
             TransferCommandContext context,
             string side,
             string correlationId,
+            LedgerGenerationScope generation,
             DateTime createdUtc)
         {
             var paymentEvent = mapper.Map<PaymentOperationEvent>(new AddPaymentOperationCommand(operation)
@@ -68,6 +77,8 @@ namespace HomeBudget.Components.Operations.Services
             paymentEvent.Metadata[EventMetadataKeys.MessageId] = commandId;
             paymentEvent.Metadata[EventMetadataKeys.CommandId] = commandId;
             paymentEvent.Metadata[EventMetadataKeys.SourceSystem] = PaymentOperationEventIdentity.DefaultSourceSystem;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerId] = generation.LedgerId;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerGenerationId] = generation.LedgerGenerationId;
 
             var activity = Activity.Current;
             var propagation = TraceContextPropagation.Capture(activity);
@@ -82,6 +93,8 @@ namespace HomeBudget.Components.Operations.Services
 
             return new OutboxAccountPaymentsEntity
             {
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 EventType = paymentEvent.EventType.ToString(),
                 AggregateId = operation.PaymentAccountId.ToString(),
                 OperationId = operation.Key.ToString(),

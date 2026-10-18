@@ -41,6 +41,11 @@ namespace HomeBudget.Components.Accounts.Commands.Handlers
                 return updateResult;
             }
 
+            if (request.SuppressExternalSideEffects)
+            {
+                return Result<Guid>.Succeeded(updateResult.Payload);
+            }
+
             try
             {
                 await notificationPublisher.PublishAsync(

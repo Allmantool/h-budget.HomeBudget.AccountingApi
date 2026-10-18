@@ -701,6 +701,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             firstResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(firstResponse));
             retryResponse.Data.IsSucceeded.Should().BeTrue(DescribeResponse(retryResponse));
             firstResponse.Data.Payload.IsDuplicate.Should().BeFalse();
+            firstResponse.Data.Payload.LedgerId.Should().Be("default");
+            firstResponse.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+            firstResponse.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+            firstResponse.Headers
+                .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                .Value?.ToString()
+                .Should().Be("\"legacy-token-v1\"");
             retryResponse.Data.Payload.IsDuplicate.Should().BeTrue();
             retryResponse.Data.Payload.CommandId.Should().Be(firstResponse.Data.Payload.CommandId);
             retryResponse.Data.Payload.PaymentOperationId.Should().Be(firstResponse.Data.Payload.PaymentOperationId);
@@ -721,6 +728,13 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             statusResponse.Data.Payload.PublishedAt.Should().NotBeNull();
             statusResponse.Data.Payload.PersistedAt.Should().NotBeNull();
             statusResponse.Data.Payload.ProjectedAt.Should().NotBeNull();
+            statusResponse.Data.Payload.LedgerId.Should().Be("default");
+            statusResponse.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+            statusResponse.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+            statusResponse.Headers
+                .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                .Value?.ToString()
+                .Should().Be("\"legacy-token-v1\"");
             records.Count(record => record.Record.Key == operationId).Should().Be(1);
         }
 
@@ -907,6 +921,40 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound, DescribeResponse(response));
             response.Data?.Payload.Should().BeNull();
+        }
+
+        [Test]
+        public async Task Create_WhenExpectedGenerationTokenIsStale_ShouldRejectBeforeCommandAcceptance()
+        {
+            var accountId = (await SavePaymentAccountAsync()).Payload;
+            var categoryId = (await SaveCategoryAsync(
+                CategoryTypes.Income,
+                nameof(Create_WhenExpectedGenerationTokenIsStale_ShouldRejectBeforeCommandAcceptance))).Payload;
+            var request = new RestRequest($"{ApiHost}/{accountId}", Method.Post)
+                .AddHeader("If-Match", "\"stale-ledger-generation\"")
+                .AddJsonBody(new CreateOperationRequest
+                {
+                    Amount = 15m,
+                    Comment = "must-not-be-accepted",
+                    CategoryId = categoryId,
+                    ContractorId = string.Empty,
+                    OperationDate = new DateOnly(2026, 10, 5)
+                });
+
+            var response = await _restClientAllowingHttpErrors.ExecuteAllowingHttpErrorAsync<Result<LedgerGenerationResponse>>(
+                request,
+                [HttpStatusCode.PreconditionFailed]);
+
+            response.StatusCode.Should().Be(
+                HttpStatusCode.PreconditionFailed,
+                "a command confirmed against an inactive generation must not enter the outbox");
+            response.Data.Payload.LedgerId.Should().Be("default");
+            response.Data.Payload.LedgerGenerationId.Should().Be("legacy");
+            response.Data.Payload.GenerationToken.Should().Be("\"legacy-token-v1\"");
+            response.Headers
+                .Single(header => header.Name.Equals("ETag", StringComparison.OrdinalIgnoreCase))
+                .Value?.ToString()
+                .Should().Be("\"legacy-token-v1\"");
         }
 
         [Test]

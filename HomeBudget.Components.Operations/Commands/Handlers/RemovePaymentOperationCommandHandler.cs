@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using MediatR;
 
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
 using HomeBudget.Components.Operations.Services.Interfaces;
@@ -15,11 +16,13 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
     internal class RemovePaymentOperationCommandHandler(
         IMapper mapper,
         IDateTimeProvider dateTimeProvider,
-        IOutboxPaymentStatusService outboxPaymentStatusService)
+        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : BasePaymentCommandHandler(
             mapper,
             dateTimeProvider,
-            outboxPaymentStatusService),
+            outboxPaymentStatusService,
+            activeGenerationResolver),
             IRequestHandler<RemovePaymentOperationCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(RemovePaymentOperationCommand command, CancellationToken cancellationToken)

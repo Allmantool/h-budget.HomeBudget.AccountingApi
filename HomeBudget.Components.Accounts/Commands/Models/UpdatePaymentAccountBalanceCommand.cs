@@ -17,5 +17,6 @@ namespace HomeBudget.Components.Accounts.Commands.Models
         public Guid PaymentAccountId { get; } = paymentAccountId;
         public decimal Balance { get; } = balance;
         public long ProjectionFence { get; } = projectionFence;
+        public bool SuppressExternalSideEffects { get; init; }
     }
 }

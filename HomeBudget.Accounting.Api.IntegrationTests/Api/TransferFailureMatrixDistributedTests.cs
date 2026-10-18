@@ -23,6 +23,7 @@ using HomeBudget.Accounting.Api.IntegrationTests.WebApps;
 using HomeBudget.Accounting.Api.Models.History;
 using HomeBudget.Accounting.Api.Models.Operations.Requests;
 using HomeBudget.Accounting.Api.Models.Operations.Responses;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Api.Models.PaymentAccount;
 using HomeBudget.Accounting.Api.Constants;
 using HomeBudget.Accounting.Domain.Enumerations;
@@ -482,13 +483,20 @@ namespace HomeBudget.Accounting.Api.IntegrationTests.Api
             public Task<TransferCommandRegistration> RegisterAsync(TransferCommandRegistrationRequest request) =>
                 Task.FromException<TransferCommandRegistration>(Unavailable());
 
-            public Task<TransferCommandRecord> GetByIdempotencyKeyAsync(string idempotencyKeyHash) =>
+            public Task<TransferCommandRecord> GetByIdempotencyKeyAsync(
+                string idempotencyKeyHash,
+                LedgerGenerationScope generation) =>
                 Task.FromException<TransferCommandRecord>(Unavailable());
 
-            public Task<TransferCommandRecord> GetAsync(Guid transferId, string commandId) =>
+            public Task<TransferCommandRecord> GetAsync(
+                Guid transferId,
+                string commandId,
+                LedgerGenerationScope generation) =>
                 Task.FromException<TransferCommandRecord>(Unavailable());
 
-            public Task<TransferCommandRecord> GetByTransferIdAsync(Guid transferId) =>
+            public Task<TransferCommandRecord> GetByTransferIdAsync(
+                Guid transferId,
+                LedgerGenerationScope generation) =>
                 Task.FromException<TransferCommandRecord>(Unavailable());
 
             private static Exception Unavailable() => new SimulatedSqlUnavailableException();

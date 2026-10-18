@@ -1,0 +1,58 @@
+{
+  "commonCutoffUtc": "2025-01-31T23:59:59Z",
+  "counts": {
+    "accounts": 2,
+    "currencies": 2,
+    "categories": 5,
+    "contractors": 3,
+    "settings": 1,
+    "operations": 6,
+    "openingBalances": 2,
+    "incomeOperations": 1,
+    "expenseOperations": 1,
+    "adjustmentOperations": 1,
+    "transferOperations": 1,
+    "splitLines": 2,
+    "rates": 1,
+    "lineage": 4
+  },
+  "accountBalances": [
+    {
+      "accountId": "40000000-0000-4000-8000-000000000001",
+      "currencyId": "10000000-0000-4000-8000-000000000001",
+      "balance": "3082.80"
+    },
+    {
+      "accountId": "40000000-0000-4000-8000-000000000002",
+      "currencyId": "10000000-0000-4000-8000-000000000002",
+      "balance": "190.00"
+    }
+  ],
+  "periodTotals": [
+    {
+      "accountId": "40000000-0000-4000-8000-000000000001",
+      "period": "2025-01",
+      "currencyId": "10000000-0000-4000-8000-000000000001",
+      "income": "2500.00",
+      "expense": "125.45",
+      "adjustmentCredit": "10.25",
+      "adjustmentDebit": "0",
+      "transferIn": "0",
+      "transferOut": "300.00",
+      "fees": "2.00"
+    },
+    {
+      "accountId": "40000000-0000-4000-8000-000000000002",
+      "period": "2025-01",
+      "currencyId": "10000000-0000-4000-8000-000000000002",
+      "income": "0",
+      "expense": "0",
+      "adjustmentCredit": "0",
+      "adjustmentDebit": "0",
+      "transferIn": "90.00",
+      "transferOut": "0",
+      "fees": "0"
+    }
+  ],
+  "operationIdentitySha256": "9e3304a252d8d3ba765c059c5a7da4cbfd8909867f242409f0897f79f7d6dac5"
+}

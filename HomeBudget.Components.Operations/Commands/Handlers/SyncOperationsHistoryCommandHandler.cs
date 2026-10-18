@@ -137,7 +137,10 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                                 new UpdatePaymentAccountBalanceCommand(
                                     accountId,
                                     finalBalance,
-                                    balanceSnapshot.Fence),
+                                    balanceSnapshot.Fence)
+                                {
+                                    SuppressExternalSideEffects = request.SuppressExternalSideEffects
+                                },
                                 cancellationToken);
                             if (updateResult?.IsSucceeded != true)
                             {
@@ -151,7 +154,11 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
                         logger,
                         new { PaymentAccountId = accountId });
 
-                    await MarkCommandsProjectedAsync(events);
+                    if (!request.SuppressExternalSideEffects)
+                    {
+                        await MarkCommandsProjectedAsync(events);
+                    }
+
                     await historyDocumentsClient.CompleteProjectionRunAsync(projectionRunId, "Succeeded");
 
                     activity?.SetStatus(ActivityStatusCode.Ok);

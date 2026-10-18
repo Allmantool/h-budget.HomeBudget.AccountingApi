@@ -56,7 +56,30 @@ namespace HomeBudget.Components.Operations.Tests.Commands
             order[^1].Should().Be("audit");
         }
 
-        private static HandlerDependencies BuildDependencies(List<string> order, bool balanceSucceeded)
+        [Test]
+        public async Task ManagedRebuild_SuppressesNotificationsAndCommandLifecycleEffects()
+        {
+            var order = new List<string>();
+            var dependencies = BuildDependencies(order, balanceSucceeded: true, suppressExternalSideEffects: true);
+            var handler = dependencies.CreateHandler();
+
+            var result = await handler.Handle(dependencies.Command, CancellationToken.None);
+
+            result.IsSucceeded.Should().BeTrue();
+            dependencies.Sender.Verify(
+                current => current.Send(
+                    It.Is<UpdatePaymentAccountBalanceCommand>(command => command.SuppressExternalSideEffects),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+            dependencies.Outbox.Verify(
+                service => service.MarkProjectedAsync(It.IsAny<string>(), It.IsAny<DateTime>()),
+                Times.Never);
+        }
+
+        private static HandlerDependencies BuildDependencies(
+            List<string> order,
+            bool balanceSucceeded,
+            bool suppressExternalSideEffects = false)
         {
             var accountId = Guid.NewGuid();
             var paymentEvent = new PaymentOperationEvent
@@ -108,7 +131,10 @@ namespace HomeBudget.Components.Operations.Tests.Commands
                 .Callback(() => order.Add("ack"))
                 .Returns(Task.CompletedTask);
             return new HandlerDependencies(
-                new SyncOperationsHistoryCommand(accountId, [paymentEvent]),
+                new SyncOperationsHistoryCommand(accountId, [paymentEvent])
+                {
+                    SuppressExternalSideEffects = suppressExternalSideEffects
+                },
                 sender,
                 accountService,
                 historyClient,

@@ -9,6 +9,8 @@ using Serilog.Context;
 
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Models;
 using HomeBudget.Components.Operations.Options;
@@ -23,12 +25,19 @@ namespace HomeBudget.Components.Operations.Services
         IOutboxPaymentStatusService outboxPaymentStatusService,
         IKafkaProducer<string, string> kafkaProducer,
         IDateTimeProvider dateTimeProvider,
-        IOptions<PaymentOutboxPublisherOptions> options)
+        IOptions<PaymentOutboxPublisherOptions> options,
+        IMaintenanceAdmissionFence admissionFence,
+        IActiveLedgerGenerationResolver generationResolver)
     {
         private readonly string _lockedBy = $"{Environment.MachineName}-{Guid.NewGuid():N}";
 
         public async Task<int> PublishRetryableRowsAsync(CancellationToken cancellationToken)
         {
+            var generation = await generationResolver.GetActiveAsync(cancellationToken).ConfigureAwait(false);
+            await using var permit = await admissionFence.AcquireAdmissionPermitAsync(
+                MaintenanceScopeKey.ForLedger(generation),
+                generation.LedgerGenerationId,
+                cancellationToken).ConfigureAwait(false);
             var publisherOptions = options.Value;
             var nowUtc = dateTimeProvider.GetNowUtc();
             var lockedRows = await outboxPaymentStatusService.LockRetryableRowsAsync(
@@ -134,6 +143,8 @@ namespace HomeBudget.Components.Operations.Services
             SetIfNotEmpty(paymentEvent, EventMetadataKeys.CausationId, row.CausationId);
             SetIfNotEmpty(paymentEvent, EventMetadataKeys.TraceParent, row.TraceParent);
             SetIfNotEmpty(paymentEvent, EventMetadataKeys.TraceState, row.TraceState);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.LedgerId, row.LedgerId);
+            SetIfNotEmpty(paymentEvent, EventMetadataKeys.LedgerGenerationId, row.LedgerGenerationId);
         }
 
         private static void SetIfNotEmpty(

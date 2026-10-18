@@ -21,6 +21,7 @@ using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Consumers;
 using HomeBudget.Components.Operations.Models;
@@ -37,6 +38,27 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
     [TestFixture]
     public class PaymentOperationsConsumerTests
     {
+        [Test]
+        public async Task ConsumeAsync_WhenMaintenanceIsClosed_DoesNotStartInboxOrAppendEvent()
+        {
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            var fence = new Mock<IMaintenanceAdmissionFence>();
+            fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new MaintenanceAdmissionClosedException());
+
+            var act = () => dependencies.BuildConsumer(fence.Object).ConsumeAsync(CancellationToken.None);
+
+            await act.Should().ThrowAsync<MaintenanceAdmissionClosedException>();
+            dependencies.Inbox.VerifyNoOtherCalls();
+            dependencies.EventStore.VerifyNoOtherCalls();
+            dependencies.KafkaConsumer.Verify(
+                consumer => consumer.Commit(It.IsAny<ConsumeResult<string, string>>()),
+                Times.Never);
+        }
+
         [Test]
         public async Task ConsumeAsync_WhenEventStoreAppendFails_ThenDoesNotCommitKafkaOffset()
         {
@@ -470,6 +492,116 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
             dependencies.KafkaConsumer.Verify(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()), Times.Once);
         }
 
+        [Test]
+        public async Task ConsumeAsync_WhenDeliveryTargetsStaleGeneration_ThenRecordsDispositionWithoutEventStoreEffectAndCommitsOffset()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var consumeResult = BuildConsumeResult(BuildPaymentEventJson());
+            consumeResult.Message.Headers.Add("ledger-id", Encoding.UTF8.GetBytes("default"));
+            consumeResult.Message.Headers.Add("ledger-generation-id", Encoding.UTF8.GetBytes("replacement"));
+            var dependencies = BuildDependencies(consumeResult);
+            PaymentInboxMessageEntity capturedInbox = null;
+            dependencies.Inbox
+                .Setup(x => x.StartProcessingAsync(It.IsAny<PaymentInboxMessageEntity>()))
+                .Callback<PaymentInboxMessageEntity>(message => capturedInbox = message)
+                .ReturnsAsync(new PaymentInboxStartResult
+                {
+                    MessageId = "message-42",
+                    Status = PaymentInboxStatus.Processing,
+                    ShouldProcess = true
+                });
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            dependencies.KafkaConsumer
+                .Setup(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()))
+                .Callback(cancellation.Cancel);
+
+            using var sut = dependencies.BuildConsumer();
+            await sut.ConsumeAsync(cancellation.Token);
+
+            dependencies.EventStore.Verify(
+                x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never,
+                "a delivery for a non-active generation must have no business effect");
+            dependencies.KafkaConsumer.Verify(
+                x => x.Commit(It.IsAny<ConsumeResult<string, string>>()),
+                Times.Once,
+                "a durable stale disposition must allow the offset to complete");
+            typeof(PaymentInboxStatus)
+                .GetField("StaleGeneration", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+                .Should().NotBeNull("the inbox requires a durable stale-generation disposition");
+            capturedInbox.GetType().GetProperty("LedgerGenerationId")
+                .Should().NotBeNull("the durable disposition must retain the rejected scope");
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenLegacyDeliveryHasNoScopeHeaders_ThenAdoptsDefaultLegacyScope()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var dependencies = BuildDependencies(BuildConsumeResult(BuildPaymentEventJson()));
+            PaymentOperationEvent appended = null;
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((events, _, _, _) =>
+                {
+                    appended = events.Single();
+                })
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            dependencies.KafkaConsumer
+                .Setup(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()))
+                .Callback(cancellation.Cancel);
+
+            using var sut = dependencies.BuildConsumer();
+            await sut.ConsumeAsync(cancellation.Token);
+
+            appended.Should().NotBeNull();
+            appended!.Metadata.Should().Contain("ledger-id", "default");
+            appended.Metadata.Should().Contain("ledger-generation-id", "legacy");
+        }
+
+        [Test]
+        public async Task ConsumeAsync_WhenActiveGenerationHeadersArePresent_ThenPreservesEventStoreMetadata()
+        {
+            using var cancellation = new CancellationTokenSource();
+            var consumeResult = BuildConsumeResult(BuildPaymentEventJson());
+            consumeResult.Message.Headers.Add("ledger-id", Encoding.UTF8.GetBytes("default"));
+            consumeResult.Message.Headers.Add("ledger-generation-id", Encoding.UTF8.GetBytes("legacy"));
+            var dependencies = BuildDependencies(consumeResult);
+            PaymentOperationEvent appended = null;
+            dependencies.EventStore
+                .Setup(x => x.SendBatchAsync(
+                    It.IsAny<IEnumerable<PaymentOperationEvent>>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>()))
+                .Callback<IEnumerable<PaymentOperationEvent>, string, string, CancellationToken>((events, _, _, _) =>
+                    appended = events.Single())
+                .ReturnsAsync(Mock.Of<IWriteResult>());
+            dependencies.KafkaConsumer
+                .Setup(x => x.Commit(It.IsAny<ConsumeResult<string, string>>()))
+                .Callback(cancellation.Cancel);
+
+            using var sut = dependencies.BuildConsumer();
+            await sut.ConsumeAsync(cancellation.Token);
+
+            appended.Should().NotBeNull();
+            appended!.Metadata.Should().Contain("ledger-id", "default");
+            appended.Metadata.Should().Contain("ledger-generation-id", "legacy");
+        }
+
         private static ConsumerDependencies BuildDependencies(ConsumeResult<string, string> consumeResult)
         {
             var kafkaConsumer = new Mock<IConsumer<string, string>>();
@@ -559,7 +691,7 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
 
             public Mock<IPaymentMessageInboxService> Inbox { get; } = inbox;
 
-            public PaymentOperationsConsumer BuildConsumer()
+            public PaymentOperationsConsumer BuildConsumer(IMaintenanceAdmissionFence admissionFence = null)
             {
                 var options = Microsoft.Extensions.Options.Options.Create(new KafkaOptions
                 {
@@ -571,6 +703,7 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                     }
                 });
 
+                admissionFence ??= CreateOpenFence();
                 return new PaymentOperationsConsumer(
                     Mock.Of<ILogger<PaymentOperationsConsumer>>(),
                     dateTimeProvider.Object,
@@ -581,7 +714,19 @@ namespace HomeBudget.Components.Operations.Tests.Consumers
                         MaxRetryAttempts = 5
                     }),
                     Inbox.Object,
-                    KafkaConsumer.Object);
+                    KafkaConsumer.Object,
+                    admissionFence);
+            }
+
+            private static IMaintenanceAdmissionFence CreateOpenFence()
+            {
+                var fence = new Mock<IMaintenanceAdmissionFence>();
+                fence.Setup(service => service.AcquireAdmissionPermitAsync(
+                        It.IsAny<string>(),
+                        It.IsAny<string>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(Mock.Of<IMaintenanceAdmissionPermit>());
+                return fence.Object;
             }
         }
     }

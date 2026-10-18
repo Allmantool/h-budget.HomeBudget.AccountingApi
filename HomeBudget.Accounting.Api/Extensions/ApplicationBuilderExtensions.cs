@@ -47,10 +47,11 @@ namespace HomeBudget.Accounting.Api.Extensions
                 .UseHsts()
                 .UseHttpsRedirection()
                 .UseResponseCaching()
+                .UseRouting()
+                .UseAuthentication()
                 .UseAuthorization()
                 .UseCustomCorrelationId()
                 .UseHeaderPropagation()
-                .UseRouting()
                 .UseSerilogRequestLogging(options =>
                 {
                     options.MessageTemplate = "Handled {RequestPath}";

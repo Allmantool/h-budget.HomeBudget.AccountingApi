@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Core.Options;
 
 namespace HomeBudget.Accounting.Infrastructure.Clients
@@ -81,6 +82,28 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(indexKeysDefinition, indexOptions));
         }
 
+        protected static async Task AdoptMissingLegacyScopeAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            LedgerGenerationScope generation)
+        {
+            ArgumentNullException.ThrowIfNull(collection);
+            ArgumentNullException.ThrowIfNull(generation);
+            if (generation.GenerationNumber != 0 ||
+                !string.Equals(generation.LedgerId, "default", StringComparison.Ordinal) ||
+                !string.Equals(generation.LedgerGenerationId, "legacy", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var missingScope = Builders<TDocument>.Filter.Or(
+                Builders<TDocument>.Filter.Exists("LedgerId", exists: false),
+                Builders<TDocument>.Filter.Exists("LedgerGenerationId", exists: false));
+            var legacyScope = Builders<TDocument>.Update
+                .Set("LedgerId", generation.LedgerId)
+                .Set("LedgerGenerationId", generation.LedgerGenerationId);
+            await collection.UpdateManyAsync(missingScope, legacyScope);
+        }
+
         protected static async Task EnsureNonUniqueIndexAsync<TDocument>(
             IMongoCollection<TDocument> collection,
             string fieldPath,
@@ -101,6 +124,35 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             };
 
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(indexKeysDefinition, indexOptions));
+        }
+
+        protected static async Task EnsureUniqueCompoundIndexAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            string indexName,
+            params string[] fieldPaths)
+        {
+            ArgumentNullException.ThrowIfNull(collection);
+            var existingIndexes = await collection.Indexes.List().ToListAsync();
+            if (existingIndexes.Any(index =>
+                index.GetValue("unique", false).ToBoolean()
+                && index.GetValue("key").AsBsonDocument.ElementCount == fieldPaths.Length
+                && fieldPaths.All(index.GetValue("key").AsBsonDocument.Contains)))
+            {
+                return;
+            }
+
+            await EnsureNoDuplicateCompoundValuesAsync(collection, fieldPaths, indexName);
+
+            if (existingIndexes.Any(index => HasName(index, indexName)))
+            {
+                await collection.Indexes.DropOneAsync(indexName);
+            }
+
+            var keys = Builders<TDocument>.IndexKeys.Combine(
+                fieldPaths.Select(fieldPath => Builders<TDocument>.IndexKeys.Ascending(fieldPath)));
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(
+                keys,
+                new CreateIndexOptions { Name = indexName, Unique = true }));
         }
 
         protected static async Task EnsureUniquePartialStringIndexAsync<TDocument>(
@@ -127,11 +179,45 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(key, options));
         }
 
+        protected static async Task EnsureUniqueScopedPartialStringIndexAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            string fieldPath,
+            string indexName)
+        {
+            ArgumentNullException.ThrowIfNull(collection);
+            var existingIndexes = await collection.Indexes.List().ToListAsync();
+            var fieldPaths = new[] { "LedgerId", "LedgerGenerationId", fieldPath };
+            if (existingIndexes.Any(index =>
+                index.GetValue("unique", false).ToBoolean()
+                && index.GetValue("key").AsBsonDocument.ElementCount == fieldPaths.Length
+                && fieldPaths.All(index.GetValue("key").AsBsonDocument.Contains)))
+            {
+                return;
+            }
+
+            if (existingIndexes.Any(index => HasName(index, indexName)))
+            {
+                await collection.Indexes.DropOneAsync(indexName);
+            }
+
+            var keys = Builders<TDocument>.IndexKeys.Combine(
+                fieldPaths.Select(field => Builders<TDocument>.IndexKeys.Ascending(field)));
+            var options = new CreateIndexOptions<TDocument>
+            {
+                Name = indexName,
+                Unique = true,
+                PartialFilterExpression = new BsonDocument(fieldPath, new BsonDocument("$type", "string"))
+            };
+            await collection.Indexes.CreateOneAsync(new CreateIndexModel<TDocument>(keys, options));
+        }
+
         protected static async Task<IdempotentDocumentWriteResult> UpsertIdempotentAsync<TDocument, TPayload>(
             IMongoCollection<TDocument> collection,
             TPayload payload,
             Func<TPayload, Guid> targetId,
             IdempotentDocumentWriteContext context,
+            string ledgerId,
+            string ledgerGenerationId,
             CancellationToken cancellationToken)
             where TDocument : DocumentEntity<TPayload>
             where TPayload : class
@@ -141,10 +227,15 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
             ArgumentNullException.ThrowIfNull(context);
 
             var now = DateTime.UtcNow;
-            var filter = Builders<TDocument>.Filter.Eq(
-                nameof(DocumentEntity<TPayload>.IdempotencyKeyHash),
-                context.IdempotencyKeyHash);
+            var filter = Builders<TDocument>.Filter.And(
+                Builders<TDocument>.Filter.Eq("LedgerId", ledgerId),
+                Builders<TDocument>.Filter.Eq("LedgerGenerationId", ledgerGenerationId),
+                Builders<TDocument>.Filter.Eq(
+                    nameof(DocumentEntity<TPayload>.IdempotencyKeyHash),
+                    context.IdempotencyKeyHash));
             var update = Builders<TDocument>.Update
+                .SetOnInsert("LedgerId", ledgerId)
+                .SetOnInsert("LedgerGenerationId", ledgerGenerationId)
                 .SetOnInsert(nameof(DocumentEntity<TPayload>.Payload), payload)
                 .SetOnInsert(nameof(DocumentEntity<TPayload>.CreatedUtc), now)
                 .SetOnInsert(nameof(DocumentEntity<TPayload>.UpdatedUtc), now)
@@ -238,6 +329,39 @@ namespace HomeBudget.Accounting.Infrastructure.Clients
                     collection.CollectionNamespace.CollectionName,
                     fieldPath,
                     string.Join("; ", duplicateDescriptions)));
+        }
+
+        private static async Task EnsureNoDuplicateCompoundValuesAsync<TDocument>(
+            IMongoCollection<TDocument> collection,
+            IReadOnlyCollection<string> fieldPaths,
+            string indexName)
+        {
+            var pipeline = new[]
+            {
+                new BsonDocument("$group", new BsonDocument
+                {
+                    { "_id", new BsonArray(fieldPaths.Select(path => "$" + path)) },
+                    { "count", new BsonDocument("$sum", 1) },
+                    { "ids", new BsonDocument("$push", "$_id") }
+                }),
+                new BsonDocument("$match", new BsonDocument("count", new BsonDocument("$gt", 1))),
+                new BsonDocument("$limit", 5)
+            };
+
+            var duplicates = await collection.Aggregate<BsonDocument>(pipeline).ToListAsync();
+            if (duplicates.Count == 0)
+            {
+                return;
+            }
+
+            throw new MongoDuplicateKeyDiagnosticException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Cannot create unique Mongo index '{0}' on collection '{1}' for fields '{2}' because duplicate values already exist: {3}. Clean or merge these documents before enabling the unique index.",
+                    indexName,
+                    collection.CollectionNamespace.CollectionName,
+                    string.Join(", ", fieldPaths),
+                    string.Join("; ", duplicates.Select(DescribeDuplicate))));
         }
 
         private static bool HasUniqueIndex(IEnumerable<BsonDocument> indexes, string fieldPath)

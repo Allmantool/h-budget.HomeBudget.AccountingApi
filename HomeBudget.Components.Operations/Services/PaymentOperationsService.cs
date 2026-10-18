@@ -8,6 +8,7 @@ using MediatR;
 using HomeBudget.Accounting.Domain.Enumerations;
 using HomeBudget.Accounting.Domain.Factories;
 using HomeBudget.Accounting.Domain.Models;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Accounts.Clients.Interfaces;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Contractors.Clients.Interfaces;
@@ -37,6 +38,16 @@ namespace HomeBudget.Components.Operations.Services
             Guid paymentAccountId,
             PaymentOperationPayload payload,
             PaymentCommandContext commandContext,
+            CancellationToken token)
+        {
+            return await CreateAsync(paymentAccountId, payload, commandContext, null, token);
+        }
+
+        public async Task<Result<Guid>> CreateAsync(
+            Guid paymentAccountId,
+            PaymentOperationPayload payload,
+            PaymentCommandContext commandContext,
+            LedgerGenerationScope expectedGeneration,
             CancellationToken token)
         {
             var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
@@ -69,7 +80,8 @@ namespace HomeBudget.Components.Operations.Services
             return await mediator.Send(
                 new AddPaymentOperationCommand(operationForAddResult.Payload)
             {
-                CommandContext = commandContext
+                CommandContext = commandContext,
+                ExpectedGeneration = expectedGeneration
             }, token);
         }
 
@@ -85,6 +97,16 @@ namespace HomeBudget.Components.Operations.Services
             Guid paymentAccountId,
             Guid operationId,
             PaymentCommandContext commandContext,
+            CancellationToken token)
+        {
+            return await RemoveAsync(paymentAccountId, operationId, commandContext, null, token);
+        }
+
+        public async Task<Result<Guid>> RemoveAsync(
+            Guid paymentAccountId,
+            Guid operationId,
+            PaymentCommandContext commandContext,
+            LedgerGenerationScope expectedGeneration,
             CancellationToken token)
         {
             var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
@@ -116,7 +138,8 @@ namespace HomeBudget.Components.Operations.Services
             return await mediator.Send(
                 new RemovePaymentOperationCommand(operationForDelete.Payload.Record)
                 {
-                    CommandContext = commandContext
+                    CommandContext = commandContext,
+                    ExpectedGeneration = expectedGeneration
                 },
                 token);
         }
@@ -135,6 +158,17 @@ namespace HomeBudget.Components.Operations.Services
             Guid operationId,
             PaymentOperationPayload payload,
             PaymentCommandContext commandContext,
+            CancellationToken token)
+        {
+            return await UpdateAsync(paymentAccountId, operationId, payload, commandContext, null, token);
+        }
+
+        public async Task<Result<Guid>> UpdateAsync(
+            Guid paymentAccountId,
+            Guid operationId,
+            PaymentOperationPayload payload,
+            PaymentCommandContext commandContext,
+            LedgerGenerationScope expectedGeneration,
             CancellationToken token)
         {
             var isPaymentAccountExist = await IsPaymentAccountExistAsync(paymentAccountId.ToString());
@@ -188,7 +222,8 @@ namespace HomeBudget.Components.Operations.Services
             return await mediator.Send(
                 new UpdatePaymentOperationCommand(operationForUpdate)
             {
-                CommandContext = commandContext
+                CommandContext = commandContext,
+                ExpectedGeneration = expectedGeneration
             }, token);
         }
 

@@ -6,6 +6,9 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Responses
     {
         public Guid TransferId { get; init; }
         public string CommandId { get; init; }
+        public string LedgerId { get; init; }
+        public string LedgerGenerationId { get; init; }
+        public string GenerationToken { get; init; }
         public string Status { get; init; }
         public Guid SenderAccountId { get; init; }
         public Guid RecipientAccountId { get; init; }

@@ -19,6 +19,8 @@ using HomeBudget.Accounting.Infrastructure.Clients.Interfaces;
 using HomeBudget.Accounting.Infrastructure.Constants;
 using HomeBudget.Accounting.Infrastructure.Consumers;
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Logs;
 using HomeBudget.Components.Operations.Models;
@@ -41,6 +43,8 @@ namespace HomeBudget.Components.Operations.Consumers
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IPaymentMessageInboxService _messageInboxService;
         private readonly PaymentInboxOptions _paymentInboxOptions;
+        private readonly IActiveLedgerGenerationResolver _activeGenerationResolver;
+        private readonly IMaintenanceAdmissionFence _admissionFence;
 
         public PaymentOperationsConsumer(
             ILogger<PaymentOperationsConsumer> logger,
@@ -65,7 +69,9 @@ namespace HomeBudget.Components.Operations.Consumers
             IOptions<KafkaOptions> kafkaOptions,
             IOptions<PaymentInboxOptions> paymentInboxOptions,
             IPaymentMessageInboxService messageInboxService,
-            IConsumer<string, string> consumer)
+            IConsumer<string, string> consumer,
+            IMaintenanceAdmissionFence admissionFence,
+            IActiveLedgerGenerationResolver activeGenerationResolver = null)
             : base(EnrichConsumerOptions(kafkaOptions.Value), logger, consumer)
         {
             _logger = logger;
@@ -73,6 +79,8 @@ namespace HomeBudget.Components.Operations.Consumers
             _eventStoreDbWriteClient = eventStoreDbWriteClient;
             _paymentInboxOptions = paymentInboxOptions?.Value ?? new PaymentInboxOptions();
             _messageInboxService = messageInboxService;
+            _activeGenerationResolver = activeGenerationResolver ?? new LegacyGenerationResolver();
+            _admissionFence = admissionFence;
         }
 
         private static KafkaOptions EnrichConsumerOptions(KafkaOptions options)
@@ -113,36 +121,60 @@ namespace HomeBudget.Components.Operations.Consumers
 
             if (_messageInboxService is not null)
             {
-                return await ProcessMessageAsync(payload, _messageInboxService, cancellationToken);
+                return await ProcessMessageAsync(
+                    payload,
+                    _messageInboxService,
+                    null,
+                    _activeGenerationResolver,
+                    _admissionFence,
+                    cancellationToken);
             }
 
             await using var scope = _serviceScopeFactory.CreateAsyncScope();
             var inboxService = scope.ServiceProvider.GetRequiredService<IPaymentMessageInboxService>();
 
             var outboxService = scope.ServiceProvider.GetRequiredService<IOutboxPaymentStatusService>();
-            return await ProcessMessageAsync(payload, inboxService, outboxService, cancellationToken);
-        }
-
-        private async Task<KafkaMessageProcessingOutcome> ProcessMessageAsync(
-            ConsumeResult<string, string> payload,
-            IPaymentMessageInboxService inboxService,
-            CancellationToken cancellationToken)
-        {
-            return await ProcessMessageAsync(payload, inboxService, null, cancellationToken);
+            var generationResolver = scope.ServiceProvider.GetRequiredService<IActiveLedgerGenerationResolver>();
+            var admissionFence = scope.ServiceProvider.GetRequiredService<IMaintenanceAdmissionFence>();
+            return await ProcessMessageAsync(
+                payload,
+                inboxService,
+                outboxService,
+                generationResolver,
+                admissionFence,
+                cancellationToken);
         }
 
         private async Task<KafkaMessageProcessingOutcome> ProcessMessageAsync(
             ConsumeResult<string, string> payload,
             IPaymentMessageInboxService inboxService,
             IOutboxPaymentStatusService outboxService,
+            IActiveLedgerGenerationResolver generationResolver,
+            IMaintenanceAdmissionFence admissionFence,
             CancellationToken cancellationToken)
         {
             var message = payload.Message;
             var nowUtc = _dateTimeProvider.GetNowUtc();
             var messageId = GetMessageId(payload);
+            var activeScope = await generationResolver.GetActiveAsync(cancellationToken);
+            var hasLedger = message.Headers.TryGetLastBytes(KafkaMessageHeaders.LedgerId, out var ledgerBytes);
+            var hasGeneration = message.Headers.TryGetLastBytes(KafkaMessageHeaders.LedgerGenerationId, out var generationBytes);
+            var incomingLedger = hasLedger ? Encoding.UTF8.GetString(ledgerBytes) : activeScope.LedgerId;
+            var incomingGeneration = hasGeneration ? Encoding.UTF8.GetString(generationBytes) : activeScope.LedgerGenerationId;
+            var missingScope = !hasLedger || !hasGeneration;
+            var staleGeneration = (missingScope && activeScope.GenerationNumber != 0)
+                || !string.Equals(incomingLedger, activeScope.LedgerId, StringComparison.Ordinal)
+                || !string.Equals(incomingGeneration, activeScope.LedgerGenerationId, StringComparison.Ordinal);
 
-            var processingDecision = await inboxService.StartProcessingAsync(new PaymentInboxMessageEntity
+            await using var admissionPermit = await admissionFence.AcquireAdmissionPermitAsync(
+                MaintenanceScopeKey.ForLedger(activeScope),
+                activeScope.LedgerGenerationId,
+                cancellationToken).ConfigureAwait(false);
+
+            var inboxMessage = new PaymentInboxMessageEntity
             {
+                LedgerId = incomingLedger,
+                LedgerGenerationId = incomingGeneration,
                 MessageId = messageId,
                 Topic = payload.Topic ?? string.Empty,
                 Partition = payload.Partition.Value,
@@ -151,11 +183,18 @@ namespace HomeBudget.Components.Operations.Consumers
                 CreatedUtc = nowUtc,
                 UpdatedUtc = nowUtc,
                 RawMessage = message.Value
-            });
+            };
+            var processingDecision = await inboxService.StartProcessingAsync(inboxMessage);
 
             if (!processingDecision.ShouldProcess)
             {
                 _logger.DuplicateMessageSkipped(messageId, processingDecision.Status);
+                return KafkaMessageProcessingOutcome.Duplicate;
+            }
+
+            if (staleGeneration)
+            {
+                await inboxService.MarkStaleGenerationAsync(inboxMessage, nowUtc);
                 return KafkaMessageProcessingOutcome.Duplicate;
             }
 
@@ -241,6 +280,8 @@ namespace HomeBudget.Components.Operations.Consumers
             }
 
             paymentEvent.Metadata[EventMetadataKeys.CorrelationId] = correlationId;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerId] = incomingLedger;
+            paymentEvent.Metadata[EventMetadataKeys.LedgerGenerationId] = incomingGeneration;
             if (!string.IsNullOrEmpty(traceId))
             {
                 paymentEvent.Metadata[EventMetadataKeys.TraceId] = traceId;
@@ -418,7 +459,8 @@ namespace HomeBudget.Components.Operations.Consumers
         private static string GenerateStreamName(PaymentOperationEvent paymentEvent)
         {
             var accountPerMonthIdentifier = paymentEvent.Payload.GetMonthPeriodPaymentAccountIdentifier();
-            return PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
+            var legacyStreamName = PaymentOperationNamesGenerator.GenerateForAccountMonthStream(accountPerMonthIdentifier);
+            return LedgerGenerationStreamNameResolver.Resolve(paymentEvent, legacyStreamName);
         }
 
         private static void StampTraceMetadata(PaymentOperationEvent paymentEvent, Activity activity)
@@ -450,6 +492,14 @@ namespace HomeBudget.Components.Operations.Consumers
             else
             {
                 paymentEvent.Metadata.Remove(EventMetadataKeys.Baggage);
+            }
+        }
+
+        private sealed class LegacyGenerationResolver : IActiveLedgerGenerationResolver
+        {
+            public Task<LedgerGenerationScope> GetActiveAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(LedgerGenerationScope.Legacy);
             }
         }
     }

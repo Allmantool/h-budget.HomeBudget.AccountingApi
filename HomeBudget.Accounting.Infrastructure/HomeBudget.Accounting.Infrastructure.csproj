@@ -10,6 +10,7 @@
     <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" />
     <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" />
     <PackageReference Include="EventStore.Client.Grpc.Streams" />
+    <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
@@ -50,11 +51,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\contracts\home-ledger-portability\v1\README.md"
+                      LogicalName="HomeBudget.Accounting.Portability.v1.README.md" />
+    <EmbeddedResource Include="..\contracts\home-ledger-portability\v1\entry-catalog.json"
+                      LogicalName="HomeBudget.Accounting.Portability.v1.entry-catalog.json" />
+    <EmbeddedResource Include="..\contracts\home-ledger-portability\v1\schemas\*.schema.json"
+                      LogicalName="HomeBudget.Accounting.Portability.v1.schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>$(AssemblyName).Tests</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>HomeBudget.Accounting.Api.IntegrationTests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>HomeBudget.Accounting.Api.Tests</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>HomeBudget.Components.Operations.Tests</_Parameter1>

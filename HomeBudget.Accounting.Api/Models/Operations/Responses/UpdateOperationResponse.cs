@@ -1,5 +1,6 @@
 ﻿using System;
 
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Operations.Models;
 
 namespace HomeBudget.Accounting.Api.Models.Operations.Responses
@@ -11,12 +12,16 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Responses
         public string CommandId { get; set; }
         public string Status { get; set; }
         public bool IsDuplicate { get; set; }
+        public string LedgerId { get; set; }
+        public string LedgerGenerationId { get; set; }
+        public string GenerationToken { get; set; }
 
         public static UpdateOperationResponse From(
             string paymentAccountId,
             string operationId,
             PaymentCommandRecord command,
-            bool isDuplicate)
+            bool isDuplicate,
+            LedgerGenerationScope generation)
         {
             return new UpdateOperationResponse
             {
@@ -24,7 +29,10 @@ namespace HomeBudget.Accounting.Api.Models.Operations.Responses
                 PaymentOperationId = command.PaymentOperationId == Guid.Empty ? operationId : command.PaymentOperationId.ToString(),
                 CommandId = command.CommandId,
                 Status = command.Status.ToString(),
-                IsDuplicate = isDuplicate
+                IsDuplicate = isDuplicate,
+                LedgerId = command.LedgerId,
+                LedgerGenerationId = command.LedgerGenerationId,
+                GenerationToken = generation.GenerationToken
             };
         }
     }

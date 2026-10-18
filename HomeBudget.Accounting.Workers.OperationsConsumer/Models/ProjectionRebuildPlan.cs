@@ -9,5 +9,12 @@ namespace HomeBudget.Accounting.Workers.OperationsConsumer.Models
         string MongoDatabase,
         string EventStoreEndpoint,
         DateTime CreatedUtc,
-        IReadOnlyList<ProjectionRebuildPlanItem> Items);
+        IReadOnlyList<ProjectionRebuildPlanItem> Items)
+    {
+        public string EnvironmentId { get; init; } = "default";
+        public string LedgerId { get; init; } = "default";
+        public string LedgerGenerationId { get; init; } = "legacy";
+        public bool ExternalSideEffectsSuppressed { get; init; }
+        public string InventoryFingerprint { get; init; }
+    }
 }

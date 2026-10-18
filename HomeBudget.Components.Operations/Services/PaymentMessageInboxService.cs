@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 using HomeBudget.Accounting.Infrastructure.Data.DbEntries;
 using HomeBudget.Accounting.Infrastructure.Data.Interfaces;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Operations.Services.Interfaces;
 using HomeBudget.Core.Observability;
 
@@ -14,7 +15,8 @@ namespace HomeBudget.Components.Operations.Services
     internal sealed class PaymentMessageInboxService(
         ILogger<PaymentMessageInboxService> logger,
         IBaseReadRepository cdcReader,
-        IBaseWriteRepository cdcWriter)
+        IBaseWriteRepository cdcWriter,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : IPaymentMessageInboxService
     {
         private const int LastErrorMaxLength = 500;
@@ -29,11 +31,15 @@ namespace HomeBudget.Components.Operations.Services
                 IF NOT EXISTS (
                     SELECT 1
                     FROM dbo.PaymentInboxMessages WITH (UPDLOCK, HOLDLOCK)
-                    WHERE MessageId = @MessageId
+                    WHERE LedgerId = @LedgerId
+                      AND LedgerGenerationId = @LedgerGenerationId
+                      AND MessageId = @MessageId
                 )
                 BEGIN
                     INSERT INTO dbo.PaymentInboxMessages
                     (
+                        LedgerId,
+                        LedgerGenerationId,
                         MessageId,
                         Topic,
                         Partition,
@@ -48,6 +54,8 @@ namespace HomeBudget.Components.Operations.Services
                     )
                     VALUES
                     (
+                        @LedgerId,
+                        @LedgerGenerationId,
                         @MessageId,
                         @Topic,
                         @Partition,
@@ -64,7 +72,9 @@ namespace HomeBudget.Components.Operations.Services
                 ELSE IF EXISTS (
                     SELECT 1
                     FROM dbo.PaymentInboxMessages WITH (UPDLOCK, HOLDLOCK)
-                    WHERE MessageId = @MessageId
+                    WHERE LedgerId = @LedgerId
+                      AND LedgerGenerationId = @LedgerGenerationId
+                      AND MessageId = @MessageId
                       AND Status NOT IN ('Processed', 'Poison')
                 )
                 BEGIN
@@ -74,7 +84,9 @@ namespace HomeBudget.Components.Operations.Services
                            RetryCount = CASE WHEN Status = 'ReplayRequested' THEN 0 ELSE RetryCount END,
                            LastError = CASE WHEN Status = 'ReplayRequested' THEN NULL ELSE LastError END,
                            ProcessedUtc = CASE WHEN Status = 'ReplayRequested' THEN NULL ELSE ProcessedUtc END
-                     WHERE MessageId = @MessageId;
+                     WHERE LedgerId = @LedgerId
+                       AND LedgerGenerationId = @LedgerGenerationId
+                       AND MessageId = @MessageId;
                 END
 
                 COMMIT TRANSACTION;
@@ -84,7 +96,9 @@ namespace HomeBudget.Components.Operations.Services
                        RetryCount,
                        CAST(CASE WHEN Status IN ('Processed', 'Poison') THEN 0 ELSE 1 END AS bit) AS ShouldProcess
                   FROM dbo.PaymentInboxMessages
-                 WHERE MessageId = @MessageId;";
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId;";
 
             var result = await cdcReader.SingleAsync<PaymentInboxStartResult>(
                 sql,
@@ -113,10 +127,15 @@ namespace HomeBudget.Components.Operations.Services
                        UpdatedUtc = @UpdatedUtc,
                        ProcessedUtc = COALESCE(ProcessedUtc, @UpdatedUtc),
                        LastError = NULL
-                 WHERE MessageId = @MessageId;";
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId;";
 
+            var generation = await GetActiveGenerationAsync();
             await cdcWriter.ExecuteAsync(sql, new PaymentInboxMessageUpdateEntity
             {
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 MessageId = messageId,
                 Status = PaymentInboxStatus.Processed,
                 UpdatedUtc = processedUtc
@@ -145,12 +164,17 @@ namespace HomeBudget.Components.Operations.Services
                 OUTPUT inserted.MessageId,
                        inserted.Status,
                        inserted.RetryCount
-                 WHERE MessageId = @MessageId;";
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId;";
 
+            var generation = await GetActiveGenerationAsync();
             var results = await cdcReader.GetAsync<PaymentInboxFailureResult>(
                 sql,
                 new PaymentInboxMessageUpdateEntity
                 {
+                    LedgerId = generation.LedgerId,
+                    LedgerGenerationId = generation.LedgerGenerationId,
                     MessageId = messageId,
                     LastError = Truncate(lastError, LastErrorMaxLength),
                     MaxRetryAttempts = maxRetryAttempts,
@@ -170,10 +194,15 @@ namespace HomeBudget.Components.Operations.Services
                    SET Status = @Status,
                        LastError = @LastError,
                        UpdatedUtc = @UpdatedUtc
-                 WHERE MessageId = @MessageId;";
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId;";
 
+            var generation = await GetActiveGenerationAsync();
             await cdcWriter.ExecuteAsync(sql, new PaymentInboxMessageUpdateEntity
             {
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 MessageId = messageId,
                 Status = PaymentInboxStatus.Poison,
                 LastError = Truncate(lastError, LastErrorMaxLength),
@@ -181,6 +210,28 @@ namespace HomeBudget.Components.Operations.Services
             });
 
             TelemetryMetrics.PaymentInboxStatusTransitions.Add(1, [new("status", PaymentInboxStatus.Poison)]);
+        }
+
+        public async Task MarkStaleGenerationAsync(PaymentInboxMessageEntity message, DateTime updatedUtc)
+        {
+            const string sql = @"
+                UPDATE dbo.PaymentInboxMessages
+                   SET Status = @Status,
+                       UpdatedUtc = @UpdatedUtc,
+                       ProcessedUtc = COALESCE(ProcessedUtc, @UpdatedUtc),
+                       LastError = NULL
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId;";
+
+            await cdcWriter.ExecuteAsync(sql, new PaymentInboxMessageUpdateEntity
+            {
+                LedgerId = message.LedgerId,
+                LedgerGenerationId = message.LedgerGenerationId,
+                MessageId = message.MessageId,
+                Status = PaymentInboxStatus.StaleGeneration,
+                UpdatedUtc = updatedUtc
+            });
         }
 
         public async Task RequestReplayAsync(string messageId, DateTime updatedUtc)
@@ -192,11 +243,16 @@ namespace HomeBudget.Components.Operations.Services
                        LastError = NULL,
                        ProcessedUtc = NULL,
                        UpdatedUtc = @UpdatedUtc
-                 WHERE MessageId = @MessageId
+                 WHERE LedgerId = @LedgerId
+                   AND LedgerGenerationId = @LedgerGenerationId
+                   AND MessageId = @MessageId
                    AND Status = 'Poison';";
 
+            var generation = await GetActiveGenerationAsync();
             await cdcWriter.ExecuteAsync(sql, new PaymentInboxMessageUpdateEntity
             {
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 MessageId = messageId,
                 Status = PaymentInboxStatus.ReplayRequested,
                 UpdatedUtc = updatedUtc
@@ -213,6 +269,12 @@ namespace HomeBudget.Components.Operations.Services
             }
 
             return value[..maxLength];
+        }
+
+        private Task<LedgerGenerationScope> GetActiveGenerationAsync()
+        {
+            return activeGenerationResolver?.GetActiveAsync()
+                ?? Task.FromResult(LedgerGenerationScope.Legacy);
         }
     }
 }

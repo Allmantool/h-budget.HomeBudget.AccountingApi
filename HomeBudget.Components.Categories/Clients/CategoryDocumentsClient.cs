@@ -10,6 +10,7 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Categories.Clients.Interfaces;
 using HomeBudget.Components.Categories.Models;
 using HomeBudget.Core.Models;
@@ -17,7 +18,9 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Categories.Clients
 {
-    internal class CategoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
+    internal class CategoryDocumentsClient(
+        IOptions<MongoDbOptions> dbOptions,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.HandBooks),
         ICategoryDocumentsClient
     {
@@ -28,8 +31,8 @@ namespace HomeBudget.Components.Categories.Clients
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetAsync()
         {
             var targetCollection = await GetCategoriesCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(_ => true);
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(BuildScopeFilter(generation));
 
             return Result<IReadOnlyCollection<CategoryDocument>>.Succeeded(await payload.ToListAsync());
         }
@@ -37,8 +40,10 @@ namespace HomeBudget.Components.Categories.Clients
         public async Task<Result<CategoryDocument>> GetByIdAsync(Guid contractorId)
         {
             var targetCollection = await GetCategoriesCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(Builders<CategoryDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<CategoryDocument>.Filter.Eq(document => document.Payload.Key, contractorId)));
 
             return Result<CategoryDocument>.Succeeded(await payload.SingleOrDefaultAsync());
         }
@@ -46,7 +51,10 @@ namespace HomeBudget.Components.Categories.Clients
         public async Task<Result<Guid>> InsertOneAsync(Category payload)
         {
             var targetCollection = await GetCategoriesCollectionAsync();
-            var filter = Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, payload.CategoryKey);
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<CategoryDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, payload.CategoryKey));
             var now = DateTime.UtcNow;
 
             try
@@ -58,6 +66,8 @@ namespace HomeBudget.Components.Categories.Clients
 
                 await targetCollection.InsertOneAsync(new CategoryDocument
                 {
+                    LedgerId = generation.LedgerId,
+                    LedgerGenerationId = generation.LedgerGenerationId,
                     Payload = payload,
                     CreatedUtc = now,
                     UpdatedUtc = now
@@ -77,19 +87,24 @@ namespace HomeBudget.Components.Categories.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetCategoriesCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             return await UpsertIdempotentAsync(
                 collection,
                 payload,
                 static category => category.Key,
                 context,
+                generation.LedgerId,
+                generation.LedgerGenerationId,
                 cancellationToken);
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
         {
-            var filter = Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, contractorKey);
-
             var targetCollection = await GetCategoriesCollectionAsync();
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<CategoryDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<CategoryDocument>.Filter.Eq(d => d.Payload.CategoryKey, contractorKey));
 
             var payload = await targetCollection.FindAsync(filter);
 
@@ -99,8 +114,10 @@ namespace HomeBudget.Components.Categories.Clients
         public async Task<Result<IReadOnlyCollection<CategoryDocument>>> GetByIdsAsync(IEnumerable<Guid> operationIds)
         {
             var targetCollection = await GetCategoriesCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(d => operationIds.Contains(d.Payload.Key));
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(Builders<CategoryDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<CategoryDocument>.Filter.In(document => document.Payload.Key, operationIds)));
 
             var categories = await payload.ToListAsync();
 
@@ -110,12 +127,28 @@ namespace HomeBudget.Components.Categories.Clients
         private async Task<IMongoCollection<CategoryDocument>> GetCategoriesCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<CategoryDocument>(LedgerDbCollections.Categories);
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
 
-            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
-            await EnsureUniqueIndexAsync(collection, "Payload.CategoryKey", CategoryKeyIndexName);
-            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
+            await EnsureUniqueCompoundIndexAsync(collection, PayloadKeyIndexName, "LedgerId", "LedgerGenerationId", "Payload.Key");
+            await EnsureUniqueCompoundIndexAsync(collection, CategoryKeyIndexName, "LedgerId", "LedgerGenerationId", "Payload.CategoryKey");
+            await EnsureUniqueScopedPartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
+        }
+
+        private static FilterDefinition<CategoryDocument> BuildScopeFilter(LedgerGenerationScope generation)
+        {
+            return Builders<CategoryDocument>.Filter.And(
+                Builders<CategoryDocument>.Filter.Eq(document => document.LedgerId, generation.LedgerId),
+                Builders<CategoryDocument>.Filter.Eq(
+                    document => document.LedgerGenerationId,
+                    generation.LedgerGenerationId));
+        }
+
+        private Task<LedgerGenerationScope> GetActiveGenerationAsync(CancellationToken cancellationToken = default)
+        {
+            return activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy);
         }
     }
 }

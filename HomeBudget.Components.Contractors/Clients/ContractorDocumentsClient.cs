@@ -9,6 +9,7 @@ using MongoDB.Driver;
 using HomeBudget.Accounting.Domain.Constants;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Contractors.Clients.Interfaces;
 using HomeBudget.Components.Contractors.Models;
 using HomeBudget.Core.Models;
@@ -16,7 +17,9 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Contractors.Clients
 {
-    internal class ContractorDocumentsClient(IOptions<MongoDbOptions> dbOptions) :
+    internal class ContractorDocumentsClient(
+        IOptions<MongoDbOptions> dbOptions,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null) :
         BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.HandBooks),
         IContractorDocumentsClient
     {
@@ -27,8 +30,8 @@ namespace HomeBudget.Components.Contractors.Clients
         public async Task<Result<IReadOnlyCollection<ContractorDocument>>> GetAsync()
         {
             var targetCollection = await GetContractorsCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(_ => true);
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(BuildScopeFilter(generation));
 
             return Result<IReadOnlyCollection<ContractorDocument>>.Succeeded(await payload.ToListAsync());
         }
@@ -36,17 +39,21 @@ namespace HomeBudget.Components.Contractors.Clients
         public async Task<Result<ContractorDocument>> GetByIdAsync(Guid contractorId)
         {
             var targetCollection = await GetContractorsCollectionAsync();
-
-            var payload = await targetCollection.FindAsync(d => d.Payload.Key.CompareTo(contractorId) == 0);
+            var generation = await GetActiveGenerationAsync();
+            var payload = await targetCollection.FindAsync(Builders<ContractorDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<ContractorDocument>.Filter.Eq(document => document.Payload.Key, contractorId)));
 
             return Result<ContractorDocument>.Succeeded(await payload.SingleOrDefaultAsync());
         }
 
         public async Task<bool> CheckIfExistsAsync(string contractorKey)
         {
-            var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, contractorKey);
-
             var targetCollection = await GetContractorsCollectionAsync();
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<ContractorDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, contractorKey));
 
             var payload = await targetCollection.FindAsync(filter);
 
@@ -56,7 +63,10 @@ namespace HomeBudget.Components.Contractors.Clients
         public async Task<Result<Guid>> InsertOneAsync(Contractor payload)
         {
             var targetCollection = await GetContractorsCollectionAsync();
-            var filter = Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, payload.ContractorKey);
+            var generation = await GetActiveGenerationAsync();
+            var filter = Builders<ContractorDocument>.Filter.And(
+                BuildScopeFilter(generation),
+                Builders<ContractorDocument>.Filter.Eq(d => d.Payload.ContractorKey, payload.ContractorKey));
             var now = DateTime.UtcNow;
 
             try
@@ -68,6 +78,8 @@ namespace HomeBudget.Components.Contractors.Clients
 
                 await targetCollection.InsertOneAsync(new ContractorDocument
                 {
+                    LedgerId = generation.LedgerId,
+                    LedgerGenerationId = generation.LedgerGenerationId,
                     Payload = payload,
                     CreatedUtc = now,
                     UpdatedUtc = now
@@ -87,23 +99,42 @@ namespace HomeBudget.Components.Contractors.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetContractorsCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             return await UpsertIdempotentAsync(
                 collection,
                 payload,
                 static contractor => contractor.Key,
                 context,
+                generation.LedgerId,
+                generation.LedgerGenerationId,
                 cancellationToken);
         }
 
         private async Task<IMongoCollection<ContractorDocument>> GetContractorsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<ContractorDocument>(LedgerDbCollections.Contractors);
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
 
-            await EnsureUniqueIndexAsync(collection, "Payload.Key", PayloadKeyIndexName);
-            await EnsureUniqueIndexAsync(collection, "Payload.ContractorKey", ContractorKeyIndexName);
-            await EnsureUniquePartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
+            await EnsureUniqueCompoundIndexAsync(collection, PayloadKeyIndexName, "LedgerId", "LedgerGenerationId", "Payload.Key");
+            await EnsureUniqueCompoundIndexAsync(collection, ContractorKeyIndexName, "LedgerId", "LedgerGenerationId", "Payload.ContractorKey");
+            await EnsureUniqueScopedPartialStringIndexAsync(collection, "IdempotencyKeyHash", IdempotencyIndexName);
 
             return collection;
+        }
+
+        private static FilterDefinition<ContractorDocument> BuildScopeFilter(LedgerGenerationScope generation)
+        {
+            return Builders<ContractorDocument>.Filter.And(
+                Builders<ContractorDocument>.Filter.Eq(document => document.LedgerId, generation.LedgerId),
+                Builders<ContractorDocument>.Filter.Eq(
+                    document => document.LedgerGenerationId,
+                    generation.LedgerGenerationId));
+        }
+
+        private Task<LedgerGenerationScope> GetActiveGenerationAsync(CancellationToken cancellationToken = default)
+        {
+            return activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy);
         }
     }
 }

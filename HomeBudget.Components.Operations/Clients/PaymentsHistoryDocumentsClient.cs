@@ -15,6 +15,7 @@ using HomeBudget.Accounting.Domain;
 using HomeBudget.Accounting.Domain.Extensions;
 using HomeBudget.Accounting.Domain.Models;
 using HomeBudget.Accounting.Infrastructure.Clients;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Extensions;
 using HomeBudget.Components.Operations.Models;
@@ -24,7 +25,9 @@ using HomeBudget.Core.Options;
 
 namespace HomeBudget.Components.Operations.Clients
 {
-    internal class PaymentsHistoryDocumentsClient(IOptions<MongoDbOptions> dbOptions)
+    internal class PaymentsHistoryDocumentsClient(
+        IOptions<MongoDbOptions> dbOptions,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
     : BaseDocumentClient(dbOptions?.Value, dbOptions?.Value?.PaymentsHistory), IPaymentsHistoryDocumentsClient
     {
         private const string ProjectionAuditCollectionName = "_projection_audit";
@@ -35,7 +38,7 @@ namespace HomeBudget.Components.Operations.Clients
         private const string ProjectionAuditRunIdIndexName = "ux_projection_audit_run_id";
         private const string ProjectionGenerationRecordIndexName = "ux_projection_generation_record";
         private const string ProjectionHeadPeriodIndexName = "ux_projection_head_period";
-        private const string ProjectionHeadAccountIndexName = "ix_projection_head_account";
+        private const string ProjectionHeadAccountIndexName = "ix_projection_head_account_scope";
         private const string ProjectionAccountIndexName = "ux_projection_account";
         private const string TimelineDateIndexName = "ix_payments_history_timeline_date_order";
         private const string TimelineAmountIndexName = "ix_payments_history_timeline_amount";
@@ -174,12 +177,17 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-
-                    var filter = Builders<PaymentHistoryDocument>
-                        .Filter.Eq(d => d.Payload.Record.Key, payload.Record.Key);
+                    var generation = await GetActiveGenerationAsync();
+                    var filter = Builders<PaymentHistoryDocument>.Filter.And(
+                        BuildScopeFilter<PaymentHistoryDocument>(generation),
+                        Builders<PaymentHistoryDocument>.Filter.Eq(
+                            document => document.Payload.Record.Key,
+                            payload.Record.Key));
 
                     var update = Builders<PaymentHistoryDocument>
                         .Update
+                        .SetOnInsert(document => document.LedgerId, generation.LedgerId)
+                        .SetOnInsert(document => document.LedgerGenerationId, generation.LedgerGenerationId)
                         .Set(d => d.Payload, payload)
                         .Set(d => d.UpdatedUtc, DateTime.UtcNow)
                         .SetOnInsert(d => d.CreatedUtc, DateTime.UtcNow);
@@ -204,12 +212,20 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
+                    var generation = await GetActiveGenerationAsync();
 
                     var bulkOps = records.Select(r =>
                         new UpdateOneModel<PaymentHistoryDocument>(
-                            Builders<PaymentHistoryDocument>.Filter
-                                .Eq(d => d.Payload.Record.Key, r.Record.Key),
+                            Builders<PaymentHistoryDocument>.Filter.And(
+                                BuildScopeFilter<PaymentHistoryDocument>(generation),
+                                Builders<PaymentHistoryDocument>.Filter.Eq(
+                                    document => document.Payload.Record.Key,
+                                    r.Record.Key)),
                             Builders<PaymentHistoryDocument>.Update
+                                .SetOnInsert(document => document.LedgerId, generation.LedgerId)
+                                .SetOnInsert(
+                                    document => document.LedgerGenerationId,
+                                    generation.LedgerGenerationId)
                                 .Set(d => d.Payload, r)
                                 .Set(d => d.UpdatedUtc, DateTime.UtcNow)
                                 .SetOnInsert(d => d.CreatedUtc, DateTime.UtcNow))
@@ -244,7 +260,8 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var targetCollection = await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier);
-                    await targetCollection.DeleteManyAsync(_ => true);
+                    var generation = await GetActiveGenerationAsync();
+                    await targetCollection.DeleteManyAsync(BuildScopeFilter<PaymentHistoryDocument>(generation));
                     return true;
                 });
         }
@@ -284,10 +301,11 @@ namespace HomeBudget.Components.Operations.Clients
             using var namesCursor = await MongoDatabase.ListCollectionNamesAsync(
                 cancellationToken: cancellationToken);
             var collectionNames = await namesCursor.ToListAsync(cancellationToken);
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             var heads = collectionNames.Contains(ProjectionHeadsCollectionName, StringComparer.Ordinal)
                 ? await MongoDatabase
                     .GetCollection<PaymentHistoryProjectionHeadDocument>(ProjectionHeadsCollectionName)
-                    .Find(FilterDefinition<PaymentHistoryProjectionHeadDocument>.Empty)
+                    .Find(BuildScopeFilter<PaymentHistoryProjectionHeadDocument>(generation))
                     .ToListAsync(cancellationToken)
                 : [];
             var scopes = heads.ToDictionary(
@@ -333,9 +351,11 @@ namespace HomeBudget.Components.Operations.Clients
             }
 
             var now = DateTime.UtcNow;
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             var writes = records.Select(record =>
                 new UpdateOneModel<PaymentHistoryDocument>(
                     Builders<PaymentHistoryDocument>.Filter.And(
+                        BuildScopeFilter<PaymentHistoryDocument>(generation),
                         Builders<PaymentHistoryDocument>.Filter.Eq(
                             document => document.GenerationId,
                             generationId),
@@ -343,6 +363,8 @@ namespace HomeBudget.Components.Operations.Clients
                             document => document.Payload.Record.Key,
                             record.Record.Key)),
                     Builders<PaymentHistoryDocument>.Update
+                        .SetOnInsert(document => document.LedgerId, generation.LedgerId)
+                        .SetOnInsert(document => document.LedgerGenerationId, generation.LedgerGenerationId)
                         .SetOnInsert(document => document.Payload, record)
                         .SetOnInsert(document => document.GenerationId, generationId)
                         .SetOnInsert(document => document.ProjectionRunId, projectionRunId)
@@ -379,8 +401,13 @@ namespace HomeBudget.Components.Operations.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetProjectionGenerationsCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             var documents = await collection
-                .Find(document => document.GenerationId == generationId)
+                .Find(Builders<PaymentHistoryDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryDocument>(generation),
+                    Builders<PaymentHistoryDocument>.Filter.Eq(
+                        document => document.GenerationId,
+                        generationId)))
                 .ToListAsync(cancellationToken);
             var records = documents
                 .Where(static document => document?.Payload?.Record != null)
@@ -404,10 +431,15 @@ namespace HomeBudget.Components.Operations.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetProjectionHeadsCollectionAsync();
+            var generation = await GetActiveGenerationAsync(cancellationToken);
             for (var attempt = 0; attempt < 5; attempt++)
             {
                 var current = await collection
-                    .Find(document => document.Payload.FinancialPeriodIdentifier == snapshot.FinancialPeriodIdentifier)
+                    .Find(Builders<PaymentHistoryProjectionHeadDocument>.Filter.And(
+                        BuildScopeFilter<PaymentHistoryProjectionHeadDocument>(generation),
+                        Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
+                            document => document.Payload.FinancialPeriodIdentifier,
+                            snapshot.FinancialPeriodIdentifier)))
                     .SingleOrDefaultAsync(cancellationToken);
                 var decision = DecidePublication(current?.Payload, snapshot, generationId);
                 if (decision is not null)
@@ -415,7 +447,7 @@ namespace HomeBudget.Components.Operations.Clients
                     return decision;
                 }
 
-                var replacement = BuildHeadDocument(current, snapshot, generationId);
+                var replacement = BuildHeadDocument(current, snapshot, generationId, generation);
                 if (current is null)
                 {
                     try
@@ -430,6 +462,7 @@ namespace HomeBudget.Components.Operations.Clients
                 }
 
                 var filter = Builders<PaymentHistoryProjectionHeadDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryProjectionHeadDocument>(generation),
                     Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(document => document.Id, current.Id),
                     Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
                         document => document.Payload.SourceRevision,
@@ -490,10 +523,13 @@ namespace HomeBudget.Components.Operations.Clients
         private static PaymentHistoryProjectionHeadDocument BuildHeadDocument(
             PaymentHistoryProjectionHeadDocument current,
             PaymentHistoryProjectionSnapshot snapshot,
-            string generationId)
+            string generationId,
+            LedgerGenerationScope generation)
         {
             return new PaymentHistoryProjectionHeadDocument
             {
+                LedgerId = generation.LedgerId,
+                LedgerGenerationId = generation.LedgerGenerationId,
                 Id = current?.Id ?? default,
                 CreatedUtc = current?.CreatedUtc ?? DateTime.UtcNow,
                 UpdatedUtc = DateTime.UtcNow,
@@ -518,10 +554,15 @@ namespace HomeBudget.Components.Operations.Clients
             CancellationToken cancellationToken)
         {
             var collection = await GetProjectionAccountsCollectionAsync();
-            var filter = Builders<PaymentHistoryProjectionAccountDocument>.Filter.Eq(
-                document => document.Payload.PaymentAccountId,
-                accountId);
+            var generation = await GetActiveGenerationAsync(cancellationToken);
+            var filter = Builders<PaymentHistoryProjectionAccountDocument>.Filter.And(
+                BuildScopeFilter<PaymentHistoryProjectionAccountDocument>(generation),
+                Builders<PaymentHistoryProjectionAccountDocument>.Filter.Eq(
+                    document => document.Payload.PaymentAccountId,
+                    accountId));
             var update = Builders<PaymentHistoryProjectionAccountDocument>.Update
+                .SetOnInsert(document => document.LedgerId, generation.LedgerId)
+                .SetOnInsert(document => document.LedgerGenerationId, generation.LedgerGenerationId)
                 .SetOnInsert(document => document.Payload.PaymentAccountId, accountId)
                 .SetOnInsert(document => document.CreatedUtc, DateTime.UtcNow)
                 .Set(document => document.UpdatedUtc, DateTime.UtcNow)
@@ -559,8 +600,11 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var collection = await GetProjectionAuditCollectionAsync();
+                    var generation = await GetActiveGenerationAsync();
                     await collection.InsertOneAsync(new ProjectionAuditDocument
                     {
+                        LedgerId = generation.LedgerId,
+                        LedgerGenerationId = generation.LedgerGenerationId,
                         Payload = auditRecord
                     });
 
@@ -578,9 +622,13 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var collection = await GetProjectionAuditCollectionAsync();
+                    var generation = await GetActiveGenerationAsync();
                     var now = DateTime.UtcNow;
-                    var filter = Builders<ProjectionAuditDocument>.Filter
-                        .Eq(document => document.Payload.ProjectionRunId, projectionRunId);
+                    var filter = Builders<ProjectionAuditDocument>.Filter.And(
+                        BuildScopeFilter<ProjectionAuditDocument>(generation),
+                        Builders<ProjectionAuditDocument>.Filter.Eq(
+                            document => document.Payload.ProjectionRunId,
+                            projectionRunId));
                     var update = Builders<ProjectionAuditDocument>.Update
                         .Set(document => document.Payload.Status, "Published")
                         .Set(document => document.Payload.PublicationState, publicationState)
@@ -605,9 +653,13 @@ namespace HomeBudget.Components.Operations.Clients
                 async () =>
                 {
                     var collection = await GetProjectionAuditCollectionAsync();
+                    var generation = await GetActiveGenerationAsync();
                     var now = DateTime.UtcNow;
-                    var filter = Builders<ProjectionAuditDocument>.Filter
-                        .Eq(d => d.Payload.ProjectionRunId, projectionRunId);
+                    var filter = Builders<ProjectionAuditDocument>.Filter.And(
+                        BuildScopeFilter<ProjectionAuditDocument>(generation),
+                        Builders<ProjectionAuditDocument>.Filter.Eq(
+                            document => document.Payload.ProjectionRunId,
+                            projectionRunId));
                     var update = Builders<ProjectionAuditDocument>.Update
                         .Set(d => d.Payload.Status, status)
                         .Set(d => d.Payload.Error, error)
@@ -632,13 +684,14 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IMongoCollection<PaymentHistoryDocument>> GetProjectionGenerationsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(ProjectionGenerationsCollectionName);
-            await EnsureNamedIndexAsync(
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
+            await EnsureUniqueCompoundIndexAsync(
                 collection,
                 ProjectionGenerationRecordIndexName,
-                Builders<PaymentHistoryDocument>.IndexKeys
-                    .Ascending(document => document.GenerationId)
-                    .Ascending(document => document.Payload.Record.Key),
-                unique: true);
+                "LedgerId",
+                "LedgerGenerationId",
+                "GenerationId",
+                "Payload.Record.Key");
             await EnsureTimelineIndexesAsync(collection);
             return collection;
         }
@@ -646,17 +699,20 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IMongoCollection<PaymentHistoryProjectionHeadDocument>> GetProjectionHeadsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryProjectionHeadDocument>(ProjectionHeadsCollectionName);
-            await EnsureNamedIndexAsync(
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
+            await EnsureUniqueCompoundIndexAsync(
                 collection,
                 ProjectionHeadPeriodIndexName,
-                Builders<PaymentHistoryProjectionHeadDocument>.IndexKeys.Ascending(
-                    document => document.Payload.FinancialPeriodIdentifier),
-                unique: true);
+                "LedgerId",
+                "LedgerGenerationId",
+                "Payload.FinancialPeriodIdentifier");
             await EnsureNamedIndexAsync(
                 collection,
                 ProjectionHeadAccountIndexName,
-                Builders<PaymentHistoryProjectionHeadDocument>.IndexKeys.Ascending(
-                    document => document.Payload.PaymentAccountId),
+                Builders<PaymentHistoryProjectionHeadDocument>.IndexKeys
+                    .Ascending(document => document.LedgerId)
+                    .Ascending(document => document.LedgerGenerationId)
+                    .Ascending(document => document.Payload.PaymentAccountId),
                 unique: false);
             return collection;
         }
@@ -664,12 +720,13 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IMongoCollection<PaymentHistoryProjectionAccountDocument>> GetProjectionAccountsCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryProjectionAccountDocument>(ProjectionAccountsCollectionName);
-            await EnsureNamedIndexAsync(
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
+            await EnsureUniqueCompoundIndexAsync(
                 collection,
                 ProjectionAccountIndexName,
-                Builders<PaymentHistoryProjectionAccountDocument>.IndexKeys.Ascending(
-                    document => document.Payload.PaymentAccountId),
-                unique: true);
+                "LedgerId",
+                "LedgerGenerationId",
+                "Payload.PaymentAccountId");
             return collection;
         }
 
@@ -704,8 +761,13 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IEnumerable<HistoryReadSource>> GetPaymentAccountReadSourcesAsync(Guid accountId)
         {
             var headsCollection = await GetProjectionHeadsCollectionAsync();
+            var generation = await GetActiveGenerationAsync();
             var heads = await headsCollection
-                .Find(document => document.Payload.PaymentAccountId == accountId)
+                .Find(Builders<PaymentHistoryProjectionHeadDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryProjectionHeadDocument>(generation),
+                    Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
+                        document => document.Payload.PaymentAccountId,
+                        accountId)))
                 .ToListAsync();
             var publishedPeriods = heads
                 .Select(static document => document.Payload.FinancialPeriodIdentifier)
@@ -721,9 +783,9 @@ namespace HomeBudget.Components.Operations.Clients
             await Task.WhenAll(legacyCollections.Select(EnsureTimelineIndexesAsync));
 
             var sources = legacyCollections
-                .Select(static collection => new HistoryReadSource(
+                .Select(collection => new HistoryReadSource(
                     collection,
-                    FilterDefinition<PaymentHistoryDocument>.Empty))
+                    BuildScopeFilter<PaymentHistoryDocument>(generation)))
                 .ToList();
             if (heads.Count == 0)
             {
@@ -733,9 +795,11 @@ namespace HomeBudget.Components.Operations.Clients
             var generations = await GetProjectionGenerationsCollectionAsync();
             sources.AddRange(heads.Select(head => new HistoryReadSource(
                 generations,
-                Builders<PaymentHistoryDocument>.Filter.Eq(
-                    document => document.GenerationId,
-                    head.Payload.GenerationId))));
+                Builders<PaymentHistoryDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryDocument>(generation),
+                    Builders<PaymentHistoryDocument>.Filter.Eq(
+                        document => document.GenerationId,
+                        head.Payload.GenerationId)))));
             return sources;
         }
 
@@ -743,27 +807,40 @@ namespace HomeBudget.Components.Operations.Clients
             string financialPeriodIdentifier)
         {
             var heads = await GetProjectionHeadsCollectionAsync();
+            var generation = await GetActiveGenerationAsync();
             var head = await heads
-                .Find(document => document.Payload.FinancialPeriodIdentifier == financialPeriodIdentifier)
+                .Find(Builders<PaymentHistoryProjectionHeadDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryProjectionHeadDocument>(generation),
+                    Builders<PaymentHistoryProjectionHeadDocument>.Filter.Eq(
+                        document => document.Payload.FinancialPeriodIdentifier,
+                        financialPeriodIdentifier)))
                 .SingleOrDefaultAsync();
             if (head is null)
             {
                 return new HistoryReadSource(
                     await GetPaymentAccountCollectionForPeriodAsync(financialPeriodIdentifier),
-                    FilterDefinition<PaymentHistoryDocument>.Empty);
+                    BuildScopeFilter<PaymentHistoryDocument>(generation));
             }
 
             return new HistoryReadSource(
                 await GetProjectionGenerationsCollectionAsync(),
-                Builders<PaymentHistoryDocument>.Filter.Eq(
-                    document => document.GenerationId,
-                    head.Payload.GenerationId));
+                Builders<PaymentHistoryDocument>.Filter.And(
+                    BuildScopeFilter<PaymentHistoryDocument>(generation),
+                    Builders<PaymentHistoryDocument>.Filter.Eq(
+                        document => document.GenerationId,
+                        head.Payload.GenerationId)));
         }
 
         private async Task<IMongoCollection<PaymentHistoryDocument>> GetPaymentAccountCollectionForPeriodAsync(string financialPeriodIdentifier)
         {
             var collection = MongoDatabase.GetCollection<PaymentHistoryDocument>(financialPeriodIdentifier);
-            await EnsureUniqueIndexAsync(collection, "Payload.Record.Key", "ux_payments_history_record_key");
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
+            await EnsureUniqueCompoundIndexAsync(
+                collection,
+                "ux_payments_history_record_key",
+                "LedgerId",
+                "LedgerGenerationId",
+                "Payload.Record.Key");
             await EnsureNonUniqueIndexAsync(collection, "ProjectionRunId", ProjectionRunIdIndexName);
             await EnsureTimelineIndexesAsync(collection);
 
@@ -773,7 +850,13 @@ namespace HomeBudget.Components.Operations.Clients
         private async Task<IMongoCollection<ProjectionAuditDocument>> GetProjectionAuditCollectionAsync()
         {
             var collection = MongoDatabase.GetCollection<ProjectionAuditDocument>(ProjectionAuditCollectionName);
-            await EnsureUniqueIndexAsync(collection, "Payload.ProjectionRunId", ProjectionAuditRunIdIndexName);
+            await AdoptMissingLegacyScopeAsync(collection, await GetActiveGenerationAsync());
+            await EnsureUniqueCompoundIndexAsync(
+                collection,
+                ProjectionAuditRunIdIndexName,
+                "LedgerId",
+                "LedgerGenerationId",
+                "Payload.ProjectionRunId");
 
             return collection;
         }
@@ -1001,6 +1084,19 @@ namespace HomeBudget.Components.Operations.Clients
                     ? revisionComparison
                     : leftRecord.Key.CompareTo(rightRecord.Key);
             }
+        }
+
+        private static FilterDefinition<TDocument> BuildScopeFilter<TDocument>(LedgerGenerationScope generation)
+        {
+            return Builders<TDocument>.Filter.And(
+                Builders<TDocument>.Filter.Eq("LedgerId", generation.LedgerId),
+                Builders<TDocument>.Filter.Eq("LedgerGenerationId", generation.LedgerGenerationId));
+        }
+
+        private Task<LedgerGenerationScope> GetActiveGenerationAsync(CancellationToken cancellationToken = default)
+        {
+            return activeGenerationResolver?.GetActiveAsync(cancellationToken)
+                ?? Task.FromResult(LedgerGenerationScope.Legacy);
         }
 
         private sealed record HistoryReadSource(

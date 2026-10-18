@@ -6,6 +6,12 @@ namespace HomeBudget.Components.Operations.Models
     {
         public string CommandId { get; init; }
 
+        public string LedgerId { get; init; }
+
+        public string LedgerGenerationId { get; init; }
+
+        public string GenerationToken { get; init; }
+
         public Guid PaymentAccountId { get; init; }
 
         public Guid PaymentOperationId { get; init; }

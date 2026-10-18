@@ -6,6 +6,7 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 
+using HomeBudget.Accounting.Api.Security;
 using HomeBudget.Accounting.Domain.Configuration;
 using HomeBudget.Accounting.Infrastructure.Configuration;
 using HomeBudget.Accounting.Notifications.Configuration;
@@ -38,7 +39,8 @@ namespace HomeBudget.Accounting.Api.Configuration
                 .RegisterCategoriesDependencies()
                 .RegisterInfrastructureDependencies(configuration)
                 .RegisterCommandHandlers()
-                .AddNotifications();
+                .AddNotifications()
+                .AddDataProtectionSecurity(configuration, webHostEnvironment);
         }
 
         private static IServiceCollection RegisterCommandHandlers(this IServiceCollection services)
@@ -49,6 +51,10 @@ namespace HomeBudget.Accounting.Api.Configuration
                     configuration.RegisterServicesFromAssembly(typeof(Components.Operations.Configuration.DependencyRegistrations).Assembly);
                     configuration.RegisterServicesFromAssembly(typeof(Components.Accounts.Configuration.DependencyRegistrations).Assembly);
 
+                    configuration.AddBehavior(
+                        typeof(IPipelineBehavior<,>),
+                        typeof(MaintenanceAdmissionBehavior<,>)
+                    );
                     configuration.AddBehavior(
                         typeof(IPipelineBehavior<,>),
                         typeof(CorrelationIdBehavior<,>)

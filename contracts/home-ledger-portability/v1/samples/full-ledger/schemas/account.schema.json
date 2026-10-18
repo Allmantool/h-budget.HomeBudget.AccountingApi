@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:home-ledger:portability:v1:account",
+  "title": "Home Ledger account v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "accountType", "currencyId", "openingBalanceOperationId", "openedOn", "archived", "archivedUtc", "legacyReference"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "accountType": { "enum": ["cash", "bank", "card", "savings", "other"] },
+    "currencyId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "openingBalanceOperationId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "openedOn": { "type": "string", "format": "date" },
+    "archived": { "type": "boolean" },
+    "archivedUtc": { "type": ["string", "null"], "format": "date-time", "pattern": "Z$" },
+    "legacyReference": { "type": ["string", "null"], "maxLength": 500 }
+  }
+}

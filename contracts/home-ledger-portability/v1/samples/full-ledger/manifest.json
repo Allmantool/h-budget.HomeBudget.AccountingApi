@@ -1,0 +1,42 @@
+{
+  "format": "home-ledger-portability",
+  "formatVersion": "1.0.0",
+  "profile": "business-state",
+  "completeness": "full",
+  "exportId": "a0000000-0000-4000-8000-000000000001",
+  "environmentId": "synthetic-test",
+  "ledgerId": "default",
+  "sourceGeneration": {
+    "id": "legacy",
+    "number": 0
+  },
+  "createdUtc": "2025-02-01T00:00:00Z",
+  "commonCutoffUtc": "2025-01-31T23:59:59Z",
+  "projectionWatermarkUtc": "2025-01-31T23:59:59Z",
+  "attachments": {
+    "status": "unsupported-not-present"
+  },
+  "reconciliationEntry": "reconciliation.json",
+  "files": [
+    { "path": "README.md", "mediaType": "text/markdown", "byteSize": 1306, "sha256": "c28b4de2c7543b33fe6da42c238a626ad1cdcf030a09ebf5ee374238ef4da417" },
+    { "path": "accounts.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/account.schema.json", "recordCount": 2, "byteSize": 640, "sha256": "4dc970a09ea860d22938fadda67399c67f7a0d8d010b1da6a3accf3b24a69227" },
+    { "path": "categories.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/category.schema.json", "recordCount": 5, "byteSize": 953, "sha256": "83669209d5371e72475c650f348c0d3221a8f2fd75a23a3db60e18f3d650804e" },
+    { "path": "contractors.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/contractor.schema.json", "recordCount": 3, "byteSize": 462, "sha256": "7b550e43affde57efae9e6707830526d6f34ab722ee2e312c30ee2d368b31fe9" },
+    { "path": "currencies.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/currency.schema.json", "recordCount": 2, "byteSize": 225, "sha256": "fa34c3dcece3b2d8dbaf3a3c0e0577c4e4728d9a96f6288b8893bd85fd99e30b" },
+    { "path": "lineage.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/lineage.schema.json", "recordCount": 4, "byteSize": 1282, "sha256": "e3485fa683dd0687c5a784ce62ec97644aeb5dae6afe56b611d23b73ddec5566" },
+    { "path": "operations.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/operation.schema.json", "recordCount": 6, "byteSize": 3726, "sha256": "7724476ebb31a4fbf4cc16403b464add982594fbe222bdfebcf200f193a8826b" },
+    { "path": "rates.jsonl", "mediaType": "application/x-ndjson", "schema": "schemas/rate.schema.json", "recordCount": 1, "byteSize": 270, "sha256": "54abcf92b7df5002375826454ea855ca3ebba89aef993955e00dee2b6e079fe5" },
+    { "path": "reconciliation.json", "mediaType": "application/json", "schema": "schemas/reconciliation.schema.json", "byteSize": 1541, "sha256": "afee317a830d0f268c31ab76a8196b57246d2ce48a99faf9fbb4f4c9a89b6222" },
+    { "path": "schemas/account.schema.json", "mediaType": "application/json", "byteSize": 1168, "sha256": "1141f6b03a70f0667b6d162008d4b5d266e48938cb725a67d921de4fab2819d9" },
+    { "path": "schemas/category.schema.json", "mediaType": "application/json", "byteSize": 917, "sha256": "40e71c0cb3d3c8bf5a5a0af4f3ffd9441c52d3e4081877717b9bfdc4bd41d2fc" },
+    { "path": "schemas/contractor.schema.json", "mediaType": "application/json", "byteSize": 700, "sha256": "586d29e7f0e68679c059344c8c08c77a6cc45323fef29d9d60feb2457362d102" },
+    { "path": "schemas/currency.schema.json", "mediaType": "application/json", "byteSize": 646, "sha256": "8e5cc385c3eb21d4f54261534f52484249e6e6f13a236e6a06b50c28e0fbb5c1" },
+    { "path": "schemas/lineage.schema.json", "mediaType": "application/json", "byteSize": 1174, "sha256": "99bbc6c1d26ebccf465ac5f1ffaefad55c97f61796492264d331debcec23bd1b" },
+    { "path": "schemas/manifest.schema.json", "mediaType": "application/json", "byteSize": 2558, "sha256": "0e2826d5b4caeefdcc1cc1c46be2f484f858f9c7e377c4c27f5ba9ba4db257ec" },
+    { "path": "schemas/operation.schema.json", "mediaType": "application/json", "byteSize": 4752, "sha256": "2d684066ff8d30c737ddb2a7423e1074cf5b2cc995dc217403eeeb26c1a6e0b8" },
+    { "path": "schemas/rate.schema.json", "mediaType": "application/json", "byteSize": 1004, "sha256": "ae57c27c16b7b9a9de21f064512e4999416052a4169bac687ee004591f997d04" },
+    { "path": "schemas/reconciliation.schema.json", "mediaType": "application/json", "byteSize": 3386, "sha256": "6832a4b1a14b6c34f2abf4dfe1b9d4b1bb014fb335fff5e9f170d73f24a56d1c" },
+    { "path": "schemas/settings.schema.json", "mediaType": "application/json", "byteSize": 766, "sha256": "660d61b0fed2ab3143b023077224fa5c1581484160435127ad59126cebad2382" },
+    { "path": "settings.json", "mediaType": "application/json", "schema": "schemas/settings.schema.json", "byteSize": 195, "sha256": "268771fc13ee82551839cde7a223038baf397e231b06e44f56a7948af13561e3" }
+  ]
+}

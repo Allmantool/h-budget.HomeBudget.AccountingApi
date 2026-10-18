@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 
+using HomeBudget.Accounting.Infrastructure.DataProtection.Capture;
+
 namespace HomeBudget.Accounting.Api.Filters
 {
     internal static class ApiErrorStatusCodeClassifier
@@ -45,6 +47,11 @@ namespace HomeBudget.Accounting.Api.Filters
                 return 499;
             }
 
+            if (exception is MaintenanceAdmissionClosedException)
+            {
+                return (int)HttpStatusCode.ServiceUnavailable;
+            }
+
             return IsInfrastructureFailure(exception)
                 ? (int)HttpStatusCode.ServiceUnavailable
                 : (int)HttpStatusCode.InternalServerError;
@@ -52,6 +59,11 @@ namespace HomeBudget.Accounting.Api.Filters
 
         public static string MessageForException(Exception exception)
         {
+            if (exception is MaintenanceAdmissionClosedException)
+            {
+                return "The ledger is temporarily closed for maintenance";
+            }
+
             return IsInfrastructureFailure(exception)
                 ? "Infrastructure dependency is unavailable"
                 : "An unexpected error occurred";

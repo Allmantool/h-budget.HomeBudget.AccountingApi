@@ -6,6 +6,7 @@ using AutoMapper;
 using MediatR;
 
 using HomeBudget.Accounting.Domain.Extensions;
+using HomeBudget.Accounting.Infrastructure.DataProtection;
 using HomeBudget.Accounting.Infrastructure.Providers.Interfaces;
 using HomeBudget.Components.Operations.Clients.Interfaces;
 using HomeBudget.Components.Operations.Commands.Models;
@@ -20,11 +21,13 @@ namespace HomeBudget.Components.Operations.Commands.Handlers
         ISender sender,
         IDateTimeProvider dateTimeProvider,
         IPaymentsHistoryDocumentsClient historyDocumentsClient,
-        IOutboxPaymentStatusService outboxPaymentStatusService)
+        IOutboxPaymentStatusService outboxPaymentStatusService,
+        IActiveLedgerGenerationResolver activeGenerationResolver = null)
         : BasePaymentCommandHandler(
             mapper,
             dateTimeProvider,
-            outboxPaymentStatusService),
+            outboxPaymentStatusService,
+            activeGenerationResolver),
         IRequestHandler<UpdatePaymentOperationCommand, Result<Guid>>
     {
         public async Task<Result<Guid>> Handle(UpdatePaymentOperationCommand request, CancellationToken cancellationToken)
